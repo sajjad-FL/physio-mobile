@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "PhysioKhom",
+    "slug": "physiokhom-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "physiokhom",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#f8fafc"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.physiokhom.app"
+    },
+    "android": {
+      "package": "com.physiokhom.app"
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker",
+      "expo-asset",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "PhysioKhom uses your location to set your coverage point for patient bookings."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "PhysioKhom accesses your photos so you can set a profile picture."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#0d9488",
+          "defaultChannel": "default",
+          "sounds": [],
+          "enableBackgroundRemoteNotifications": false
+        }
+      ]
+    ]
+  }
+}
