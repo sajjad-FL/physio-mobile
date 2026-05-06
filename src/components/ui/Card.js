@@ -1,7 +1,8 @@
+import { memo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { colors } from '../../theme/colors'
 
-export default function Card({ children, style }) {
+function Card({ children, style }) {
   return <View style={[styles.card, style]}>{children}</View>
 }
 
@@ -19,3 +20,6 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
 })
+
+export default memo(Card)
+

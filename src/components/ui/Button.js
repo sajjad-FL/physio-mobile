@@ -1,11 +1,14 @@
+import { memo } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native'
 import { colors } from '../../theme/colors'
 
-export default function Button({ title, onPress, disabled, loading, variant = 'primary', style }) {
+function Button({ title, onPress, disabled, loading, variant = 'primary', style }) {
   const isPrimary = variant === 'primary'
   const isOutline = variant === 'outline'
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: Boolean(disabled || loading), busy: Boolean(loading) }}
       onPress={onPress}
       disabled={disabled || loading}
       style={({ pressed }) => [
@@ -53,3 +56,6 @@ const styles = StyleSheet.create({
   textPrimary: { color: colors.white },
   textOutline: { color: colors.slate900 },
 })
+
+export default memo(Button)
+

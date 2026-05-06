@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
@@ -6,14 +6,16 @@ import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import { colors } from '../theme/colors'
 
+const inrFormatter = new Intl.NumberFormat('en-IN', {
+  style: 'currency',
+  currency: 'INR',
+  maximumFractionDigits: 2,
+})
+
 function formatInr(n) {
   const v = Number(n)
   if (!Number.isFinite(v)) return '—'
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 2,
-  }).format(v)
+  return inrFormatter.format(v)
 }
 
 function typeLabel(row) {
@@ -53,16 +55,16 @@ function typeBadgePalettes(t, row) {
   }
 }
 
-function TypeBadge({ type: t, row, label }) {
+const TypeBadge = memo(function TypeBadge({ type: t, row, label }) {
   const p = typeBadgePalettes(t, row)
   return (
     <View style={[styles.badge, { backgroundColor: p.bg, borderColor: p.bd }]}>
       <Text style={[styles.badgeTxt, { color: p.fg }]}>{label}</Text>
     </View>
   )
-}
+})
 
-function TxBookingNote({ row }) {
+const TxBookingNote = memo(function TxBookingNote({ row }) {
   if (row.isSynthetic && row.syntheticKind === 'net_available' && row.meta) {
     return (
       <Text style={styles.txNote}>
@@ -108,7 +110,7 @@ function TxBookingNote({ row }) {
     return <Text style={styles.txNote}>{row.meta.note}</Text>
   }
   return null
-}
+})
 
 export default function PhysioWalletScreen() {
   const [dash, setDash] = useState(null)
@@ -167,13 +169,23 @@ export default function PhysioWalletScreen() {
     loadTx()
   }, [loadTx])
 
-  const w = dash?.wallet
-  const b = dash?.breakdown
-  const available = Number(w?.availableBalance)
-  const onlineAvail = Number(w?.onlineAvailableBalance ?? w?.onlineEarning)
-  const commissionDue = Number(w?.commissionDue)
+  const walletValues = useMemo(() => {
+    const w = dash?.wallet
+    const available = Number(w?.availableBalance)
+    const onlineAvail = Number(w?.onlineAvailableBalance ?? w?.onlineEarning)
+    const commissionDue = Number(w?.commissionDue)
+    return {
+      w,
+      b: dash?.breakdown,
+      available,
+      onlineAvail,
+      commissionDue,
+      showNetExplainer: Number.isFinite(commissionDue) && commissionDue > 0.009,
+    }
+  }, [dash])
+
+  const { w, b, available, onlineAvail, commissionDue, showNetExplainer } = walletValues
   const hasPending = Boolean(pendingWithdraw)
-  const showNetExplainer = Number.isFinite(commissionDue) && commissionDue > 0.009
 
   async function submitWithdraw() {
     const raw = withdrawAmount.trim()
@@ -381,7 +393,7 @@ export default function PhysioWalletScreen() {
   )
 }
 
-function BreakdownRow({ type, label, count, vol, detail, last }) {
+const BreakdownRow = memo(function BreakdownRow({ type, label, count, vol, detail, last }) {
   return (
     <View style={[styles.bdRow, last ? { borderBottomWidth: 0 } : null]}>
       <TypeBadge type={type} row={{}} label={label} />
@@ -395,7 +407,7 @@ function BreakdownRow({ type, label, count, vol, detail, last }) {
       </View>
     </View>
   )
-}
+})
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.slate50 },
