@@ -1,9 +1,9 @@
 import { memo } from 'react'
 import { StyleSheet, Text } from 'react-native'
-import { signupTokens as t } from '../../../theme/signupTokens'
-import { signupType, signupLeading } from '../../../theme/signupTypography'
-import { font } from '../../../theme/typography'
+import { colors } from '../../../theme/colors'
+import { font, type, leading } from '../../../theme/typography'
 
+/** Match LoginScreen `heroSub`. */
 function SignupSubtitle({ children }) {
   return <Text style={styles.sub}>{children}</Text>
 }
@@ -12,10 +12,10 @@ const styles = StyleSheet.create({
   sub: {
     textAlign: 'center',
     fontFamily: font.regular,
-    fontSize: signupType.body,
-    lineHeight: signupLeading.body,
-    color: t.inkMuted,
-    paddingHorizontal: 6,
+    fontSize: type.base,
+    lineHeight: leading.base,
+    color: colors.textSecondary,
+    paddingHorizontal: 16,
   },
 })
 

@@ -25,7 +25,8 @@
     "android": {
       "package": "com.physiokhom.app",
       "enableProguardInReleaseBuilds": true,
-      "jsEngine": "hermes"
+      "jsEngine": "hermes",
+      "softwareKeyboardLayoutMode": "resize"
     },
     "plugins": [
       "@react-native-community/datetimepicker",

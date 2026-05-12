@@ -5,61 +5,64 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../../../theme/colors'
 import { font, type } from '../../../theme/typography'
 
-function SignupAppHeader({ title, onBack }) {
+/** Same chrome as LoginScreen header: Home-style back + centered brand. */
+function SignupAppHeader({ onBack, backLabel = 'Home' }) {
   const insets = useSafeAreaInsets()
 
   return (
-    <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) + 6 }]}>
-      <View style={styles.row}>
+    <View style={[styles.header, { paddingTop: Math.max(insets.top, 8) + 6 }]}>
+      <View style={styles.headerRow}>
         <Pressable
           onPress={onBack}
-          hitSlop={12}
           style={styles.backBtn}
+          hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel="Go back"
+          accessibilityLabel={backLabel === 'Home' ? 'Go back to Home' : 'Go back'}
         >
-          <View style={styles.backIcon}>
-            <Ionicons name="chevron-back" size={15} color={colors.white} />
-          </View>
-          {title ? (
-            <Text style={styles.backTxt} numberOfLines={1}>{title}</Text>
-          ) : null}
+          <Ionicons name="chevron-back" size={16} color={colors.brand} />
+          <Text style={styles.backTxt}>{backLabel}</Text>
         </Pressable>
+        <View style={styles.brandRow}>
+          <View style={styles.logoMark}>
+            <Ionicons name="pulse" size={11} color={colors.white} />
+          </View>
+          <Text style={styles.brandPhysio}>Physio</Text>
+          <Text style={styles.brandKhom}>Khom</Text>
+        </View>
+        <View style={styles.headerSpacer} />
       </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  wrap: {
+  header: {
     backgroundColor: colors.white,
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
   },
-  row: { flexDirection: 'row', alignItems: 'center', minHeight: 36 },
-  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
-  backIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 9,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 36,
+  },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 80 },
+  backTxt: { fontFamily: font.medium, fontSize: type.base, color: colors.brand },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  logoMark: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
-    flexShrink: 0,
   },
-  backTxt: {
-    fontFamily: font.medium,
-    fontSize: type.base,
-    color: colors.textPrimary,
-    flexShrink: 1,
-  },
+  brandPhysio: { fontFamily: font.bold, fontSize: type.lg, color: colors.textPrimary, letterSpacing: -0.3 },
+  brandKhom: { fontFamily: font.bold, fontSize: type.lg, color: colors.brand, letterSpacing: -0.3 },
+  headerSpacer: { minWidth: 80 },
 })
 
 export default memo(SignupAppHeader)

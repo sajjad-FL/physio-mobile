@@ -1,19 +1,21 @@
-import { useEffect, useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { useCallback, useEffect, useState } from 'react'
+import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native'
 import { CommonActions } from '@react-navigation/native'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
 import { setSession, getTokenSync } from '../auth/tokenStore'
 import { getDefaultDashboardScreen } from '../auth/navigationTargets'
 import { validateIndianMobile } from '../utils/phoneIndia'
+import { siteOrigin } from '../utils/siteOrigin'
 import { validateLoginPassword, validateName, validateOtp } from '../utils/validation'
 import SignupScreenLayout from '../components/signup/templates/SignupScreenLayout'
 import SignupPhoneStep from '../components/signup/organisms/SignupPhoneStep'
 import SignupOtpStep from '../components/signup/organisms/SignupOtpStep'
 import SignupProfileStep from '../components/signup/organisms/SignupProfileStep'
 import SignupFooterLink from '../components/signup/atoms/SignupFooterLink'
-import { signupTokens as t } from '../theme/signupTokens'
 import { openWebLoginInBrowser } from '../utils/webApp'
+import { colors } from '../theme/colors'
+import { font, type, leading } from '../theme/typography'
 
 const STEPS = { PHONE: 1, OTP: 2, PROFILE: 3 }
 const TOTAL_STEPS = 3
@@ -57,6 +59,17 @@ export default function RegisterScreen({ navigation }) {
   const [sendingOtp, setSendingOtp] = useState(false)
   const [loading, setLoading] = useState(false)
   const [fieldErrors, setFieldErrors] = useState({})
+
+  const openLink = useCallback(async (url) => {
+    try {
+      const supported = await Linking.canOpenURL(url)
+      if (supported) await Linking.openURL(url)
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const base = siteOrigin()
 
   useEffect(() => {
     if (getTokenSync()) {
@@ -172,16 +185,48 @@ export default function RegisterScreen({ navigation }) {
     }
   }
 
-  if (busy) return <View style={styles.center} />
+  if (busy) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.brand} />
+      </View>
+    )
+  }
 
   const si = stepIndex(step)
 
   return (
     <SignupScreenLayout
-      headerMode={step === STEPS.PROFILE ? 'brand' : 'signup'}
-      title="Sign up"
+      backLabel={step === STEPS.PHONE ? 'Home' : 'Back'}
       onBack={goBackFromHeader}
-      footer={step === STEPS.PROFILE ? null : <SignupFooterLink onPress={() => navigation.navigate('Login')} />}
+      footer={
+        <>
+          {step !== STEPS.PROFILE ? (
+            <SignupFooterLink onPress={() => navigation.navigate('Login')} />
+          ) : null}
+          <View style={styles.legal}>
+            <Text style={styles.legalTxt}>
+              By creating an account, you agree to our{' '}
+              <Text
+                style={styles.legalLink}
+                onPress={() => openLink(`${base}/terms`)}
+                accessibilityRole="link"
+              >
+                Terms of Service
+              </Text>{' '}
+              and{' '}
+              <Text
+                style={styles.legalLink}
+                onPress={() => openLink(`${base}/privacy`)}
+                accessibilityRole="link"
+              >
+                Privacy Policy
+              </Text>
+              .
+            </Text>
+          </View>
+        </>
+      }
     >
       {step === STEPS.PHONE ? (
         <SignupPhoneStep
@@ -226,5 +271,14 @@ export default function RegisterScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, backgroundColor: t.canvas },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.canvas },
+  legal: { marginTop: 24, paddingHorizontal: 4 },
+  legalTxt: {
+    textAlign: 'center',
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    lineHeight: leading.xs,
+    color: colors.textTertiary,
+  },
+  legalLink: { fontFamily: font.semiBold, color: colors.brand },
 })

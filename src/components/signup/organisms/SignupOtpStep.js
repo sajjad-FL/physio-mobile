@@ -1,13 +1,11 @@
 import { memo } from 'react'
 import { StyleSheet, View } from 'react-native'
-import Card from '../../ui/Card'
 import Input from '../../ui/Input'
 import SignupHero from '../molecules/SignupHero'
 import SignupDevOtpBanner from '../molecules/SignupDevOtpBanner'
 import SignupContinueButton from '../molecules/SignupContinueButton'
 import SignupSecondaryButton from '../molecules/SignupSecondaryButton'
-
-const cardStyle = { borderRadius: 16 }
+import { authFormCard } from '../../../theme/authFormCard'
 
 function SignupOtpStep({
   step,
@@ -23,16 +21,16 @@ function SignupOtpStep({
   return (
     <>
       <SignupHero
-        titleSize="md"
+        heroIcon="chatbox-ellipses-outline"
         step={step}
         totalSteps={totalSteps}
         kickerLabel="CREATE ACCOUNT"
         title="Verify your number"
         subtitle="Enter the 6-digit code we sent to your phone."
       />
-      <Card padding="lg" style={cardStyle}>
+      <View style={authFormCard}>
         <Input
-          variant="signup"
+          variant="login"
           label="6-digit OTP"
           placeholder="Enter the 6-digit code"
           keyboardType="number-pad"
@@ -44,7 +42,7 @@ function SignupOtpStep({
         <SignupSecondaryButton title="Resend code" onPress={onResend} loading={sendingOtp} />
         <View style={styles.gapSm} />
         <SignupContinueButton title="Continue" onPress={onContinue} />
-      </Card>
+      </View>
     </>
   )
 }

@@ -1,5 +1,5 @@
-import { memo } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { memo, useState } from 'react'
+import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../context/AuthContext'
@@ -16,6 +16,49 @@ const HOW_STEPS = [
   { icon: 'search-outline', title: 'Book online', desc: 'Choose a time and share your concerns from the app.' },
   { icon: 'person-add-outline', title: 'Get matched', desc: 'We connect you with a verified home-visit physiotherapist.' },
   { icon: 'home-outline', title: 'Recover at home', desc: 'Get care at home on a schedule that works for you.' },
+]
+
+const WHY_FEATURES = [
+  {
+    icon: 'shield-checkmark-outline',
+    title: 'Certified Physiotherapists',
+    desc: 'Every physio is a licensed BPT/MPT graduate, background-verified before joining.',
+    bg: colors.emerald50,
+    color: colors.emerald700,
+  },
+  {
+    icon: 'home-outline',
+    title: 'Home Visits Only',
+    desc: 'Sessions happen at your home — no travel, no waiting rooms.',
+    bg: colors.blue50,
+    color: colors.blue600,
+  },
+  {
+    icon: 'wallet-outline',
+    title: 'Flexible Payment',
+    desc: 'Pay per session or in packages. Easy online payment via Razorpay.',
+    bg: colors.amber50,
+    color: colors.amber800,
+  },
+]
+
+const FAQ_ITEMS = [
+  {
+    q: 'How do I book a session?',
+    a: 'Create an account, choose a date and time slot, pay online, and track everything in your dashboard.',
+  },
+  {
+    q: 'Are your physiotherapists certified?',
+    a: 'Yes — every physiotherapist on PhysioKhom is a licensed BPT/MPT graduate who has completed our verification process.',
+  },
+  {
+    q: 'What if I need to reschedule?',
+    a: 'You can reschedule or cancel up to 4 hours before your session from the My Bookings section.',
+  },
+  {
+    q: 'Do you serve areas outside Guwahati?',
+    a: 'We currently serve Guwahati and nearby areas across Assam. Type your locality when booking to confirm availability.',
+  },
 ]
 
 const CONDITION_ICONS = {
@@ -37,6 +80,54 @@ function SectionHeader({ icon, title }) {
       </View>
       <Text style={styles.sectionTitle}>{title}</Text>
     </View>
+  )
+}
+
+function StatPill({ icon, label }) {
+  return (
+    <View style={styles.statPill}>
+      <Ionicons name={icon} size={10} color="rgba(255,255,255,0.9)" />
+      <Text style={styles.statPillTxt}>{label}</Text>
+    </View>
+  )
+}
+
+function FeatureCard({ icon, title, desc, bg, color, last }) {
+  return (
+    <>
+      <View style={styles.whyRow}>
+        <View style={[styles.whyIconWrap, { backgroundColor: bg }]}>
+          <Ionicons name={icon} size={18} color={color} />
+        </View>
+        <View style={styles.whyBody}>
+          <Text style={styles.whyTitle}>{title}</Text>
+          <Text style={styles.whyDesc}>{desc}</Text>
+        </View>
+      </View>
+      {!last && <View style={styles.whyDivider} />}
+    </>
+  )
+}
+
+function FaqRow({ q, a, last }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen((v) => !v)}
+        style={({ pressed }) => [styles.faqRow, pressed && styles.faqRowPressed]}
+        accessibilityRole="button"
+      >
+        <View style={styles.faqIconWrap}>
+          <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={12} color={colors.brand} />
+        </View>
+        <View style={styles.faqBody}>
+          <Text style={styles.q}>{q}</Text>
+          {open ? <Text style={styles.a}>{a}</Text> : null}
+        </View>
+      </Pressable>
+      {!last && <View style={styles.faqDivider} />}
+    </>
   )
 }
 
@@ -76,7 +167,7 @@ export default function HomeScreen({ navigation }) {
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 28 }]}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
       >
 
         {/* ── Hero card ──────────────────────────── */}
@@ -84,11 +175,17 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.heroBand}>
             <View style={styles.heroGlow1} pointerEvents="none" />
             <View style={styles.heroGlow2} pointerEvents="none" />
+            <View style={styles.heroGlow3} pointerEvents="none" />
             <View style={styles.heroBadge}>
               <Ionicons name="shield-checkmark" size={10} color={colors.white} />
               <Text style={styles.heroBadgeTxt}>Verified home care · Assam</Text>
             </View>
             <Text style={styles.h1}>Physio{'\n'}near you</Text>
+            <View style={styles.heroStats}>
+              <StatPill icon="checkmark-circle" label="500+ Sessions" />
+              <StatPill icon="people-outline" label="Verified Physios" />
+              <StatPill icon="location-outline" label="Across Assam" />
+            </View>
           </View>
           <View style={styles.heroBody}>
             <Text style={styles.lead}>{HOME_DESCRIPTION}</Text>
@@ -133,6 +230,14 @@ export default function HomeScreen({ navigation }) {
           ))}
         </View>
 
+        {/* ── Why PhysioKhom ─────────────────────── */}
+        <SectionHeader icon="star-outline" title="Why PhysioKhom" />
+        <View style={styles.whyCard}>
+          {WHY_FEATURES.map((f, i) => (
+            <FeatureCard key={f.title} {...f} last={i === WHY_FEATURES.length - 1} />
+          ))}
+        </View>
+
         {/* ── Physio CTA ─────────────────────────── */}
         <Pressable
           onPress={() => navigation.navigate('RegisterPhysio')}
@@ -158,31 +263,59 @@ export default function HomeScreen({ navigation }) {
           ))}
         </View>
 
-        {/* ── FAQ ────────────────────────────────── */}
-        <SectionHeader icon="help-circle-outline" title="FAQ" />
-        <View style={styles.faqCard}>
-          <View style={styles.faqRow}>
-            <View style={styles.faqIconWrap}>
-              <Ionicons name="chatbubble-outline" size={13} color={colors.brand} />
+        {/* ── Testimonial ────────────────────────── */}
+        <SectionHeader icon="chatbubbles-outline" title="What patients say" />
+        <View style={styles.testimonialCard}>
+          <View style={styles.testimonialHeader}>
+            <View style={styles.testimonialAvatar}>
+              <Text style={styles.testimonialAvatarTxt}>P</Text>
             </View>
-            <View style={styles.faqBody}>
-              <Text style={styles.q}>How do I book?</Text>
-              <Text style={styles.a}>
-                Create an account, choose a date and time slot, pay online, and track everything in your dashboard.
-              </Text>
+            <View style={styles.testimonialMeta}>
+              <Text style={styles.testimonialName}>Priya Bora</Text>
+              <Text style={styles.testimonialLoc}>Guwahati, Assam</Text>
             </View>
+            <View style={styles.testimonialStars}>
+              {[...Array(5)].map((_, i) => (
+                <Ionicons key={i} name="star" size={11} color={colors.warning} />
+              ))}
+            </View>
+          </View>
+          <Text style={styles.testimonialTxt}>
+            "My recovery after knee surgery was much faster thanks to regular home physio sessions. The physiotherapist was professional, punctual, and very caring. Highly recommended!"
+          </Text>
+          <View style={styles.testimonialBadge}>
+            <Ionicons name="checkmark-circle" size={11} color={colors.success} />
+            <Text style={styles.testimonialBadgeTxt}>Verified patient</Text>
           </View>
         </View>
 
+        {/* ── FAQ ────────────────────────────────── */}
+        <SectionHeader icon="help-circle-outline" title="FAQ" />
+        <View style={styles.faqCard}>
+          {FAQ_ITEMS.map((item, i) => (
+            <FaqRow key={item.q} q={item.q} a={item.a} last={i === FAQ_ITEMS.length - 1} />
+          ))}
+        </View>
+
         {/* ── Bottom CTA ─────────────────────────── */}
-        <Pressable
-          onPress={() => navigation.navigate('NearMeHub')}
-          style={({ pressed }) => [styles.bottomCta, pressed && { opacity: 0.9 }]}
+        <TouchableOpacity
+          activeOpacity={0.88}
+          onPress={() => navigation.navigate('PhysioList')}
+          style={styles.bottomCta}
+          accessibilityRole="button"
+          accessibilityLabel="Find physios near me"
         >
-          <Ionicons name="location-outline" size={15} color={colors.white} />
-          <Text style={styles.bottomCtaTxt}>Find physios near me</Text>
-          <Ionicons name="arrow-forward" size={15} color={colors.white} />
-        </Pressable>
+          <View style={styles.bottomCtaIcon}>
+            <Ionicons name="location-outline" size={18} color={colors.white} />
+          </View>
+          <View style={styles.bottomCtaBody}>
+            <Text style={styles.bottomCtaTxt}>Find physios near me</Text>
+            <Text style={styles.bottomCtaSub}>Available today · Free first consult</Text>
+          </View>
+          <View style={styles.bottomCtaChevron}>
+            <Ionicons name="arrow-forward" size={16} color={colors.white} />
+          </View>
+        </TouchableOpacity>
 
       </ScrollView>
     </View>
@@ -228,7 +361,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brand,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 22,
+    paddingBottom: 24,
     position: 'relative',
   },
   heroGlow1: {
@@ -248,6 +381,15 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
     backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  heroGlow3: {
+    position: 'absolute',
+    top: 30,
+    left: -20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   heroBadge: {
     flexDirection: 'row',
@@ -271,11 +413,29 @@ const styles = StyleSheet.create({
   },
   h1: {
     fontFamily: font.bold,
-    fontSize: type['3xl'],
-    lineHeight: 30,
+    fontSize: 26,
+    lineHeight: 32,
     color: colors.white,
-    letterSpacing: -0.6,
+    letterSpacing: -0.8,
   },
+  heroStats: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 14,
+    flexWrap: 'wrap',
+  },
+  statPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  statPillTxt: { fontFamily: font.medium, fontSize: type.xs, color: 'rgba(255,255,255,0.92)' },
   heroBody: {
     backgroundColor: colors.white,
     paddingHorizontal: 20,
@@ -376,6 +536,29 @@ const styles = StyleSheet.create({
   stepTitle: { fontFamily: font.semiBold, fontSize: type.md, color: colors.textPrimary },
   stepDesc: { fontFamily: font.regular, fontSize: type.base, lineHeight: leading.base, color: colors.textSecondary },
 
+  // Why PhysioKhom card
+  whyCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
+  },
+  whyRow: { flexDirection: 'row', alignItems: 'flex-start', padding: 16, gap: 14 },
+  whyIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  whyBody: { flex: 1 },
+  whyTitle: { fontFamily: font.semiBold, fontSize: type.md, color: colors.textPrimary, marginBottom: 3 },
+  whyDesc: { fontFamily: font.regular, fontSize: type.sm, lineHeight: leading.base, color: colors.textSecondary },
+  whyDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.borderSubtle, marginHorizontal: 16 },
+
   // Physio CTA banner
   physioCta: {
     marginTop: 4,
@@ -445,6 +628,40 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  // Testimonial card
+  testimonialCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 16,
+    ...CARD_SHADOW,
+  },
+  testimonialHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  testimonialAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  testimonialAvatarTxt: { fontFamily: font.bold, fontSize: type.md, color: colors.white },
+  testimonialMeta: { flex: 1 },
+  testimonialName: { fontFamily: font.semiBold, fontSize: type.md, color: colors.textPrimary },
+  testimonialLoc: { fontFamily: font.regular, fontSize: type.sm, color: colors.textSecondary, marginTop: 1 },
+  testimonialStars: { flexDirection: 'row', gap: 2 },
+  testimonialTxt: {
+    fontFamily: font.regular,
+    fontSize: type.base,
+    lineHeight: leading.base,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+  },
+  testimonialBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 },
+  testimonialBadgeTxt: { fontFamily: font.medium, fontSize: type.xs, color: colors.success },
+
   // FAQ card
   faqCard: {
     backgroundColor: colors.white,
@@ -455,10 +672,11 @@ const styles = StyleSheet.create({
     ...CARD_SHADOW,
   },
   faqRow: { flexDirection: 'row', alignItems: 'flex-start', padding: 16, gap: 12 },
+  faqRowPressed: { backgroundColor: colors.slate50 },
   faqIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 7,
     backgroundColor: colors.teal50,
     alignItems: 'center',
     justifyContent: 'center',
@@ -466,16 +684,16 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   faqBody: { flex: 1 },
-  q: { fontFamily: font.semiBold, fontSize: type.md, lineHeight: leading.md, color: colors.textPrimary, marginBottom: 6 },
-  a: { fontFamily: font.regular, fontSize: type.base, lineHeight: leading.base, color: colors.textSecondary },
+  faqDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.borderSubtle },
+  q: { fontFamily: font.semiBold, fontSize: type.md, lineHeight: leading.md, color: colors.textPrimary },
+  a: { fontFamily: font.regular, fontSize: type.base, lineHeight: leading.base, color: colors.textSecondary, marginTop: 6 },
 
   // Bottom CTA
   bottomCta: {
     marginTop: 18,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    gap: 12,
     alignSelf: 'stretch',
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -487,5 +705,25 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 4,
   },
+  bottomCtaIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  bottomCtaBody: { flex: 1 },
   bottomCtaTxt: { fontFamily: font.bold, fontSize: type.md, color: colors.white, letterSpacing: 0.1 },
+  bottomCtaSub: { fontFamily: font.regular, fontSize: type.xs, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
+  bottomCtaChevron: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
 })

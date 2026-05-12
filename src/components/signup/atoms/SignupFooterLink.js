@@ -1,8 +1,7 @@
 import { memo } from 'react'
 import { Pressable, StyleSheet, Text } from 'react-native'
-import { signupTokens as t } from '../../../theme/signupTokens'
-import { signupType, signupLeading } from '../../../theme/signupTypography'
-import { font } from '../../../theme/typography'
+import { colors } from '../../../theme/colors'
+import { font, type, leading } from '../../../theme/typography'
 
 function SignupFooterLink({ onPress, prefix = 'Already have an account?', actionLabel = 'Sign in' }) {
   return (
@@ -16,15 +15,15 @@ function SignupFooterLink({ onPress, prefix = 'Already have an account?', action
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignSelf: 'center', marginTop: 28, paddingVertical: 8 },
+  wrap: { alignSelf: 'center', marginTop: 24, paddingVertical: 2 },
   line: {
     fontFamily: font.regular,
-    fontSize: signupType.footer,
-    lineHeight: signupLeading.footer,
-    color: t.inkMuted,
+    fontSize: type.base,
+    lineHeight: leading.base,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
-  bold: { fontFamily: font.semiBold, color: t.brand },
+  bold: { fontFamily: font.semiBold, color: colors.brand },
 })
 
 export default memo(SignupFooterLink)

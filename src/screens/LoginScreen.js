@@ -20,7 +20,9 @@ import { setSession, getTokenSync } from '../auth/tokenStore'
 import { openWebLoginInBrowser } from '../utils/webApp'
 import { getDefaultDashboardScreen } from '../auth/navigationTargets'
 import { validateIndianMobile } from '../utils/phoneIndia'
+import { siteOrigin } from '../utils/siteOrigin'
 import { validateLoginPassword } from '../utils/validation'
+import { authFormCard } from '../theme/authFormCard'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { useAuth } from '../context/AuthContext'
@@ -28,11 +30,6 @@ import { useAuth } from '../context/AuthContext'
 function digitsOnly(text, maxLen) {
   const d = String(text || '').replace(/\D/g, '')
   return maxLen != null ? d.slice(0, maxLen) : d
-}
-
-function siteOrigin() {
-  const u = typeof process.env.EXPO_PUBLIC_SITE_URL === 'string' ? process.env.EXPO_PUBLIC_SITE_URL.trim() : ''
-  return u ? u.replace(/\/$/, '') : 'https://nearbyphysio.com'
 }
 
 export default function LoginScreen({ navigation }) {
@@ -312,14 +309,6 @@ export default function LoginScreen({ navigation }) {
   )
 }
 
-const CARD_SHADOW = {
-  shadowColor: '#0f172a',
-  shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.08,
-  shadowRadius: 16,
-  elevation: 4,
-}
-
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   bg: { flex: 1, backgroundColor: colors.canvas },
@@ -388,12 +377,7 @@ const styles = StyleSheet.create({
 
   // Form card
   formCard: {
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    ...CARD_SHADOW,
+    ...authFormCard,
   },
 
   // Alert banner

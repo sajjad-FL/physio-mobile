@@ -1,11 +1,10 @@
 import { memo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { signupTokens as t } from '../../../theme/signupTokens'
-import { signupType, signupLeading } from '../../../theme/signupTypography'
-import { font } from '../../../theme/typography'
+import { colors } from '../../../theme/colors'
+import { font, type, leading } from '../../../theme/typography'
 
 /**
- * @param {'outline' | 'filled'} variant outline: white pill + teal text (steps 1–2). filled: teal pill + white text (step 3).
+ * @param {'outline' | 'filled'} variant outline: white pill + brand text. filled: brand pill + white text (final step).
  * @param {boolean} compact filled pill uses "3/3"; outline uses "2 / 3".
  */
 function SignupStepPill({ current, total, variant = 'outline', compact = false }) {
@@ -31,22 +30,22 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   outline: {
-    backgroundColor: t.surface,
+    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: t.border,
+    borderColor: colors.borderSubtle,
   },
   filled: {
-    backgroundColor: t.pillFilledBg,
+    backgroundColor: colors.brand,
     borderWidth: 0,
   },
   txt: {
     fontFamily: font.bold,
-    fontSize: signupType.stepPill,
-    lineHeight: signupLeading.stepPill,
-    color: t.brand,
+    fontSize: type.sm,
+    lineHeight: leading.sm,
+    color: colors.brand,
   },
   txtFilled: {
-    color: t.pillFilledText,
+    color: colors.white,
   },
 })
 

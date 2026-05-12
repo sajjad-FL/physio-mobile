@@ -1,11 +1,9 @@
 import { memo } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native'
-import { signupTokens as t } from '../../../theme/signupTokens'
-import { signupType, signupLeading } from '../../../theme/signupTypography'
-import { font } from '../../../theme/typography'
-import { figmaTokens } from '../../../theme/figmaTokens'
+import { colors } from '../../../theme/colors'
+import { font, type } from '../../../theme/typography'
 
-/** Outlined secondary action (e.g. Resend code) matching Stitch OTP card. */
+/** Match LoginScreen secondary CTA (teal50 fill, brand border). */
 function SignupSecondaryButton({ title, onPress, loading, disabled }) {
   return (
     <Pressable
@@ -14,40 +12,33 @@ function SignupSecondaryButton({ title, onPress, loading, disabled }) {
       onPress={onPress}
       disabled={disabled || loading}
       style={({ pressed }) => [
-        styles.btn,
+        styles.secondaryBtn,
         (disabled || loading) && styles.disabled,
-        pressed && !disabled && !loading && styles.pressed,
+        pressed && !disabled && !loading && styles.secondaryBtnPressed,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={t.brand} />
+        <ActivityIndicator color={colors.brand} />
       ) : (
-        <Text style={styles.txt}>{title}</Text>
+        <Text style={styles.secondaryBtnTxt}>{title}</Text>
       )}
     </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
-  btn: {
-    minHeight: 36,
-    borderRadius: figmaTokens.radiusButton,
-    backgroundColor: t.surface,
+  secondaryBtn: {
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.teal50,
     borderWidth: 1,
-    borderColor: t.borderGray300,
+    borderColor: colors.brandSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
   },
-  pressed: { opacity: 0.92, backgroundColor: t.canvas },
+  secondaryBtnPressed: { backgroundColor: colors.brandSoft },
   disabled: { opacity: 0.55 },
-  txt: {
-    fontFamily: font.medium,
-    fontSize: signupType.cta,
-    lineHeight: signupLeading.cta,
-    color: t.slate800,
-  },
+  secondaryBtnTxt: { fontFamily: font.semiBold, fontSize: type.md, color: colors.brand },
 })
 
 export default memo(SignupSecondaryButton)
