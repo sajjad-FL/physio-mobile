@@ -3,7 +3,7 @@ import { colors } from '../theme/colors'
 /** Use on every native stack `screenOptions` so scenes fill the tab/root frame (avoids scroll/chrome drift). */
 export const nativeStackContentFlex = {
   flex: 1,
-  backgroundColor: colors.slate50,
+  backgroundColor: colors.canvas,
 }
 
 export const defaultNativeStackScreenOptions = {

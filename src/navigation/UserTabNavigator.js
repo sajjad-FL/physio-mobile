@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { CommonActions, useNavigation } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
+import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../context/AuthContext'
 import { getTokenSync, getRoleSync } from '../auth/tokenStore'
 import DashboardHomeScreen from '../screens/DashboardHomeScreen'
@@ -10,7 +11,8 @@ import UserBookingDetailScreen from '../screens/UserBookingDetailScreen'
 import DashboardWalletScreen from '../screens/DashboardWalletScreen'
 import DashboardDisputesScreen from '../screens/DashboardDisputesScreen'
 import ProfileScreen from '../screens/ProfileScreen'
-import { colors } from '../theme/colors'
+import UserTopNavHeader from '../components/UserTopNavHeader'
+import CustomTabBar from './CustomTabBar'
 import { defaultNativeStackScreenOptions, defaultTabScreenOptions } from './navLayout'
 
 const Tab = createBottomTabNavigator()
@@ -21,8 +23,7 @@ function BookingsStackNav() {
     <BookStack.Navigator
       screenOptions={{
         ...defaultNativeStackScreenOptions,
-        headerShown: true,
-        headerTitleStyle: { fontWeight: '600' },
+        header: ({ navigation, options }) => <UserTopNavHeader navigation={navigation} title={options.title || 'Session'} />,
       }}
     >
       <BookStack.Screen name="BookingsList" component={DashboardBookingsScreen} options={{ title: 'Bookings' }} />
@@ -48,20 +49,74 @@ export default function UserTabNavigator() {
 
   return (
     <Tab.Navigator
-      detachInactiveScreens={false}
+      detachInactiveScreens
+      tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         ...defaultTabScreenOptions,
-        headerShown: false,
-        tabBarActiveTintColor: colors.brand,
-        tabBarInactiveTintColor: colors.slate500,
-        tabBarStyle: { borderTopColor: colors.borderSubtle },
+        header: ({ navigation, options }) => <UserTopNavHeader navigation={navigation} title={options.title || 'Session'} />,
       }}
     >
-      <Tab.Screen name="DashboardHome" component={DashboardHomeScreen} options={{ tabBarLabel: 'Home' }} />
-      <Tab.Screen name="Bookings" component={BookingsStackNav} options={{ tabBarLabel: 'Bookings', headerShown: false }} />
-      <Tab.Screen name="Wallet" component={DashboardWalletScreen} options={{ tabBarLabel: 'Wallet' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profile' }} />
-      <Tab.Screen name="Disputes" component={DashboardDisputesScreen} options={{ tabBarLabel: 'Disputes' }} />
+      <Tab.Screen
+        name="DashboardHome"
+        component={DashboardHomeScreen}
+        options={{
+          tabBarLabel: 'Home',
+          title: 'Dashboard',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Bookings"
+        component={BookingsStackNav}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault()
+            navigation.navigate('Bookings', { screen: 'BookingsList' })
+          },
+        })}
+        options={{
+          tabBarLabel: 'Bookings',
+          headerShown: false,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Wallet"
+        component={DashboardWalletScreen}
+        options={{
+          tabBarLabel: 'Wallet',
+          title: 'Wallet',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'wallet' : 'wallet-outline'} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          tabBarLabel: 'Profile',
+          title: 'Profile',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'person-circle' : 'person-circle-outline'} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Disputes"
+        component={DashboardDisputesScreen}
+        options={{
+          tabBarLabel: 'Disputes',
+          title: 'Disputes',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'alert-circle' : 'alert-circle-outline'} size={22} color={color} />
+          ),
+        }}
+      />
     </Tab.Navigator>
   )
 }

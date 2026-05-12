@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 16,
     borderWidth: 1,
-    padding: 16,
+    padding: 14,
   },
   row: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
   iconBox: {
@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconTxt: { fontSize: 22 },
+  iconTxt: { fontSize: 18 },
   body: { flex: 1 },
   title: { fontSize: 16, fontWeight: '700' },
   p: { marginTop: 8, fontSize: 13, lineHeight: 19, color: colors.slate900 },

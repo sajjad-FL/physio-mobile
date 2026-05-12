@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: colors.borderSubtle,
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     alignItems: 'center',
   },
   emptyTxt: { fontSize: 13, color: colors.slate500 },

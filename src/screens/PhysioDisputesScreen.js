@@ -1,17 +1,20 @@
-import { useCallback, useEffect, useState } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { memo, useCallback, useEffect, useState } from 'react'
+import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
-import Button from '../components/ui/Button'
-import Card from '../components/ui/Card'
+import Chip from '../components/ui/Chip'
+import PaginationBar from '../components/ui/PaginationBar'
 import { colors } from '../theme/colors'
-import { formatBookingTimeSlot } from '../utils/date'
+import { font, type, leading } from '../theme/typography'
+import { formatBookingDateAndSlot } from '../utils/date'
+import { disputeStatusBadge } from '../utils/dashboardUtils'
 
-function badgeFor(status) {
-  if (status === 'open') return { bg: colors.amber50, fg: colors.amber950, border: colors.amber200 }
-  if (status === 'under_review') return { bg: colors.blue50, fg: colors.blue700, border: '#bfdbfe' }
-  if (status === 'resolved') return { bg: colors.emerald50, fg: colors.emerald900, border: '#a7f3d0' }
-  return { bg: colors.slate50, fg: colors.slate600, border: colors.borderSubtle }
+function statusAccent(status) {
+  if (status === 'open') return colors.warning
+  if (status === 'under_review') return colors.blue600
+  if (status === 'resolved') return colors.success
+  return colors.slate300
 }
 
 export default function PhysioDisputesScreen() {
@@ -30,75 +33,183 @@ export default function PhysioDisputesScreen() {
     }
   }, [page])
 
-  useEffect(() => {
-    load()
-  }, [load])
+  useEffect(() => { load() }, [load])
 
   const loading = list === null
 
-  return (
-    <ScrollView contentContainerStyle={styles.pad} style={styles.flex}>
-      <Text style={styles.h1}>Disputes</Text>
-      <Text style={styles.sub}>Cases linked to your assigned bookings.</Text>
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.brand} />
+      </View>
+    )
+  }
 
-      {loading ? (
-        <Text style={styles.muted}>Loading…</Text>
-      ) : list.length === 0 ? (
-        <Text style={styles.muted}>No disputes.</Text>
-      ) : (
-        list.map((d) => {
-          const b = d.bookingId
-          const st = badgeFor(d.status)
-          return (
-            <Card key={d._id} style={{ marginTop: 14 }}>
-              <View style={styles.headRow}>
-                <Text style={styles.reason}>{d.reason}</Text>
-                <View style={[styles.statusPill, { backgroundColor: st.bg, borderColor: st.border }]}>
-                  <Text style={[styles.statusTxt, { color: st.fg }]}>{String(d.status || '').replace(/_/g, ' ')}</Text>
-                </View>
-              </View>
-              <Text style={styles.meta}>
-                {b?.date} {formatBookingTimeSlot(b?.timeSlot)} · {b?.userId?.name} ·{' '}
-                {d.raisedBy === 'physio' ? 'You raised' : 'Patient raised'}
-              </Text>
-              <Text style={styles.desc}>{d.description}</Text>
-              {d.resolution ? (
-                <View style={styles.resBox}>
-                  <Text style={styles.resTitle}>Resolution</Text>
-                  <Text style={styles.resBody}>{d.resolution}</Text>
-                </View>
-              ) : null}
-            </Card>
-          )
-        })
-      )}
-      {totalPages > 1 ? (
-        <View style={styles.pager}>
-          <Button title="Prev" variant="outline" disabled={page <= 1} onPress={() => setPage((p) => Math.max(1, p - 1))} />
-          <Text style={styles.muted}>
-            {page} / {totalPages}
-          </Text>
-          <Button title="Next" variant="outline" disabled={page >= totalPages} onPress={() => setPage((p) => p + 1)} />
+  return (
+    <FlatList
+      data={list}
+      keyExtractor={(item) => String(item._id)}
+      onRefresh={load}
+      refreshing={false}
+      style={styles.root}
+      contentContainerStyle={list.length === 0 ? styles.emptyPad : styles.listPad}
+      ListEmptyComponent={
+        <View style={styles.emptyBox}>
+          <View style={styles.emptyIconWrap}>
+            <Ionicons name="checkmark-circle-outline" size={32} color={colors.slate300} />
+          </View>
+          <Text style={styles.emptyTitle}>No disputes</Text>
+          <Text style={styles.emptySub}>Disputes linked to your assigned bookings will appear here.</Text>
         </View>
-      ) : null}
-    </ScrollView>
+      }
+      ListFooterComponent={
+        list.length > 0 ? (
+          <PaginationBar
+            compact
+            page={page}
+            totalPages={totalPages}
+            onPrev={() => setPage((p) => Math.max(1, p - 1))}
+            onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+          />
+        ) : null
+      }
+      renderItem={({ item }) => <DisputeCard item={item} />}
+    />
   )
 }
 
+const DisputeCard = memo(function DisputeCard({ item }) {
+  const chip = disputeStatusBadge(item.status)
+  const accent = statusAccent(item.status)
+  const b = item.bookingId
+  const bookingRef = b?._id ? `#${String(b._id).slice(-6)}` : ''
+  const bookingDate = formatBookingDateAndSlot(b?.date, b?.timeSlot)
+  const raisedByTxt = item.raisedBy === 'physio' ? 'You raised' : 'Patient raised'
+
+  return (
+    <View style={styles.card}>
+      <View style={[styles.cardAccent, { backgroundColor: accent }]} />
+      <View style={styles.cardBody}>
+        <View style={styles.cardTop}>
+          <Chip label={chip.label} bg={chip.bg} fg={chip.fg} border={chip.border} />
+          <View style={styles.cardMeta}>
+            {bookingRef ? <Text style={styles.metaTxt}>{bookingRef}</Text> : null}
+            <View style={styles.raisedByTag}>
+              <Text style={styles.raisedByTxt}>{raisedByTxt}</Text>
+            </View>
+          </View>
+        </View>
+
+        {bookingDate ? (
+          <View style={styles.dateRow}>
+            <Ionicons name="calendar-outline" size={12} color={colors.slate400} />
+            <Text style={styles.dateTxt}>{bookingDate}</Text>
+            {b?.userId?.name ? (
+              <>
+                <Text style={styles.dateSep}>·</Text>
+                <Ionicons name="person-outline" size={12} color={colors.slate400} />
+                <Text style={styles.dateTxt}>{b.userId.name}</Text>
+              </>
+            ) : null}
+          </View>
+        ) : null}
+
+        <Text style={styles.reason}>{item.reason || 'Dispute'}</Text>
+
+        {item.description && item.description !== item.reason ? (
+          <Text style={styles.desc}>{item.description}</Text>
+        ) : null}
+
+        {item.resolution ? (
+          <View style={styles.resolutionBox}>
+            <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+            <Text style={styles.resolutionTxt}>{item.resolution}</Text>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  )
+})
+
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.slate50 },
-  pad: { padding: 16, paddingBottom: 40 },
-  h1: { fontSize: 24, fontWeight: '700', color: colors.slate900 },
-  sub: { marginTop: 6, fontSize: 14, color: colors.slate500 },
-  muted: { marginTop: 12, color: colors.slate500 },
-  headRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' },
-  reason: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.slate900 },
-  statusPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1 },
-  statusTxt: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
-  meta: { marginTop: 8, fontSize: 13, color: colors.slate500 },
-  desc: { marginTop: 12, fontSize: 14, color: colors.slate800, lineHeight: 20 },
-  resBox: { marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: colors.slate50, borderWidth: 1, borderColor: colors.borderSubtle },
-  resTitle: { fontWeight: '700', color: colors.slate900 },
-  resBody: { marginTop: 6, fontSize: 13, color: colors.slate600 },
-  pager: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 20 },
+  root: { flex: 1, backgroundColor: colors.canvas },
+  listPad: { padding: 16, paddingBottom: 28, gap: 10 },
+  emptyPad: { flexGrow: 1, padding: 24, justifyContent: 'center' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.canvas },
+
+  emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 40 },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.slate50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textSecondary },
+  emptySub: { fontFamily: font.regular, fontSize: type.sm, color: colors.textTertiary, textAlign: 'center', lineHeight: leading.sm },
+
+  // Dispute card
+  card: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  cardAccent: { width: 4, alignSelf: 'stretch' },
+  cardBody: { flex: 1, padding: 14, gap: 8 },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaTxt: { fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
+  raisedByTag: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: colors.slate50,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  raisedByTxt: { fontFamily: font.medium, fontSize: 10, color: colors.textSecondary },
+
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  dateTxt: { fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
+  dateSep: { fontFamily: font.regular, fontSize: type.xs, color: colors.slate300 },
+
+  reason: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textPrimary },
+  desc: {
+    fontFamily: font.regular,
+    fontSize: type.sm,
+    color: colors.slate600,
+    lineHeight: leading.sm,
+  },
+
+  resolutionBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: 2,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: colors.successBg,
+  },
+  resolutionTxt: {
+    flex: 1,
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.emerald700,
+    lineHeight: leading.xs,
+  },
 })

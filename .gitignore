@@ -3,6 +3,7 @@ node_modules/
 dist/
 npm-debug.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
@@ -11,3 +12,4 @@ npm-debug.*
 web-build/
 .env
 .env.local
+credentials.json

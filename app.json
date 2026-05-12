@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "PhysioKhom",
-    "slug": "physiokhom-mobile",
+    "slug": "physiokhom",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -11,17 +11,25 @@
       "backgroundColor": "#f8fafc"
     },
     "assetBundlePatterns": [
-      "**/*"
+      "assets/images/*",
+      "assets/fonts/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.physiokhom.app"
+      "bundleIdentifier": "com.physiokhom.app",
+      "jsEngine": "hermes",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.physiokhom.app"
+      "package": "com.physiokhom.app",
+      "enableProguardInReleaseBuilds": true,
+      "jsEngine": "hermes"
     },
     "plugins": [
       "@react-native-community/datetimepicker",
+      "@rnmapbox/maps",
       "expo-asset",
       [
         "expo-location",

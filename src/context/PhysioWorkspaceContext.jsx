@@ -1,6 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { api } from '../api/client'
-const PhysioWorkspaceContext = createContext(null)
+import { createContext, useContext, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { usePhysioMe, usePhysioBookings, usePhysioDisputes } from '../api/queries'
+
+const BADGE_PARAMS = { page: 1, limit: 100 }
 
 function bookingNeedsPhysioAction(b) {
   if (!b) return false
@@ -16,82 +18,50 @@ function activeDisputeCount(disputes) {
   return disputes.filter((d) => d.status === 'open' || d.status === 'under_review').length
 }
 
+const PhysioWorkspaceContext = createContext(null)
+
 export function PhysioWorkspaceProvider({ children }) {
-  const [me, setMe] = useState(null)
-  const [loadingMe, setLoadingMe] = useState(true)
-  const [bookingBadge, setBookingBadge] = useState(0)
-  const [disputeBadge, setDisputeBadge] = useState(0)
+  const queryClient = useQueryClient()
 
-  const loadMe = useCallback(async () => {
-    try {
-      const res = await api.get('/physio/me')
-      setMe(res.data)
-    } catch {
-      setMe(null)
-    }
-  }, [])
+  const { data: me, isLoading: loadingMe } = usePhysioMe()
 
-  useEffect(() => {
-    let c = false
-    setLoadingMe(true)
-    loadMe().finally(() => {
-      if (!c) setLoadingMe(false)
-    })
-    return () => {
-      c = true
-    }
-  }, [loadMe])
+  const approved = me?.platformApproved === true
 
-  const refreshBadges = useCallback(async () => {
-    const approved = me?.platformApproved === true
-    if (!approved) {
-      setBookingBadge(0)
-      setDisputeBadge(0)
-      return
-    }
-    try {
-      const [bRes, dRes] = await Promise.all([
-        api.get('/physio/bookings', { params: { page: 1, limit: 50 } }),
-        api.get('/disputes/my', { params: { page: 1, limit: 50 } }),
-      ])
-      const bookings = bRes.data?.data || []
-      const disputes = dRes.data?.data || []
-      setBookingBadge(bookings.filter(bookingNeedsPhysioAction).length)
-      setDisputeBadge(activeDisputeCount(disputes))
-    } catch {
-      setBookingBadge(0)
-      setDisputeBadge(0)
-    }
-  }, [me])
+  // These share query keys with PhysioBookingsScreen and PhysioDisputesScreen,
+  // so TanStack deduplicates them into a single network request.
+  const { data: bookings = [] } = usePhysioBookings(BADGE_PARAMS, { enabled: approved })
+  const { data: disputesData } = usePhysioDisputes(BADGE_PARAMS, { enabled: approved })
 
-  useEffect(() => {
-    refreshBadges()
-  }, [refreshBadges])
+  const bookingBadge = approved ? (bookings || []).filter(bookingNeedsPhysioAction).length : 0
+  const disputeBadge = approved ? activeDisputeCount(disputesData?.rows || []) : 0
 
   const platformApproved = me?.platformApproved === true
   const rejected = me?.verificationStatus === 'rejected' || me?.verification?.status === 'rejected'
 
+  // Invalidate shared TanStack queries instead of making raw API calls.
+  const refreshBadges = () => {
+    if (!approved) return
+    queryClient.invalidateQueries({ queryKey: ['physioBookings'] })
+    queryClient.invalidateQueries({ queryKey: ['physioDisputes'] })
+  }
+
+  const refreshMe = () => {
+    queryClient.invalidateQueries({ queryKey: ['physioMe'] })
+  }
+
   const value = useMemo(
     () => ({
-      me,
+      me: me || null,
       loadingMe,
       platformApproved,
       rejected,
       bookingBadge,
       disputeBadge,
-      refreshMe: loadMe,
+      refreshMe,
       refreshBadges,
     }),
-    [
-      me,
-      loadingMe,
-      platformApproved,
-      rejected,
-      bookingBadge,
-      disputeBadge,
-      loadMe,
-      refreshBadges,
-    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [me, loadingMe, platformApproved, rejected, bookingBadge, disputeBadge],
   )
 
   return <PhysioWorkspaceContext.Provider value={value}>{children}</PhysioWorkspaceContext.Provider>

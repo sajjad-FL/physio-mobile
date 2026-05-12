@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { getTokenSync, getRolesSync } from '../auth/tokenStore'
+import { clearSession, getTokenSync } from '../auth/tokenStore'
 
 /** No trailing slash. Must match server mount (routes use paths like `/auth/login`). */
 const rawBase = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api'
@@ -7,57 +7,61 @@ const baseURL = String(rawBase).trim().replace(/\/+$/, '')
 
 export const api = axios.create({ baseURL })
 
-const adminKey = process.env.EXPO_PUBLIC_ADMIN_API_KEY || ''
+// ---------------------------------------------------------------------------
+// Inflight deduplication for GET requests.
+// When several components (tabs, contexts) fire the same GET at the same moment
+// only one real HTTP request goes out; all callers share the single promise.
+// Any non-GET request invalidates the inflight map so stale data is never served.
+// ---------------------------------------------------------------------------
+const _inflight = new Map()
 
-function useAdminAuth(config) {
-  const url = config.url || ''
-  const roles = getRolesSync()
-  const jwtIsAdmin = roles.includes('admin') && getTokenSync()
-
-  if (url.startsWith('/physios/nearby')) {
-    return false
+function _inflightKey(url, params) {
+  const scope = getTokenSync() ? 'authed' : 'anon'
+  try {
+    return `${url}|${JSON.stringify(params ?? {})}|${scope}`
+  } catch {
+    return `${url}|?|${scope}`
   }
+}
 
-  const method = (config.method || 'get').toLowerCase()
-  const path = url.split('?')[0]
-
-  if (path.startsWith('/withdraw/pending') || (path === '/withdraw' && method === 'post')) {
-    return false
-  }
-
-  const isWithdrawAdminUrl =
-    (path === '/withdraw' && method === 'get') || (method === 'patch' && /^\/withdraw\/[^/]+$/.test(path))
-
-  const isAdminUrl =
-    url.startsWith('/admin') ||
-    isWithdrawAdminUrl ||
-    (url === '/payment/release' && method === 'post') ||
-    (url === '/bookings' && method === 'get') ||
-    (Boolean(url.match(/^\/bookings\/[^/]+$/)) && method === 'patch') ||
-    (Boolean(url.match(/^\/bookings\/[^/]+\/verify-payment$/)) && method === 'patch') ||
-    (Boolean(url.match(/^\/bookings\/[^/]+\/reject-payment$/)) && method === 'patch') ||
-    ((url === '/physios' || url.startsWith('/physios?')) && (method === 'get' || method === 'post'))
-
-  if (isAdminUrl) {
-    if (jwtIsAdmin) {
-      return false
-    }
-    if (adminKey) {
-      config.headers.Authorization = 'Bearer ' + adminKey
-      return true
-    }
-  }
-
-  return false
+const _rawGet = api.get.bind(api)
+api.get = function dedupedGet(url, config = {}) {
+  const key = _inflightKey(url, config?.params)
+  const running = _inflight.get(key)
+  if (running) return running
+  const p = _rawGet(url, config).finally(() => _inflight.delete(key))
+  _inflight.set(key, p)
+  return p
 }
 
 api.interceptors.request.use((config) => {
-  if (useAdminAuth(config)) {
-    return config
-  }
   const token = getTokenSync()
   if (token) {
     config.headers.Authorization = 'Bearer ' + token
   }
+  // Any mutation clears inflight map so next GET gets fresh data.
+  const method = String(config.method || 'get').toLowerCase()
+  if (method !== 'get') {
+    _inflight.clear()
+  }
   return config
 })
+
+let clearingUnauthorizedSession = false
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const status = error?.response?.status
+    // If server says JWT is invalid/expired, treat user as logged out.
+    if (status === 401 && getTokenSync() && !clearingUnauthorizedSession) {
+      clearingUnauthorizedSession = true
+      try {
+        await clearSession()
+      } finally {
+        clearingUnauthorizedSession = false
+      }
+    }
+    return Promise.reject(error)
+  },
+)

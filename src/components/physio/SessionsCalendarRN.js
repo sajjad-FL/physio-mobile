@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   monthBtn: { padding: 8 },
-  monthBtnTxt: { fontSize: 18, fontWeight: '700', color: colors.slate900 },
+  monthBtnTxt: { fontSize: 16, fontWeight: '700', color: colors.slate900 },
   monthTitle: { fontSize: 16, fontWeight: '700', color: colors.slate900 },
   weekRow: { flexDirection: 'row', marginBottom: 4 },
   weekCell: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '600', color: colors.slate500 },

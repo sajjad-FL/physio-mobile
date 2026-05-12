@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
   },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
   h3: { fontSize: 14, fontWeight: '700', color: colors.slate900 },
-  big: { marginTop: 6, fontSize: 22, fontWeight: '800', color: colors.slate900 },
+  big: { marginTop: 6, fontSize: 18, fontWeight: '800', color: colors.slate900 },
   sub: { marginTop: 4, fontSize: 13, color: colors.slate500 },
   donePill: {
     paddingHorizontal: 10,

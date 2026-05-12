@@ -1,25 +1,56 @@
 import { memo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { colors } from '../../theme/colors'
+import { r } from '../../theme/radius'
+import { shadows } from '../../theme/shadows'
 
-function Card({ children, style }) {
-  return <View style={[styles.card, style]}>{children}</View>
+/**
+ * Surface card.
+ * Variants: 'default' | 'flat' | 'filled'
+ * Padding:  'sm' (8) | 'md' (10, default) | 'lg' (14) | 'none' (0)
+ */
+function Card({ children, variant = 'default', padding = 'md', style }) {
+  return (
+    <View
+      style={[
+        styles.base,
+        styles[`pad_${padding}`],
+        variant === 'default' && styles.default,
+        variant === 'flat' && styles.flat,
+        variant === 'filled' && styles.filled,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  )
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: 16,
+  base: {
+    borderRadius: r.xl,
+    backgroundColor: colors.white,
+  },
+
+  // Padding variants
+  pad_none: { padding: 0 },
+  pad_sm: { padding: 8 },
+  pad_md: { padding: 10 },
+  pad_lg: { padding: 14 },
+
+  // Style variants
+  default: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    backgroundColor: colors.white,
-    padding: 20,
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    ...shadows.sm,
+  },
+  flat: {
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  filled: {
+    backgroundColor: colors.slate50,
   },
 })
 
 export default memo(Card)
-

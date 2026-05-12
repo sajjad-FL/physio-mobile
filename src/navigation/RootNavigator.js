@@ -15,9 +15,9 @@ import PhysioDisputesScreen from '../screens/PhysioDisputesScreen'
 import PhysioOnboardingScreen from '../screens/PhysioOnboardingScreen'
 import PhysioVerificationRedirectScreen from '../screens/PhysioVerificationRedirectScreen'
 import RegisterPhysioScreen from '../screens/RegisterPhysioScreen'
+import PhysioListScreen from '../screens/PhysioListScreen'
 import UserTabNavigator from './UserTabNavigator'
 import PhysioTabNavigator from './PhysioTabNavigator'
-import AdminTabNavigator from './AdminTabNavigator'
 import { defaultNativeStackScreenOptions } from './navLayout'
 
 const Stack = createNativeStackNavigator()
@@ -51,11 +51,15 @@ export default function RootNavigator() {
       <Stack.Screen name="RegisterPhysio" component={RegisterPhysioScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Unauthorized" component={UnauthorizedScreen} options={{ title: 'Unauthorized' }} />
       <Stack.Screen name="PublicPhysician" component={PlaceholderScreen} options={{ title: 'Physician' }} />
+      {/**
+       * Register role dashboards on the root stack so CommonActions.reset targets
+       * (e.g. PhysioTabs after login) always resolve. UserTabNavigator / PhysioTabNavigator
+       * guard token + role and redirect to Login or Unauthorized.
+       */}
       <Stack.Screen name="UserTabs" component={UserTabNavigator} options={{ headerShown: false }} />
       <Stack.Screen name="PhysioTabs" component={PhysioTabNavigator} options={{ headerShown: false }} />
-      <Stack.Screen name="AdminTabs" component={AdminTabNavigator} options={{ headerShown: false }} />
       <Stack.Screen name="ProfileGlobal" component={ProfileScreen} options={{ title: 'Profile' }} />
-      <Stack.Screen name="PhysioList" component={PlaceholderScreen} options={{ title: 'Book' }} />
+      <Stack.Screen name="PhysioList" component={PhysioListScreen} options={{ title: 'Book' }} />
       <Stack.Screen name="MapView" component={PlaceholderScreen} options={{ title: 'Map' }} />
       <Stack.Screen name="BookingLegacy" component={PlaceholderScreen} options={{ title: 'Book (legacy)' }} />
       <Stack.Screen name="PhysioAvailability" component={PhysioAvailabilityScreen} options={{ title: 'Availability' }} />

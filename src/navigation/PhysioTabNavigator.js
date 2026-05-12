@@ -1,8 +1,8 @@
-import { Text } from 'react-native'
 import { CommonActions, useNavigation } from '@react-navigation/native'
+import { useEffect } from 'react'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
-import { useEffect } from 'react'
+import { Ionicons } from '@expo/vector-icons'
 import { PhysioWorkspaceProvider, usePhysioWorkspace } from '../context/PhysioWorkspaceContext'
 import PhysioBookingsScreen from '../screens/PhysioBookingsScreen'
 import PhysioBookingDetailScreen from '../screens/PhysioBookingDetailScreen'
@@ -10,7 +10,8 @@ import PhysioWalletScreen from '../screens/PhysioWalletScreen'
 import PhysioAvailabilityScreen from '../screens/PhysioAvailabilityScreen'
 import PhysioNotesScreen from '../screens/PhysioNotesScreen'
 import PhysioMoreScreen from '../screens/PhysioMoreScreen'
-import { colors } from '../theme/colors'
+import PhysioTopNavHeader from '../components/PhysioTopNavHeader'
+import CustomTabBar from './CustomTabBar'
 import { defaultNativeStackScreenOptions, defaultTabScreenOptions } from './navLayout'
 import { getRoleSync, getTokenSync } from '../auth/tokenStore'
 import { useAuth } from '../context/AuthContext'
@@ -18,24 +19,15 @@ import { useAuth } from '../context/AuthContext'
 const Tab = createBottomTabNavigator()
 const BookingsStack = createNativeStackNavigator()
 
-function TabGlyph({ glyph, focused }) {
-  return (
-    <Text style={{ fontSize: 16, opacity: focused ? 1 : 0.55, color: focused ? colors.brand : colors.slate500 }}>
-      {glyph}
-    </Text>
-  )
-}
-
 function PhysioBookingsStackInner() {
   return (
     <BookingsStack.Navigator
       screenOptions={{
         ...defaultNativeStackScreenOptions,
-        headerTitleStyle: { fontWeight: '700' },
-        headerTintColor: colors.brand,
+        header: ({ navigation }) => <PhysioTopNavHeader navigation={navigation} />,
       }}
     >
-      <BookingsStack.Screen name="PhysioBookingsList" component={PhysioBookingsScreen} options={{ title: 'Workspace' }} />
+      <BookingsStack.Screen name="PhysioBookingsList" component={PhysioBookingsScreen} />
       <BookingsStack.Screen
         name="PhysioBookingDetail"
         component={PhysioBookingDetailScreen}
@@ -61,28 +53,34 @@ function TabsWithBadges() {
       return
     }
     const r = getRoleSync()
-    if (r !== 'physio' && r !== 'admin') {
+    if (r !== 'physio') {
       root.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Unauthorized' }] }))
     }
   }, [nav, authEpoch])
 
   return (
     <Tab.Navigator
-      detachInactiveScreens={false}
+      detachInactiveScreens
+      tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         ...defaultTabScreenOptions,
         headerShown: false,
-        tabBarActiveTintColor: colors.brand,
-        tabBarInactiveTintColor: colors.slate500,
-        tabBarStyle: { borderTopColor: colors.borderSubtle },
       }}
     >
       <Tab.Screen
         name="PhysioDashboard"
         component={PhysioBookingsStackInner}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault()
+            navigation.navigate('PhysioDashboard', { screen: 'PhysioBookingsList' })
+          },
+        })}
         options={{
           title: 'Bookings',
-          tabBarIcon: ({ focused }) => <TabGlyph glyph="▦" focused={focused} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={22} color={color} />
+          ),
           tabBarBadge: bookingBadge > 0 ? (bookingBadge > 99 ? '99+' : bookingBadge) : undefined,
         }}
       />
@@ -91,10 +89,11 @@ function TabsWithBadges() {
         component={PhysioWalletScreen}
         options={{
           title: 'Wallet',
-          tabBarIcon: ({ focused }) => <TabGlyph glyph="◇" focused={focused} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'wallet' : 'wallet-outline'} size={22} color={color} />
+          ),
           headerShown: true,
-          headerTitle: 'Wallet',
-          headerTitleStyle: { fontWeight: '700' },
+          header: ({ navigation }) => <PhysioTopNavHeader navigation={navigation} />,
         }}
       />
       <Tab.Screen
@@ -102,10 +101,11 @@ function TabsWithBadges() {
         component={PhysioAvailabilityScreen}
         options={{
           title: 'Hours',
-          tabBarIcon: ({ focused }) => <TabGlyph glyph="◷" focused={focused} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'time' : 'time-outline'} size={22} color={color} />
+          ),
           headerShown: true,
-          headerTitle: 'Availability',
-          headerTitleStyle: { fontWeight: '700' },
+          header: ({ navigation }) => <PhysioTopNavHeader navigation={navigation} />,
         }}
       />
       <Tab.Screen
@@ -113,10 +113,11 @@ function TabsWithBadges() {
         component={PhysioNotesScreen}
         options={{
           title: 'Notes',
-          tabBarIcon: ({ focused }) => <TabGlyph glyph="✎" focused={focused} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'document-text' : 'document-text-outline'} size={22} color={color} />
+          ),
           headerShown: true,
-          headerTitle: 'Clinical notes',
-          headerTitleStyle: { fontWeight: '700' },
+          header: ({ navigation }) => <PhysioTopNavHeader navigation={navigation} />,
         }}
       />
       <Tab.Screen
@@ -124,10 +125,11 @@ function TabsWithBadges() {
         component={PhysioMoreScreen}
         options={{
           title: 'Hub',
-          tabBarIcon: ({ focused }) => <TabGlyph glyph="⚙" focused={focused} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'grid' : 'grid-outline'} size={22} color={color} />
+          ),
           headerShown: true,
-          headerTitle: 'Hub',
-          headerTitleStyle: { fontWeight: '700' },
+          header: ({ navigation }) => <PhysioTopNavHeader navigation={navigation} />,
         }}
       />
     </Tab.Navigator>

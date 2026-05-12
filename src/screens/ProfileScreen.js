@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -18,10 +19,11 @@ import Toast from 'react-native-toast-message'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { api } from '../api/client'
 import Button from '../components/ui/Button'
-import Card from '../components/ui/Card'
 import Input from '../components/ui/Input'
-import { useAuth } from '../context/AuthContext'
+import MapPickerModal from '../components/booking/MapPickerModal'
 import { colors } from '../theme/colors'
+import { figmaTokens as F, figmaShadowSm } from '../theme/figmaTokens'
+import { font, type } from '../theme/typography'
 import { assetUrl } from '../utils/assetUrl'
 import { validateProfileLiveField } from '../utils/profileLiveValidation'
 
@@ -33,9 +35,9 @@ const GENDERS = [
 ]
 
 function profileRoleFromApi(d) {
-  if (d?.role === 'user' || d?.role === 'physio' || d?.role === 'admin') return d.role
+  if (d?.role === 'physio') return 'physio'
+  if (d?.role === 'user' || d?.role === 'patient') return 'user'
   const arr = Array.isArray(d?.roles) ? d.roles : []
-  if (arr.includes('admin')) return 'admin'
   if (arr.includes('physio')) return 'physio'
   return 'user'
 }
@@ -56,7 +58,6 @@ function parseYmd(s) {
 
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets()
-  const { logout } = useAuth()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -77,6 +78,10 @@ export default function ProfileScreen({ navigation }) {
   const [addressText, setAddressText] = useState('')
   const [addressLat, setAddressLat] = useState(null)
   const [addressLng, setAddressLng] = useState(null)
+  const [locationModalOpen, setLocationModalOpen] = useState(false)
+  const [locationDraft, setLocationDraft] = useState('')
+  const [mapPickerOpen, setMapPickerOpen] = useState(false)
+  const [mapPin, setMapPin] = useState({ lat: 17.36162, lng: 78.47452 })
   const [fieldErrors, setFieldErrors] = useState({})
 
   const isPhysio = role === 'physio'
@@ -173,6 +178,79 @@ export default function ProfileScreen({ navigation }) {
     }
   }
 
+  async function useLocationForModal() {
+    setLocating(true)
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync()
+      if (status !== 'granted') {
+        Toast.show({ type: 'error', text1: 'Location permission is required to set your address pin' })
+        return
+      }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+      const lat = pos.coords.latitude
+      const lng = pos.coords.longitude
+      setAddressLat(lat)
+      setAddressLng(lng)
+      setMapPin({ lat, lng })
+      let label = ''
+      try {
+        const geo = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng })
+        const g = geo[0]
+        if (g) {
+          const parts = [g.name, g.street, g.streetNumber, g.district, g.city, g.region, g.postalCode, g.country]
+            .filter(Boolean)
+            .map((x) => String(x).trim())
+          label = [...new Set(parts)].join(', ')
+        }
+      } catch {
+        /* ignore reverse geocode */
+      }
+      if (!label) label = `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+      setLocationDraft(label)
+      Toast.show({ type: 'success', text1: 'Location captured' })
+    } catch (e) {
+      Toast.show({ type: 'error', text1: e.message || 'Could not read location' })
+    } finally {
+      setLocating(false)
+    }
+  }
+
+  async function applyMapPinToDraft() {
+    const lat = Number(mapPin?.lat)
+    const lng = Number(mapPin?.lng)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      Toast.show({ type: 'error', text1: 'Pick a valid map location' })
+      return
+    }
+    setAddressLat(lat)
+    setAddressLng(lng)
+    patchField('addressCoords', '', {})
+    try {
+      const geo = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng })
+      const g = geo?.[0]
+      const parts = [g?.name, g?.street, g?.streetNumber, g?.district, g?.city, g?.region, g?.postalCode, g?.country]
+        .filter(Boolean)
+        .map((x) => String(x).trim())
+      const label = [...new Set(parts)].join(', ')
+      setLocationDraft(label || `${lat.toFixed(5)}, ${lng.toFixed(5)}`)
+    } catch {
+      setLocationDraft(`${lat.toFixed(5)}, ${lng.toFixed(5)}`)
+    }
+    setMapPickerOpen(false)
+  }
+
+  function applyAddressDraft() {
+    const txt = String(locationDraft || '').trim()
+    if (!txt) {
+      Toast.show({ type: 'error', text1: 'Please enter address' })
+      return
+    }
+    setAddressText(txt)
+    patchField('address', txt)
+    patchField('addressCoords', '', {})
+    setLocationModalOpen(false)
+  }
+
   async function pickAvatar() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!perm.granted) {
@@ -201,14 +279,20 @@ export default function ProfileScreen({ navigation }) {
     setUploading(true)
     try {
       const fd = new FormData()
-      fd.append('avatar', {
-        uri,
-        name: asset.fileName || 'avatar.jpg',
-        type: mime,
-      })
-      const res = await api.patch('/profile/avatar', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
+      if (Platform.OS === 'web') {
+        const resp = await fetch(uri)
+        const blob = await resp.blob()
+        const file = new File([blob], asset.fileName || 'avatar.jpg', { type: mime })
+        fd.append('avatar', file)
+      } else {
+        fd.append('avatar', {
+          uri,
+          name: asset.fileName || 'avatar.jpg',
+          type: mime,
+        })
+      }
+      // Let axios set multipart boundary automatically.
+      const res = await api.patch('/profile/avatar', fd)
       const next = res.data?.avatarUrl || ''
       setAvatarUrl(next)
       setPreviewLocal(null)
@@ -286,16 +370,18 @@ export default function ProfileScreen({ navigation }) {
     }
   }
 
-  const roleLabel = useMemo(() => {
-    if (role === 'physio') return 'Physiotherapist profile'
-    if (role === 'admin') return 'Admin profile'
-    return 'Patient profile'
-  }, [role])
+  const profileSubtitle = useMemo(
+    () =>
+      isPhysio
+        ? 'Update your practice details, fees, and service address so patients can book with confidence.'
+        : 'Keep your contact details and address current for bookings and care visits.',
+    [isPhysio],
+  )
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.brand} />
+        <ActivityIndicator size="large" color={F.primary} />
       </View>
     )
   }
@@ -316,11 +402,15 @@ export default function ProfileScreen({ navigation }) {
           </Pressable>
         ) : null}
 
-        <Text style={styles.eyebrow}>{roleLabel}</Text>
-        <Text style={styles.title}>Profile</Text>
-        <Text style={styles.lead}>Your details, photo, and saved address</Text>
+        <View style={styles.heroBlock}>
+          <View style={styles.rolePill}>
+            <Text style={styles.rolePillTxt}>{isPhysio ? 'Physiotherapist' : 'Patient'}</Text>
+          </View>
+          <Text style={styles.title}>Profile</Text>
+          <Text style={styles.lead}>{profileSubtitle}</Text>
+        </View>
 
-        <Card style={styles.mainCard}>
+        <View style={styles.sectionCard}>
           <View style={styles.avatarSection}>
             <View style={styles.avatarRing}>
               {displayAvatarUri ? (
@@ -336,11 +426,13 @@ export default function ProfileScreen({ navigation }) {
                 </View>
               ) : null}
             </View>
-            <Button title={uploading ? 'Uploading…' : 'Upload photo'} variant="outline" onPress={pickAvatar} disabled={uploading} />
-            <Text style={styles.avatarHint}>JPEG, PNG, or WebP · max ~2MB (same as web)</Text>
+            <Button title={uploading ? 'Uploading…' : 'Upload photo'} variant="outline" size="sm" onPress={pickAvatar} disabled={uploading} />
+            <Text style={styles.avatarHint}>JPEG, PNG, or WebP · max ~2MB</Text>
           </View>
+        </View>
 
-          <View style={styles.formBlock}>
+        <View style={styles.sectionCard}>
+          <Text style={[styles.sectionKicker, styles.sectionKickerFirst]}>Contact</Text>
             <Input
               label="Name"
               value={name}
@@ -367,13 +459,13 @@ export default function ProfileScreen({ navigation }) {
               autoCorrect={false}
               error={fieldErrors.profileEmail}
             />
-            <View style={styles.fieldGap} />
-
-            <Text style={styles.label}>Address</Text>
+            <View style={styles.sectionRule} />
+            <Text style={styles.sectionKicker}>Address</Text>
             {addressText.trim() || addressLat != null ? (
               <View style={styles.currentAddr}>
-                <Text style={styles.currentAddrStrong}>Current:</Text>{' '}
-                <Text style={styles.currentAddrBody}>{addressText.trim() || '—'}</Text>
+                <Text style={styles.currentAddrStrong}>
+                  Current: <Text style={styles.currentAddrBody}>{addressText.trim() || '—'}</Text>
+                </Text>
                 {addressLat != null && addressLng != null ? (
                   <Text style={styles.coords}>
                     {Number(addressLat).toFixed(5)}, {Number(addressLng).toFixed(5)}
@@ -383,13 +475,29 @@ export default function ProfileScreen({ navigation }) {
             ) : (
               <Text style={styles.helper}>No address saved yet. Enter below or use your device location.</Text>
             )}
-            <Pressable
-              style={[styles.locBtn, locating && styles.locBtnBusy]}
-              onPress={useDeviceLocation}
-              disabled={locating}
-            >
-              <Text style={styles.locBtnTxt}>{locating ? 'Getting location…' : 'Use current location'}</Text>
-            </Pressable>
+            <View style={styles.locRow}>
+              <Pressable
+                style={[styles.locBtn, locating && styles.locBtnBusy]}
+                onPress={useDeviceLocation}
+                disabled={locating}
+              >
+                <Text style={styles.locBtnTxt}>{locating ? 'Getting location…' : 'Use current location'}</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.locBtn, locating && styles.locBtnBusy]}
+                onPress={() => {
+                  setLocationDraft(addressText || '')
+                  setMapPin({
+                    lat: Number.isFinite(addressLat) ? addressLat : 17.36162,
+                    lng: Number.isFinite(addressLng) ? addressLng : 78.47452,
+                  })
+                  setLocationModalOpen(true)
+                }}
+                disabled={locating}
+              >
+                <Text style={styles.locBtnTxt}>Change location</Text>
+              </Pressable>
+            </View>
             <TextInput
               value={addressText}
               onChangeText={(v) => {
@@ -403,8 +511,8 @@ export default function ProfileScreen({ navigation }) {
             />
             {fieldErrors.address ? <Text style={styles.err}>{fieldErrors.address}</Text> : null}
             {fieldErrors.addressCoords ? <Text style={styles.err}>{fieldErrors.addressCoords}</Text> : null}
-            <View style={styles.fieldGap} />
-
+            <View style={styles.sectionRule} />
+            <Text style={styles.sectionKicker}>Personal</Text>
             <Text style={styles.label}>Date of birth</Text>
             <Pressable style={styles.dateBtn} onPress={() => setDobShow(true)}>
               <Text style={[styles.dateBtnTxt, !dob && { color: colors.slate500 }]}>{dob || 'Select date…'}</Text>
@@ -467,7 +575,8 @@ export default function ProfileScreen({ navigation }) {
 
             {isPhysio ? (
               <>
-                <View style={styles.fieldGap} />
+                <View style={styles.sectionRule} />
+                <Text style={styles.sectionKicker}>Practice</Text>
                 <Input
                   label="Specialization"
                   value={specialization}
@@ -513,150 +622,227 @@ export default function ProfileScreen({ navigation }) {
             ) : null}
 
             <View style={styles.saveGap} />
-            <Button
-              title={saving ? 'Saving…' : 'Save changes'}
+            <Pressable
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.saveCta, (saving || uploading) && styles.saveCtaDisabled, pressed && !saving && !uploading && styles.saveCtaPressed]}
               onPress={save}
-              loading={saving}
               disabled={saving || uploading}
-              style={styles.saveBtn}
-            />
-          </View>
-        </Card>
+            >
+              {saving ? (
+                <ActivityIndicator color={F.surface} size="small" />
+              ) : (
+                <Text style={styles.saveCtaTxt}>Save changes</Text>
+              )}
+            </Pressable>
+        </View>
 
-        <View style={{ height: 20 }} />
-        <Button title="Sign out" variant="outline" onPress={() => logout(navigation)} />
+        <View style={{ height: 8 }} />
       </ScrollView>
+
+      <Modal transparent visible={locationModalOpen} animationType="fade" onRequestClose={() => setLocationModalOpen(false)}>
+        <View style={styles.modalRoot}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setLocationModalOpen(false)} />
+          <View style={styles.modalCard}>
+            <Text style={styles.cardTitle}>Set location</Text>
+            <Text style={styles.helper}>Search, use GPS, or drop a pin. This updates your saved profile address.</Text>
+            <Text style={[styles.label, { marginTop: 10 }]}>Search</Text>
+            <TextInput
+              value={locationDraft}
+              onChangeText={setLocationDraft}
+              placeholder="Enter address"
+              placeholderTextColor={colors.slate500}
+              style={styles.singleInput}
+            />
+            <View style={{ height: 8 }} />
+            <Button title="Select on map" variant="outline" onPress={() => setMapPickerOpen(true)} />
+            <View style={{ height: 8 }} />
+            <Button
+              title={locating ? 'Locating…' : 'Use my location'}
+              variant="outline"
+              onPress={useLocationForModal}
+              disabled={locating}
+            />
+            <View style={{ height: 8 }} />
+            <Button title="Use this location" onPress={applyAddressDraft} />
+            <View style={{ height: 8 }} />
+            <Button title="Cancel" variant="outline" onPress={() => setLocationModalOpen(false)} />
+          </View>
+        </View>
+      </Modal>
+
+      <MapPickerModal
+        visible={mapPickerOpen}
+        pin={mapPin}
+        geoBusy={locating}
+        onClose={() => setMapPickerOpen(false)}
+        onPick={setMapPin}
+        onUseMyLocation={useLocationForModal}
+        onUseLocation={applyMapPinToDraft}
+      />
     </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.slate50 },
-  pad: { paddingHorizontal: 16, paddingTop: 8 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.slate50 },
-  backRow: { marginBottom: 8 },
-  backTxt: { fontSize: 15, fontWeight: '600', color: colors.brand },
-  eyebrow: {
-    marginBottom: 6,
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.brand,
-    letterSpacing: 1.5,
+  flex: { flex: 1, backgroundColor: F.canvas },
+  pad: { paddingHorizontal: F.padScreen, paddingTop: 10 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: F.canvas },
+  backRow: { marginBottom: 10 },
+  backTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: F.primaryDark },
+  heroBlock: { marginBottom: 12 },
+  rolePill: {
+    alignSelf: 'flex-start',
+    backgroundColor: F.badgeMint,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: F.radiusPill,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(162, 240, 239, 0.65)',
+  },
+  rolePillTxt: {
+    fontFamily: font.bold,
+    fontSize: 9,
+    letterSpacing: 0.8,
+    color: F.primaryDark,
     textTransform: 'uppercase',
   },
-  title: { fontSize: 24, fontWeight: '800', color: colors.slate900, letterSpacing: -0.4, textAlign: 'center' },
-  lead: {
-    marginTop: 8,
-    marginBottom: 20,
-    fontSize: 14,
-    color: colors.slate600,
-    textAlign: 'center',
-    lineHeight: 21,
-    fontWeight: '500',
+  title: {
+    fontFamily: font.bold,
+    fontSize: 20,
+    color: F.ink,
+    letterSpacing: -0.35,
+    lineHeight: 26,
   },
-  mainCard: { paddingHorizontal: 0, paddingVertical: 0, overflow: 'hidden' },
+  lead: {
+    marginTop: 6,
+    fontFamily: font.regular,
+    fontSize: type.sm,
+    color: F.body,
+    lineHeight: 19,
+    maxWidth: 400,
+  },
+  sectionCard: {
+    backgroundColor: F.surface,
+    borderRadius: F.radiusCardLg,
+    borderWidth: 1,
+    borderColor: F.borderSoft,
+    padding: F.padCard,
+    marginBottom: 10,
+    ...figmaShadowSm,
+  },
+  sectionKicker: {
+    marginTop: 4,
+    marginBottom: 10,
+    fontFamily: font.bold,
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: F.muted,
+  },
+  sectionKickerFirst: { marginTop: 0 },
+  sectionRule: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: F.line,
+    marginVertical: 14,
+  },
   avatarSection: {
     alignItems: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.white,
+    paddingVertical: 6,
   },
   avatarRing: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     borderWidth: 2,
-    borderColor: colors.borderSubtle,
+    borderColor: F.outlineVariant,
     overflow: 'hidden',
-    marginBottom: 14,
-    backgroundColor: colors.slate100,
+    marginBottom: 12,
+    backgroundColor: '#e2e8f0',
   },
   avatarImg: { width: '100%', height: '100%' },
   avatarPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  avatarMonogram: { fontSize: 40, fontWeight: '700', color: colors.slate400 },
+  avatarMonogram: { fontFamily: font.bold, fontSize: 20, color: F.inkSecondary },
   avatarBusy: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarHint: { marginTop: 10, fontSize: 11, color: colors.slate500, textAlign: 'center', maxWidth: 280 },
-  formBlock: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 24 },
-  fieldGap: { height: 16 },
-  label: { marginBottom: 8, fontSize: 14, fontWeight: '600', color: colors.slate800 },
-  helper: { marginTop: 6, fontSize: 12, color: colors.slate500, lineHeight: 17 },
-  helperTight: { marginTop: -2, marginBottom: 8, fontSize: 12, color: colors.slate500 },
+  avatarHint: { marginTop: 8, fontSize: type.xs, color: F.muted, textAlign: 'center', maxWidth: 280 },
+  fieldGap: { height: 12 },
+  label: { marginBottom: 6, fontFamily: font.semiBold, fontSize: type.sm, color: F.ink },
+  helper: { marginTop: 4, fontFamily: font.regular, fontSize: type.xs, color: F.muted, lineHeight: 17 },
+  helperTight: { marginTop: -2, marginBottom: 6, fontFamily: font.regular, fontSize: type.xs, color: F.muted },
+  locRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   currentAddr: {
     marginBottom: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: F.padCard,
     paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: colors.slate50,
+    borderRadius: F.radiusCard,
+    backgroundColor: F.mintSoft,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: F.borderSoft,
   },
-  currentAddrStrong: { fontSize: 12, fontWeight: '700', color: colors.slate800 },
-  currentAddrBody: { fontSize: 12, color: colors.slate600, lineHeight: 18 },
-  coords: { marginTop: 6, fontSize: 11, color: colors.slate500, fontVariant: ['tabular-nums'] },
+  currentAddrStrong: { fontFamily: font.bold, fontSize: type.sm, color: F.ink },
+  currentAddrBody: { fontFamily: font.regular, fontSize: type.sm, color: F.body, lineHeight: 18 },
+  coords: { marginTop: 4, fontFamily: font.medium, fontSize: type.xs, color: F.muted, fontVariant: ['tabular-nums'] },
   locBtn: {
-    alignSelf: 'flex-start',
-    marginBottom: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: colors.brandSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: F.radiusButton,
+    backgroundColor: F.surface,
     borderWidth: 1,
-    borderColor: 'rgba(13,148,136,0.35)',
+    borderColor: F.outlineVariant,
   },
   locBtnBusy: { opacity: 0.7 },
-  locBtnTxt: { fontSize: 13, fontWeight: '700', color: colors.teal800 },
+  locBtnTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: F.primaryDark },
   textArea: {
     marginTop: 4,
-    minHeight: 100,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
+    minHeight: 88,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: F.radiusCard,
     borderWidth: 1,
-    borderColor: colors.slate200,
-    fontSize: 16,
-    color: colors.slate900,
-    backgroundColor: colors.white,
+    borderColor: F.outlineVariant,
+    fontFamily: font.regular,
+    fontSize: type.sm,
+    color: F.ink,
+    backgroundColor: F.surface,
     textAlignVertical: 'top',
   },
   textAreaErr: { borderColor: colors.red500 },
-  err: { marginTop: 6, fontSize: 12, color: colors.red600 },
+  err: { marginTop: 6, fontSize: type.xs, color: colors.red600 },
   dateBtn: {
     marginTop: 4,
-    minHeight: 48,
+    minHeight: 38,
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    borderRadius: F.radiusCard,
     borderWidth: 1,
-    borderColor: colors.slate200,
-    backgroundColor: colors.white,
+    borderColor: F.outlineVariant,
+    backgroundColor: F.surface,
   },
-  dateBtnTxt: { fontSize: 16, color: colors.slate900, fontVariant: ['tabular-nums'] },
+  dateBtnTxt: { fontFamily: font.regular, fontSize: type.sm, color: F.ink, fontVariant: ['tabular-nums'] },
   iosPickWrap: { marginTop: 8 },
   genderRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   genderChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: F.radiusPill,
     borderWidth: 1,
-    borderColor: colors.slate200,
-    backgroundColor: colors.white,
+    borderColor: F.outlineVariant,
+    backgroundColor: F.surface,
   },
   genderChipOn: {
-    borderColor: colors.brand,
-    backgroundColor: colors.brandSoft,
+    borderColor: F.primary,
+    backgroundColor: F.mintSoft,
   },
-  genderChipTxt: { fontSize: 13, fontWeight: '600', color: colors.slate700 },
-  genderChipTxtOn: { color: colors.teal800 },
+  genderChipTxt: { fontFamily: font.semiBold, fontSize: 11, color: F.body },
+  genderChipTxtOn: { color: F.primaryDark },
   twoCol: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     flexWrap: 'wrap',
   },
   twoColItem: {
@@ -665,17 +851,38 @@ const styles = StyleSheet.create({
   },
   singleInput: {
     borderWidth: 1,
-    borderColor: colors.slate200,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    height: 48,
-    fontSize: 16,
-    color: colors.slate900,
-    backgroundColor: colors.white,
+    borderColor: F.outlineVariant,
+    borderRadius: F.radiusCard,
+    paddingHorizontal: 12,
+    height: 42,
+    fontFamily: font.regular,
+    fontSize: type.sm,
+    color: F.ink,
+    backgroundColor: F.surface,
   },
   singleInputErr: {
     borderColor: colors.red500,
   },
-  saveGap: { height: 8 },
-  saveBtn: { alignSelf: 'stretch' },
+  saveGap: { height: 14 },
+  saveCta: {
+    minHeight: 40,
+    borderRadius: F.radiusButton,
+    backgroundColor: F.primaryDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: F.padCard,
+  },
+  saveCtaPressed: { opacity: 0.92 },
+  saveCtaDisabled: { opacity: 0.45 },
+  saveCtaTxt: { fontFamily: font.bold, fontSize: type.sm, color: F.surface, letterSpacing: 0.15 },
+  modalRoot: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', padding: F.padScreen },
+  modalCard: {
+    borderRadius: F.radiusHero,
+    backgroundColor: F.surface,
+    borderWidth: 1,
+    borderColor: F.borderSoft,
+    padding: F.padCard,
+    ...figmaShadowSm,
+  },
+  cardTitle: { fontFamily: font.bold, fontSize: type.md, color: F.ink },
 })

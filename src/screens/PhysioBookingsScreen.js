@@ -1,8 +1,7 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -11,15 +10,15 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import Toast from 'react-native-toast-message'
-import { useFocusEffect } from '@react-navigation/native'
-import { api } from '../api/client'
+import { Ionicons } from '@expo/vector-icons'
 import PhysioApprovalBanner from '../components/physio/PhysioApprovalBanner'
 import PhysioFilterModal from '../components/physio/PhysioFilterModal'
 import SessionsCalendarRN from '../components/physio/SessionsCalendarRN'
 import { DEFAULT_PHYSIO_FILTERS } from '../constants/physioBookingFilters'
 import { usePhysioWorkspaceOptional } from '../context/PhysioWorkspaceContext'
+import { usePhysioBookings } from '../api/queries'
 import { colors } from '../theme/colors'
+import { font, type, leading } from '../theme/typography'
 import { formatBookingDateAndSlot } from '../utils/date'
 import { openGoogleMapsDestination } from '../utils/googleMaps'
 import { normalizeIndianPhone } from '../utils/phoneIndia'
@@ -36,13 +35,25 @@ function patientInitial(name) {
   return s ? s.slice(0, 1).toUpperCase() : '?'
 }
 
+function statusAccent(b) {
+  if (b.sessionStatus === 'completed') return colors.success
+  if (b.rescheduled) return colors.warning
+  return colors.brand
+}
+
+function statusChipColors(b) {
+  if (b.sessionStatus === 'completed') return { bg: colors.successBg, fg: colors.emerald700, border: '#a7f3d0' }
+  if (b.rescheduled) return { bg: colors.amber50, fg: colors.amber800, border: '#fde68a' }
+  return { bg: colors.teal50, fg: colors.teal800, border: colors.brandSoft }
+}
+
+function serviceChipColors(b) {
+  if (b.serviceType === 'online') return { bg: colors.blue50, fg: colors.blue600, border: '#bfdbfe', label: 'Online' }
+  return { bg: '#dcfce7', fg: '#166534', border: '#a7f3d0', label: 'Home' }
+}
+
 export default function PhysioBookingsScreen({ navigation }) {
   const ws = usePhysioWorkspaceOptional()
-  const [bookings, setBookings] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [loadError, setLoadError] = useState('')
-  const [errorCode, setErrorCode] = useState('')
   const [filters, setFilters] = useState(() => ({ ...DEFAULT_PHYSIO_FILTERS }))
   const [filterDraft, setFilterDraft] = useState(() => ({ ...DEFAULT_PHYSIO_FILTERS }))
   const [filterOpen, setFilterOpen] = useState(false)
@@ -50,11 +61,20 @@ export default function PhysioBookingsScreen({ navigation }) {
   const [sort, setSort] = useState('latest')
   const [view, setView] = useState('list')
 
+  const {
+    data: bookings = [],
+    isLoading: loading,
+    isRefetching: refreshing,
+    refetch,
+    error: fetchError,
+  } = usePhysioBookings({ page: 1, limit: 100 })
+
+  const loadError = fetchError ? (fetchError?.response?.data?.message || 'Failed to load bookings') : ''
+  const errorCode = fetchError ? String(fetchError?.response?.data?.code || '') : ''
   const deferredSearch = useDeferredValue(search)
 
   const filtersActive = useMemo(
-    () =>
-      filters.status !== 'all' || filters.service !== 'all' || filters.date !== 'all',
+    () => filters.status !== 'all' || filters.service !== 'all' || filters.date !== 'all',
     [filters],
   )
 
@@ -70,11 +90,7 @@ export default function PhysioBookingsScreen({ navigation }) {
         const phoneDigits = phone.replace(/\D/g, '')
         const phoneNorm = normalizeIndianPhone(phone) || phoneDigits
         if (qNorm && qNorm.length === 10 && phoneNorm === qNorm) return true
-        return (
-          name.includes(q) ||
-          phone.toLowerCase().includes(q) ||
-          (digits.length > 0 && phoneDigits.includes(digits))
-        )
+        return name.includes(q) || phone.toLowerCase().includes(q) || (digits.length > 0 && phoneDigits.includes(digits))
       })
     }
     const arr = [...list]
@@ -89,136 +105,98 @@ export default function PhysioBookingsScreen({ navigation }) {
     return arr
   }, [bookings, filters, deferredSearch, sort])
 
-  const load = useCallback(async () => {
-    setLoadError('')
-    setErrorCode('')
-    try {
-      const res = await api.get('/physio/bookings', { params: { page: 1, limit: 100 } })
-      setBookings(res.data?.data || [])
-      ws?.refreshBadges?.()
-    } catch (e) {
-      setBookings([])
-      setErrorCode(String(e?.response?.data?.code || ''))
-      setLoadError(e?.response?.data?.message || 'Failed to load bookings')
-      Toast.show({ type: 'error', text1: e?.response?.data?.message || 'Failed to load bookings' })
-    }
-  }, [ws])
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    load().finally(() => {
-      if (!cancelled) setLoading(false)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [load])
-
-  useFocusEffect(
-    useCallback(() => {
-      ws?.refreshBadges?.()
-    }, [ws]),
-  )
-
-  async function onRefresh() {
-    setRefreshing(true)
-    await load()
-    setRefreshing(false)
-  }
-
-  function accentBorder(b) {
-    if (b.sessionStatus === 'completed') return { borderLeftColor: '#10b981' }
-    if (b.rescheduled) return { borderLeftColor: '#f59e0b' }
-    return { borderLeftColor: colors.blue600 }
-  }
-
-  function servicePill(b) {
-    const online = b.serviceType === 'online'
-    return {
-      pillBg: online ? colors.violet50 : colors.teal50,
-      pillFg: online ? colors.violet800 : colors.teal800,
-      pillText: online ? 'Online' : 'Home',
-    }
-  }
-
-  function statusPill(b) {
-    if (b.sessionStatus === 'completed') return { bg: colors.emerald50, fg: colors.emerald900, ring: '#a7f3d0' }
-    if (b.rescheduled) return { bg: colors.amber50, fg: colors.amber950, ring: '#fde68a' }
-    return { bg: colors.slate50, fg: colors.slate900, ring: colors.slate200 }
-  }
+  const stats = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    const todayCount = bookings.filter((b) => b.date === today).length
+    const completedCount = bookings.filter((b) => b.sessionStatus === 'completed').length
+    const scheduledCount = bookings.filter((b) => b.sessionStatus !== 'completed').length
+    return { total: bookings.length, today: todayCount, completed: completedCount, scheduled: scheduledCount }
+  }, [bookings])
 
   const showBanner = Boolean(ws?.me && ws?.platformApproved === false)
 
-  const heroShadow =
-    Platform.OS === 'ios'
-      ? {
-          shadowColor: '#0f172a',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.09,
-          shadowRadius: 14,
-        }
-      : {}
-
   const header = (
     <View style={styles.headerBlock}>
-      <View style={[styles.shellStripe, heroShadow]}>
-        <View style={styles.heroStripe} />
-        <View style={styles.heroBody}>
-          <Text style={styles.shellBrand}>PhysioKhom</Text>
-          <View style={styles.shellBadge}>
-            <Text style={styles.shellBadgeTxt}>Physio</Text>
-          </View>
-          <Text style={styles.shellSub}>Sessions, availability, and notes</Text>
-        </View>
-      </View>
       {showBanner ? (
-        <PhysioApprovalBanner
-          rejected={ws.rejected}
-          onPressOnboarding={() => navigation.getParent()?.getParent()?.navigate('PhysioOnboarding')}
-          onPressProfile={() => navigation.getParent()?.getParent()?.navigate('ProfileGlobal')}
-        />
-      ) : null}
-      <View style={[styles.intro, showBanner ? { paddingHorizontal: 16 } : null]}>
-        <Text style={styles.eyebrow}>Your workspace</Text>
-        <Text style={styles.title}>Assigned bookings</Text>
-        <Text style={styles.subtitle}>
-          Search and filter patients, switch list or calendar, then open any row for actions and full detail.
-        </Text>
-      </View>
-      {!loading && bookings.length > 0 ? (
-        <View style={[styles.toolbarCard, heroShadow, showBanner ? { marginHorizontal: 16 } : null]}>
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search by patient name or phone..."
-            placeholderTextColor={colors.slate500}
-            style={styles.search}
+        <View style={styles.bannerWrap}>
+          <PhysioApprovalBanner
+            rejected={ws.rejected}
+            onPressOnboarding={() => navigation.getParent()?.getParent()?.navigate('PhysioOnboarding')}
+            onPressProfile={() => navigation.getParent()?.getParent()?.navigate('ProfileGlobal')}
           />
-          <View style={styles.toolbarRow}>
-            <Pressable
-              style={[styles.sortChip, styles.sortGhost]}
-              onPress={() => setSort((s) => (s === 'latest' ? 'oldest' : 'latest'))}
-            >
-              <Text style={styles.sortChipTxt}>{sort === 'latest' ? 'Latest first' : 'Oldest first'}</Text>
-            </Pressable>
-            <Pressable style={styles.iconBtn} onPress={() => { setFilterDraft({ ...filters }); setFilterOpen(true) }}>
-              <Text style={styles.iconBtnTxt}>▼</Text>
-              {filtersActive ? <View style={styles.filterDot} /> : null}
-            </Pressable>
+        </View>
+      ) : null}
+
+      {/* ── Stats strip ──────────────────────────── */}
+      {!loading && bookings.length > 0 ? (
+        <View style={styles.statsStrip}>
+          <StatPill icon="calendar-outline" value={stats.today} label="Today" color={colors.brand} />
+          <View style={styles.statsDivider} />
+          <StatPill icon="time-outline" value={stats.scheduled} label="Scheduled" color={colors.blue600} />
+          <View style={styles.statsDivider} />
+          <StatPill icon="checkmark-circle-outline" value={stats.completed} label="Done" color={colors.success} />
+          <View style={styles.statsDivider} />
+          <StatPill icon="calendar-number-outline" value={stats.total} label="Total" color={colors.slate400} />
+        </View>
+      ) : null}
+
+      {/* ── Toolbar ──────────────────────────────── */}
+      {!loading && bookings.length > 0 ? (
+        <View style={styles.toolbar}>
+          {/* Search */}
+          <View style={styles.searchWrap}>
+            <Ionicons name="search-outline" size={15} color={colors.slate400} />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search patient, phone…"
+              placeholderTextColor={colors.slate300}
+              style={styles.searchInput}
+            />
+            {search.length > 0 ? (
+              <Pressable onPress={() => setSearch('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={15} color={colors.slate400} />
+              </Pressable>
+            ) : null}
+          </View>
+
+          {/* Controls row */}
+          <View style={styles.controlsRow}>
+            {/* View toggle */}
             <View style={styles.segWrap}>
-              <Pressable style={[styles.segBtn, view === 'list' && styles.segOn]} onPress={() => setView('list')}>
+              <Pressable style={[styles.segBtn, view === 'list' && styles.segBtnOn]} onPress={() => setView('list')}>
+                <Ionicons name="list-outline" size={13} color={view === 'list' ? colors.brand : colors.slate400} />
                 <Text style={[styles.segTxt, view === 'list' && styles.segTxtOn]}>List</Text>
               </Pressable>
-              <Pressable style={[styles.segBtn, view === 'calendar' && styles.segOn]} onPress={() => setView('calendar')}>
+              <Pressable style={[styles.segBtn, view === 'calendar' && styles.segBtnOn]} onPress={() => setView('calendar')}>
+                <Ionicons name="calendar-outline" size={13} color={view === 'calendar' ? colors.brand : colors.slate400} />
                 <Text style={[styles.segTxt, view === 'calendar' && styles.segTxtOn]}>Calendar</Text>
               </Pressable>
             </View>
+
+            <View style={styles.controlsRight}>
+              {/* Sort toggle */}
+              <Pressable
+                style={styles.sortBtn}
+                onPress={() => setSort((s) => (s === 'latest' ? 'oldest' : 'latest'))}
+              >
+                <Ionicons name={sort === 'latest' ? 'arrow-down-outline' : 'arrow-up-outline'} size={13} color={colors.slate500} />
+                <Text style={styles.sortTxt}>{sort === 'latest' ? 'Latest' : 'Oldest'}</Text>
+              </Pressable>
+
+              {/* Filter button */}
+              <Pressable
+                style={[styles.filterBtn, filtersActive && styles.filterBtnActive]}
+                onPress={() => { setFilterDraft({ ...filters }); setFilterOpen(true) }}
+              >
+                <Ionicons name="options-outline" size={14} color={filtersActive ? colors.white : colors.slate600} />
+                <Text style={[styles.filterBtnTxt, filtersActive && styles.filterBtnTxtActive]}>Filter</Text>
+                {filtersActive ? (
+                  <View style={styles.filterActiveDot} />
+                ) : null}
+              </Pressable>
+            </View>
           </View>
-          <Text style={styles.countLbl}>
-            Showing <Text style={styles.countEm}>{displayBookings.length}</Text> of {bookings.length}
-            {filtersActive ? ' · Filters on' : ''}
-          </Text>
         </View>
       ) : null}
     </View>
@@ -236,13 +214,20 @@ export default function PhysioBookingsScreen({ navigation }) {
     return (
       <FlatList
         data={[{ key: 'err' }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        style={styles.root}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} />}
         renderItem={() => (
-          <View style={styles.errBox}>
-            <Text style={styles.errTitle}>{loadError}</Text>
+          <View style={styles.errorCard}>
+            <View style={styles.errorIconWrap}>
+              <Ionicons name="warning-outline" size={24} color={colors.warning} />
+            </View>
+            <Text style={styles.errorTitle}>{loadError}</Text>
             {(errorCode === 'PHYSIO_PENDING' || errorCode === 'PROFILE_INCOMPLETE') && (
-              <Pressable style={styles.errBtn} onPress={() => navigation.getParent()?.getParent()?.navigate('PhysioOnboarding')}>
-                <Text style={styles.errBtnTxt}>Finish profile setup</Text>
+              <Pressable
+                style={styles.errorBtn}
+                onPress={() => navigation.getParent()?.getParent()?.navigate('PhysioOnboarding')}
+              >
+                <Text style={styles.errorBtnTxt}>Complete profile setup</Text>
               </Pressable>
             )}
           </View>
@@ -255,9 +240,19 @@ export default function PhysioBookingsScreen({ navigation }) {
     return (
       <FlatList
         data={[{ key: 'empty' }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        style={styles.root}
+        contentContainerStyle={styles.listPad}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} />}
         ListHeaderComponent={header}
-        renderItem={() => <Text style={styles.empty}>No assigned bookings yet.</Text>}
+        renderItem={() => (
+          <View style={styles.emptyBox}>
+            <View style={styles.emptyIconWrap}>
+              <Ionicons name="calendar-outline" size={30} color={colors.slate300} />
+            </View>
+            <Text style={styles.emptyTitle}>No bookings yet</Text>
+            <Text style={styles.emptySub}>Assigned sessions will appear here.</Text>
+          </View>
+        )}
       />
     )
   }
@@ -267,11 +262,15 @@ export default function PhysioBookingsScreen({ navigation }) {
       <>
         <FlatList
           data={[{ key: 'empty2' }]}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          style={styles.root}
+          contentContainerStyle={styles.listPad}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} />}
           ListHeaderComponent={header}
           renderItem={() => (
-            <View style={[styles.toolbarCard, styles.emptyFiltered]}>
-              <Text style={styles.emptyFilteredTxt}>No bookings match filters or search.</Text>
+            <View style={styles.emptyBox}>
+              <Ionicons name="search-outline" size={24} color={colors.slate300} />
+              <Text style={styles.emptyTitle}>No results</Text>
+              <Text style={styles.emptySub}>Try changing your filters or search.</Text>
             </View>
           )}
         />
@@ -279,10 +278,7 @@ export default function PhysioBookingsScreen({ navigation }) {
           visible={filterOpen}
           draft={filterDraft}
           setDraft={setFilterDraft}
-          onClose={() => {
-            setFilters({ ...filterDraft })
-            setFilterOpen(false)
-          }}
+          onClose={() => { setFilters({ ...filterDraft }); setFilterOpen(false) }}
         />
       </>
     )
@@ -292,25 +288,21 @@ export default function PhysioBookingsScreen({ navigation }) {
     return (
       <>
         <ScrollView
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          contentContainerStyle={{ paddingBottom: 32 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} />}
+          style={styles.root}
+          contentContainerStyle={styles.listPad}
         >
           {header}
-          <View style={{ paddingHorizontal: 16 }}>
-            <SessionsCalendarRN
-              displayBookings={displayBookings}
-              onOpenBooking={(b) => navigation.navigate('PhysioBookingDetail', { id: b._id })}
-            />
-          </View>
+          <SessionsCalendarRN
+            displayBookings={displayBookings}
+            onOpenBooking={(b) => navigation.navigate('PhysioBookingDetail', { id: b._id })}
+          />
         </ScrollView>
         <PhysioFilterModal
           visible={filterOpen}
           draft={filterDraft}
           setDraft={setFilterDraft}
-          onClose={() => {
-            setFilters({ ...filterDraft })
-            setFilterOpen(false)
-          }}
+          onClose={() => { setFilters({ ...filterDraft }); setFilterOpen(false) }}
         />
       </>
     )
@@ -321,52 +313,85 @@ export default function PhysioBookingsScreen({ navigation }) {
       <FlatList
         data={displayBookings}
         keyExtractor={(item) => String(item._id)}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        style={styles.root}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} />}
         ListHeaderComponent={header}
         contentContainerStyle={styles.listPad}
         renderItem={({ item: b }) => {
           const canStart = Boolean(b.userId?.coordinates || String(b.userId?.location || '').trim())
-          const sp = servicePill(b)
-          const st = statusPill(b)
+          const svc = serviceChipColors(b)
+          const st = statusChipColors(b)
+          const accent = statusAccent(b)
+
           return (
             <Pressable
-              style={[styles.card, accentBorder(b)]}
+              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
               onPress={() => navigation.navigate('PhysioBookingDetail', { id: b._id })}
             >
-              <View style={styles.avatar}>
-                <Text style={styles.avatarTxt}>{patientInitial(b.userId?.name)}</Text>
-              </View>
-              <View style={styles.cardMain}>
-                <View style={styles.rowTop}>
-                  <Text style={styles.dateLine}>{formatBookingDateAndSlot(b.date, b.timeSlot)}</Text>
-                  <View style={[styles.svcPill, { backgroundColor: sp.pillBg }]}>
-                    <Text style={[styles.svcPillTxt, { color: sp.pillFg }]}>{sp.pillText}</Text>
+              {/* Status accent border */}
+              <View style={[styles.cardAccent, { backgroundColor: accent }]} />
+
+              <View style={styles.cardBody}>
+                {/* Top row: date + pills */}
+                <View style={styles.cardTopRow}>
+                  <View style={styles.cardDateWrap}>
+                    <Ionicons name="calendar-outline" size={12} color={colors.textTertiary} />
+                    <Text style={styles.cardDate}>{formatBookingDateAndSlot(b.date, b.timeSlot)}</Text>
+                  </View>
+                  <View style={styles.cardPills}>
+                    <View style={[styles.pill, { backgroundColor: svc.bg, borderColor: svc.border }]}>
+                      <Text style={[styles.pillTxt, { color: svc.fg }]}>{svc.label}</Text>
+                    </View>
+                    <View style={[styles.pill, { backgroundColor: st.bg, borderColor: st.border }]}>
+                      <Text style={[styles.pillTxt, { color: st.fg }]}>{listStatusLabel(b)}</Text>
+                    </View>
                   </View>
                 </View>
-                <Text style={styles.patientRow} numberOfLines={1}>
-                  <Text style={styles.patientName}>{b.userId?.name ?? '—'}</Text>
-                  {b.userId?.phone ? <Text style={styles.patientPhone}> · {b.userId.phone}</Text> : null}
-                </Text>
-                <Text style={styles.issue} numberOfLines={2}>
-                  {b.issue || '—'}
-                </Text>
-                <View style={styles.actionsRow}>
+
+                {/* Patient row */}
+                <View style={styles.cardPatientRow}>
+                  <View style={[styles.cardAvatar, { backgroundColor: accent + '22' }]}>
+                    <Text style={[styles.cardAvatarTxt, { color: accent }]}>
+                      {patientInitial(b.userId?.name)}
+                    </Text>
+                  </View>
+                  <View style={styles.cardPatientBody}>
+                    <Text style={styles.cardPatientName} numberOfLines={1}>
+                      {b.userId?.name ?? '—'}
+                    </Text>
+                    {b.userId?.phone ? (
+                      <Text style={styles.cardPhone}>{b.userId.phone}</Text>
+                    ) : null}
+                    {b.issue ? (
+                      <Text style={styles.cardIssue} numberOfLines={1}>{b.issue}</Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                {/* Action row */}
+                <View style={styles.cardActions}>
                   <Pressable
-                    style={[styles.smBtn, !canStart && { opacity: 0.45 }]}
+                    style={[styles.startBtn, !canStart && styles.startBtnDisabled]}
                     disabled={!canStart}
-                    onPress={() =>
+                    onPress={(e) => {
+                      e.stopPropagation?.()
                       openGoogleMapsDestination({
                         coordinates: b.userId?.coordinates,
                         address: b.userId?.location,
                       })
-                    }
+                    }}
                   >
-                    <Text style={styles.smBtnTxt}>Start</Text>
+                    <Ionicons name="navigate-outline" size={13} color={canStart ? colors.white : colors.slate400} />
+                    <Text style={[styles.startBtnTxt, !canStart && styles.startBtnTxtDisabled]}>Directions</Text>
                   </Pressable>
-                  <View style={[styles.statusPill, { backgroundColor: st.bg }]}>
-                    <Text style={[styles.statusPillTxt, { color: st.fg }]}>{listStatusLabel(b)}</Text>
-                  </View>
-                  <Text style={styles.detailLink}>Details ›</Text>
+
+                  <Pressable
+                    style={styles.detailBtn}
+                    onPress={() => navigation.navigate('PhysioBookingDetail', { id: b._id })}
+                  >
+                    <Text style={styles.detailBtnTxt}>Details</Text>
+                    <Ionicons name="chevron-forward" size={13} color={colors.brand} />
+                  </Pressable>
                 </View>
               </View>
             </Pressable>
@@ -377,204 +402,305 @@ export default function PhysioBookingsScreen({ navigation }) {
         visible={filterOpen}
         draft={filterDraft}
         setDraft={setFilterDraft}
-        onClose={() => {
-          setFilters({ ...filterDraft })
-          setFilterOpen(false)
-        }}
+        onClose={() => { setFilters({ ...filterDraft }); setFilterOpen(false) }}
       />
     </>
   )
 }
 
+function StatPill({ icon, value, label, color }) {
+  return (
+    <View style={styles.statPill}>
+      <View style={[styles.statIconWrap, { backgroundColor: color + '18' }]}>
+        <Ionicons name={icon} size={12} color={color} />
+      </View>
+      <View style={styles.statTextWrap}>
+        <Text style={styles.statValue}>{value}</Text>
+        <Text style={styles.statLabel} numberOfLines={1}>{label}</Text>
+      </View>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.slate50 },
-  shellStripe: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.white,
-    overflow: 'hidden',
-    ...(Platform.OS === 'android' ? { elevation: 4 } : {}),
-  },
-  heroStripe: { height: 4, width: '100%', backgroundColor: colors.brand },
-  heroBody: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16 },
-  shellBrand: { fontSize: 22, fontWeight: '800', color: colors.slate900, letterSpacing: -0.35 },
-  shellBadge: {
-    alignSelf: 'flex-start',
-    marginTop: 10,
-    paddingHorizontal: 11,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: colors.brandSoft,
-    borderWidth: 1,
-    borderColor: 'rgba(13,148,136,0.35)',
-  },
-  shellBadgeTxt: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.teal800,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  shellSub: { marginTop: 12, fontSize: 14, color: colors.slate600, fontWeight: '500', lineHeight: 21 },
-  headerBlock: { paddingTop: 4, paddingBottom: 12 },
-  intro: { paddingHorizontal: 16, marginBottom: 12 },
-  eyebrow: {
-    marginBottom: 6,
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.brand,
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
-  },
-  title: { fontSize: 22, fontWeight: '800', color: colors.slate900, letterSpacing: -0.3 },
-  subtitle: {
-    marginTop: 8,
-    fontSize: 14,
-    color: colors.slate600,
-    lineHeight: 22,
-    fontWeight: '500',
-    maxWidth: 520,
-  },
-  toolbarCard: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.white,
-    ...(Platform.OS === 'android' ? { elevation: 3 } : {}),
-  },
-  search: {
-    borderWidth: 1,
-    borderColor: colors.slate200,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    backgroundColor: colors.slate50,
-    color: colors.slate900,
-  },
-  toolbarRow: {
-    marginTop: 10,
+  root: { flex: 1, backgroundColor: colors.canvas },
+  listPad: { paddingHorizontal: 16, paddingBottom: 32 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.canvas },
+
+  headerBlock: { paddingTop: 8, paddingBottom: 12 },
+  bannerWrap: { marginBottom: 10 },
+
+  // Stats strip
+  statsStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  sortChip: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10 },
-  sortGhost: { backgroundColor: colors.slate50, borderWidth: 1, borderColor: colors.borderSubtle },
-  sortChipTxt: { fontSize: 13, fontWeight: '600', color: colors.slate800 },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    backgroundColor: colors.white,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.slate200,
+    borderColor: colors.borderSubtle,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  statPill: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.white,
+    gap: 6,
+    minWidth: 0,
   },
-  iconBtnTxt: { fontSize: 13, fontWeight: '700', color: colors.slate700 },
-  filterDot: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.brand,
+  statIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  statTextWrap: { minWidth: 0, flexShrink: 1 },
+  statValue: { fontFamily: font.bold, fontSize: type.sm, color: colors.textPrimary, lineHeight: 17 },
+  statLabel: { fontFamily: font.regular, fontSize: 8, color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.3 },
+  statsDivider: { width: 1, height: 28, backgroundColor: colors.borderSubtle },
+
+  // Toolbar
+  toolbar: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 12,
+    gap: 10,
+    marginBottom: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    backgroundColor: colors.canvas,
+    minHeight: 38,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: font.regular,
+    fontSize: type.sm,
+    color: colors.textPrimary,
+    paddingVertical: 6,
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   segWrap: {
     flexDirection: 'row',
-    borderRadius: 12,
-    backgroundColor: colors.slate50,
-    padding: 3,
+    backgroundColor: colors.canvas,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    marginLeft: 'auto',
+    padding: 2,
+    gap: 2,
   },
-  segBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-  segOn: { backgroundColor: colors.white, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, elevation: 2 },
-  segTxt: { fontSize: 12, fontWeight: '600', color: colors.slate600 },
-  segTxtOn: { color: colors.brand, fontWeight: '700' },
-  countLbl: { marginTop: 12, fontSize: 12, color: colors.slate500, fontWeight: '500' },
-  countEm: { fontWeight: '800', color: colors.teal800 },
-  listPad: { paddingHorizontal: 16, paddingBottom: 32 },
-  card: {
+  segBtn: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-    padding: 14,
-    borderRadius: 16,
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  segBtnOn: {
+    backgroundColor: colors.white,
     borderWidth: 1,
-    borderLeftWidth: 4,
+    borderColor: colors.brandSoft,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  segTxt: { fontFamily: font.medium, fontSize: type.xs, color: colors.slate400 },
+  segTxtOn: { fontFamily: font.semiBold, color: colors.brand },
+
+  controlsRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  sortBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.white,
-    ...(Platform.OS === 'ios'
-      ? {
-          shadowColor: '#0f172a',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.05,
-          shadowRadius: 8,
-        }
-      : {}),
-    ...(Platform.OS === 'android' ? { elevation: 2 } : {}),
   },
-  avatar: {
-    width: 44,
-    height: 44,
+  sortTxt: { fontFamily: font.medium, fontSize: type.xs, color: colors.slate500 },
+  filterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.white,
+  },
+  filterBtnActive: {
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
+  },
+  filterBtnTxt: { fontFamily: font.medium, fontSize: type.xs, color: colors.slate600 },
+  filterBtnTxtActive: { color: colors.white },
+  filterActiveDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.white,
+    marginLeft: 2,
+  },
+
+  // Booking card
+  card: {
+    flexDirection: 'row',
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    marginBottom: 10,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  cardPressed: { opacity: 0.92 },
+  cardAccent: { width: 4, alignSelf: 'stretch', flexShrink: 0 },
+  cardBody: { flex: 1, padding: 14, gap: 10 },
+
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  cardDateWrap: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  cardDate: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.textPrimary },
+  cardPills: { flexDirection: 'row', gap: 5 },
+  pill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  pillTxt: { fontFamily: font.bold, fontSize: 9, letterSpacing: 0.3 },
+
+  cardPatientRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  cardAvatar: {
+    width: 38,
+    height: 38,
     borderRadius: 12,
-    backgroundColor: colors.slate200,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  cardAvatarTxt: { fontFamily: font.bold, fontSize: type.base },
+  cardPatientBody: { flex: 1, minWidth: 0 },
+  cardPatientName: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textPrimary },
+  cardPhone: { marginTop: 2, fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
+  cardIssue: {
+    marginTop: 2,
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textTertiary,
+    fontStyle: 'italic',
+  },
+
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+  },
+  startBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: colors.brand,
+  },
+  startBtnDisabled: { backgroundColor: colors.slate100 },
+  startBtnTxt: { fontFamily: font.semiBold, fontSize: type.xs, color: colors.white },
+  startBtnTxtDisabled: { color: colors.slate400 },
+  detailBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  detailBtnTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand },
+
+  // Error state
+  errorCard: {
+    margin: 16,
+    padding: 20,
+    borderRadius: 16,
+    backgroundColor: colors.amber50,
+    borderWidth: 1,
+    borderColor: colors.amber200,
+    alignItems: 'center',
+    gap: 10,
+  },
+  errorIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#fef3c7',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarTxt: { fontSize: 16, fontWeight: '700', color: colors.slate600 },
-  cardMain: { flex: 1, minWidth: 0 },
-  rowTop: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  dateLine: { fontSize: 14, fontWeight: '700', color: colors.slate900 },
-  svcPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: '#00000014' },
-  svcPillTxt: { fontSize: 10, fontWeight: '700' },
-  patientRow: { marginTop: 6, fontSize: 12 },
-  patientName: { fontWeight: '600', color: colors.slate900 },
-  patientPhone: { color: colors.slate500 },
-  issue: { marginTop: 4, fontSize: 12, color: colors.slate600 },
-  actionsRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  smBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-    backgroundColor: colors.blue50,
-  },
-  smBtnTxt: { fontSize: 11, fontWeight: '700', color: colors.blue700 },
-  statusPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1, borderColor: '#00000014' },
-  statusPillTxt: { fontSize: 11, fontWeight: '700' },
-  detailLink: { marginLeft: 'auto', fontSize: 12, fontWeight: '700', color: colors.brand },
-  errBox: { margin: 16, padding: 18, borderRadius: 16, borderWidth: 1, borderColor: colors.amber200, backgroundColor: colors.amber50 },
-  errTitle: { fontSize: 14, color: colors.amber950 },
-  errBtn: {
-    marginTop: 12,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 14,
+  errorTitle: { fontFamily: font.regular, fontSize: type.sm, color: colors.amber800, textAlign: 'center' },
+  errorBtn: {
+    marginTop: 4,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.amber200,
   },
-  errBtnTxt: { fontWeight: '700', fontSize: 13, color: colors.amber950 },
-  empty: { textAlign: 'center', marginTop: 24, color: colors.slate500 },
-  emptyFiltered: { alignItems: 'center' },
-  emptyFilteredTxt: { fontSize: 14, color: colors.slate500 },
+  errorBtnTxt: { fontFamily: font.bold, fontSize: type.sm, color: colors.amber800 },
+
+  // Empty state
+  emptyBox: { alignItems: 'center', paddingVertical: 40, gap: 10 },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: colors.slate50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textSecondary },
+  emptySub: { fontFamily: font.regular, fontSize: type.sm, color: colors.textTertiary, textAlign: 'center', lineHeight: leading.sm },
 })

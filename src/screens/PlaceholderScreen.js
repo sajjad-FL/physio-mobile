@@ -18,15 +18,6 @@ const WEB_SOURCE = {
   PhysioOnboarding: 'client/src/pages/physio/PhysioOnboardingPage.jsx',
   PhysioVerification: 'client/src/pages/physio/PhysioVerificationPage.jsx',
   PhysioWallet: 'client/src/pages/physio/PhysioWalletPage.jsx',
-  AdminBookings: 'client/src/pages/admin/BookingsAdmin.jsx',
-  AdminBookingDetail: 'client/src/pages/admin/AdminBookingDetailPage.jsx',
-  AdminPhysios: 'client/src/pages/admin/PhysiosAdmin.jsx',
-  AdminPhysioDetail: 'client/src/pages/admin/AdminPhysioDetailPage.jsx',
-  AdminVerifications: 'client/src/pages/admin/VerificationsAdmin.jsx',
-  AdminDisputes: 'client/src/pages/admin/DisputesAdmin.jsx',
-  AdminPayments: 'client/src/pages/admin/AdminPaymentsPage.jsx',
-  AdminFinance: 'client/src/pages/admin/AdminFinancePage.jsx',
-  AdminPlatform: 'client/src/pages/admin/AdminPlatformSettingsPage.jsx',
 }
 
 export default function PlaceholderScreen({ navigation, route }) {
@@ -50,7 +41,7 @@ export default function PlaceholderScreen({ navigation, route }) {
 
 const styles = StyleSheet.create({
   pad: { padding: 16, paddingBottom: 40 },
-  title: { fontSize: 20, fontWeight: '700', color: colors.slate900, marginBottom: 12 },
-  p: { fontSize: 14, color: colors.slate600, lineHeight: 20 },
+  title: { fontSize: 17, fontWeight: '700', color: colors.slate900, marginBottom: 10 },
+  p: { fontSize: 13, color: colors.slate600, lineHeight: 19 },
   code: { marginTop: 8, fontSize: 12, fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }), color: colors.slate900 },
 })

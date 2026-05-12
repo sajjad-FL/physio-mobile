@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { CommonActions } from '@react-navigation/native'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
@@ -7,13 +7,16 @@ import { setSession, getTokenSync } from '../auth/tokenStore'
 import { getDefaultDashboardScreen } from '../auth/navigationTargets'
 import { validateIndianMobile } from '../utils/phoneIndia'
 import { validateLoginPassword, validateName, validateOtp } from '../utils/validation'
-import AppHeader from '../components/AppHeader'
-import Button from '../components/ui/Button'
-import Input from '../components/ui/Input'
-import Card from '../components/ui/Card'
-import { colors } from '../theme/colors'
+import SignupScreenLayout from '../components/signup/templates/SignupScreenLayout'
+import SignupPhoneStep from '../components/signup/organisms/SignupPhoneStep'
+import SignupOtpStep from '../components/signup/organisms/SignupOtpStep'
+import SignupProfileStep from '../components/signup/organisms/SignupProfileStep'
+import SignupFooterLink from '../components/signup/atoms/SignupFooterLink'
+import { signupTokens as t } from '../theme/signupTokens'
+import { openWebLoginInBrowser } from '../utils/webApp'
 
 const STEPS = { PHONE: 1, OTP: 2, PROFILE: 3 }
+const TOTAL_STEPS = 3
 
 function userTabsResetState(profileComplete) {
   const routes = [
@@ -35,6 +38,12 @@ function userTabsResetState(profileComplete) {
       },
     ],
   }
+}
+
+function stepIndex(step) {
+  if (step === STEPS.PHONE) return 1
+  if (step === STEPS.OTP) return 2
+  return 3
 }
 
 export default function RegisterScreen({ navigation }) {
@@ -129,6 +138,23 @@ export default function RegisterScreen({ navigation }) {
       const res = await api.post('/auth/register', body)
       const role = res.data?.role ?? 'user'
       const profileComplete = res.data.isProfileComplete === true
+      if (role === 'admin') {
+        Toast.show({
+          type: 'info',
+          text1: 'Opening browser',
+          text2: 'Continue on the web for admin access.',
+        })
+        const opened = await openWebLoginInBrowser()
+        if (!opened) {
+          Toast.show({
+            type: 'error',
+            text1: 'Could not open browser',
+            text2: 'Set EXPO_PUBLIC_SITE_URL in .env.',
+          })
+        }
+        navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Home' }] }))
+        return
+      }
       Toast.show({ type: 'success', text1: 'Account created' })
       await setSession(res.data.token, role, profileComplete)
       if (role === 'user' && !profileComplete) {
@@ -148,126 +174,57 @@ export default function RegisterScreen({ navigation }) {
 
   if (busy) return <View style={styles.center} />
 
-  const stepLabel = step === STEPS.PHONE ? '1 / 3' : step === STEPS.OTP ? '2 / 3' : '3 / 3'
+  const si = stepIndex(step)
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <AppHeader title="Sign up" onBack={goBackFromHeader} />
-      <ScrollView contentContainerStyle={styles.pad} keyboardShouldPersistTaps="handled">
-        <Text style={styles.stepPill}>{stepLabel}</Text>
-        <Text style={styles.kicker}>CREATE ACCOUNT</Text>
-
-        {step === STEPS.PHONE ? (
-          <>
-            <Text style={styles.title}>Your phone number</Text>
-            <Text style={styles.sub}>
-              We will text a one-time code to verify this number. Date of birth, gender, and address can be added later in
-              Profile.
-            </Text>
-            <View style={{ height: 20 }} />
-            <Card>
-              <Input
-                label="Mobile"
-                keyboardType="phone-pad"
-                value={phone}
-                onChangeText={setPhone}
-                error={fieldErrors.phone}
-              />
-              <View style={{ height: 20 }} />
-              <Button title="Continue" onPress={sendOtp} loading={sendingOtp} />
-            </Card>
-          </>
-        ) : null}
-
-        {step === STEPS.OTP ? (
-          <>
-            <Text style={styles.title}>Verify your number</Text>
-            <Text style={styles.sub}>Enter the 6-digit code we sent to your phone.</Text>
-            <View style={{ height: 20 }} />
-            <Card>
-              <Input label="6-digit OTP" keyboardType="number-pad" value={otp} onChangeText={setOtp} error={fieldErrors.otp} />
-              {devOtpHint ? (
-                <View style={styles.devOtpBox}>
-                  <Text style={styles.devOtpLabel}>Local dev code</Text>
-                  <Text style={styles.devOtpMono}>{devOtpHint}</Text>
-                </View>
-              ) : (
-                <View style={{ height: 12 }} />
-              )}
-              <Button title="Resend code" variant="outline" onPress={sendOtp} loading={sendingOtp} />
-              <View style={{ height: 12 }} />
-              <Button title="Continue" onPress={continueFromOtp} />
-            </Card>
-          </>
-        ) : null}
-
-        {step === STEPS.PROFILE ? (
-          <>
-            <Text style={styles.title}>Almost there</Text>
-            <Text style={styles.sub}>
-              Your account is created with your name and password. Add date of birth, gender, and address in Profile when
-              you are ready to book.
-            </Text>
-            <View style={{ height: 20 }} />
-            <Card>
-              <Text style={styles.fieldHeading}>What&apos;s your name?</Text>
-              <Input label="Full name" value={name} onChangeText={setName} error={fieldErrors.name} />
-              <View style={{ height: 16 }} />
-              <Text style={styles.fieldHeading}>Create password</Text>
-              <Input
-                label="Password (min 8 characters)"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-                error={fieldErrors.password}
-              />
-              <View style={{ height: 20 }} />
-              <Button title="Create account" onPress={handleCreateAccount} loading={loading} />
-            </Card>
-          </>
-        ) : null}
-      </ScrollView>
-    </KeyboardAvoidingView>
+    <SignupScreenLayout
+      headerMode={step === STEPS.PROFILE ? 'brand' : 'signup'}
+      title="Sign up"
+      onBack={goBackFromHeader}
+      footer={step === STEPS.PROFILE ? null : <SignupFooterLink onPress={() => navigation.navigate('Login')} />}
+    >
+      {step === STEPS.PHONE ? (
+        <SignupPhoneStep
+          step={si}
+          totalSteps={TOTAL_STEPS}
+          phone={phone}
+          onChangePhone={setPhone}
+          phoneError={fieldErrors.phone}
+          onContinue={sendOtp}
+          sendingOtp={sendingOtp}
+        />
+      ) : null}
+      {step === STEPS.OTP ? (
+        <SignupOtpStep
+          step={si}
+          totalSteps={TOTAL_STEPS}
+          otp={otp}
+          onChangeOtp={setOtp}
+          otpError={fieldErrors.otp}
+          devOtpHint={devOtpHint}
+          onResend={sendOtp}
+          sendingOtp={sendingOtp}
+          onContinue={continueFromOtp}
+        />
+      ) : null}
+      {step === STEPS.PROFILE ? (
+        <SignupProfileStep
+          step={si}
+          totalSteps={TOTAL_STEPS}
+          name={name}
+          onChangeName={setName}
+          nameError={fieldErrors.name}
+          password={password}
+          onChangePassword={setPassword}
+          passwordError={fieldErrors.password}
+          onSubmit={handleCreateAccount}
+          loading={loading}
+        />
+      ) : null}
+    </SignupScreenLayout>
   )
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.slate50 },
-  pad: { padding: 20, paddingBottom: 40 },
-  center: { flex: 1, backgroundColor: colors.slate50 },
-  stepPill: {
-    alignSelf: 'center',
-    marginBottom: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 999,
-    overflow: 'hidden',
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.brand,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-  },
-  kicker: { textAlign: 'center', fontSize: 11, fontWeight: '700', letterSpacing: 1.2, color: colors.brand },
-  title: { textAlign: 'center', fontSize: 24, fontWeight: '700', color: colors.slate900, marginTop: 8 },
-  sub: { textAlign: 'center', marginTop: 8, fontSize: 14, color: colors.slate500, lineHeight: 20, paddingHorizontal: 8 },
-  fieldHeading: { fontSize: 15, fontWeight: '600', color: colors.slate800, marginBottom: 8 },
-  devOtpBox: {
-    marginTop: 12,
-    marginBottom: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#fde68a',
-    backgroundColor: '#fffbeb',
-  },
-  devOtpLabel: { fontSize: 12, fontWeight: '600', color: '#78350f', marginBottom: 4 },
-  devOtpMono: {
-    fontSize: 15,
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
-    color: '#451a03',
-    fontWeight: '600',
-  },
+  center: { flex: 1, backgroundColor: t.canvas },
 })

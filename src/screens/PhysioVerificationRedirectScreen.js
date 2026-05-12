@@ -16,5 +16,5 @@ export default function PhysioVerificationRedirectScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  c: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.slate50 },
+  c: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.canvas },
 })

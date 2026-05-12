@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   assignTitle: { fontSize: 11, fontWeight: '800', color: colors.amber950, textTransform: 'uppercase' },
   assignSub: { marginTop: 6, fontSize: 13, color: colors.amber900 },
   totalBox: {
-    padding: 16,
+    padding: 14,
     borderRadius: 16,
     borderWidth: 2,
     borderColor: '#bfdbfe',
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
   },
   totalTitle: { fontSize: 11, fontWeight: '800', color: colors.blue700, textTransform: 'uppercase' },
   totalLine: { marginTop: 8, fontSize: 14, color: colors.slate700 },
-  totalBig: { marginTop: 12, fontSize: 20, fontWeight: '800', color: colors.blue700 },
+  totalBig: { marginTop: 12, fontSize: 17, fontWeight: '800', color: colors.blue700 },
   submit: {
     backgroundColor: colors.brand,
     paddingVertical: 14,
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
   modalBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 16,
+    padding: 14,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle,
   },
