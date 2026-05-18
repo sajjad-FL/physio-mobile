@@ -70,7 +70,9 @@ function rnMapboxNativeAvailable() {
 
 function useRnMapboxNativePath() {
   return useMemo(() => {
-    if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) return false
+    // Allow native Mapbox in dev builds (Expo Go is StoreClient but lacks the module anyway;
+    // rnMapboxNativeAvailable() returns false in that case, so this check is redundant and
+    // only blocks native maps in custom dev builds where they'd work fine.)
     return rnMapboxNativeAvailable()
   }, [])
 }
@@ -135,6 +137,7 @@ function MapPickerStaticPreview({ pin, onPick, geoBusy, onUseMyLocation, onUseLo
   const [mapCenter, setMapCenter] = useState({ lat: pin.lat, lng: pin.lng, zoom: STATIC_ZOOM })
   const accessToken = useMemo(() => getMapboxAccessToken(), [])
   const prevGeoBusyRef = useRef(geoBusy)
+  const zoomDebounceRef = useRef(null)
 
   // Pinch-to-zoom: scale visually during gesture; commit integer zoom step on release (RNGH Gesture API)
   const pinchScaleAnim = useRef(new Animated.Value(1)).current
@@ -183,11 +186,20 @@ function MapPickerStaticPreview({ pin, onPick, geoBusy, onUseMyLocation, onUseLo
     }
   }, [pin.lat, pin.lng, layout.iw, layout.ih, mapCenter.lat, mapCenter.lng, mapCenter.zoom])
 
+  // Debounce zoom button presses so rapid taps batch into one image fetch
+  const pendingZoomDeltaRef = useRef(0)
   function handleZoom(delta) {
-    setMapCenter((c) => ({
-      ...c,
-      zoom: Math.min(STATIC_ZOOM_MAX, Math.max(STATIC_ZOOM_MIN, c.zoom + delta)),
-    }))
+    pendingZoomDeltaRef.current += delta
+    if (zoomDebounceRef.current) clearTimeout(zoomDebounceRef.current)
+    zoomDebounceRef.current = setTimeout(() => {
+      const totalDelta = pendingZoomDeltaRef.current
+      pendingZoomDeltaRef.current = 0
+      zoomDebounceRef.current = null
+      setMapCenter((c) => ({
+        ...c,
+        zoom: Math.min(STATIC_ZOOM_MAX, Math.max(STATIC_ZOOM_MIN, c.zoom + totalDelta)),
+      }))
+    }, 250)
   }
 
   return (
@@ -222,7 +234,12 @@ function MapPickerStaticPreview({ pin, onPick, geoBusy, onUseMyLocation, onUseLo
                   onPick({ lat, lng })
                 }}
               >
-                <Image source={{ uri }} style={styles.staticImg} resizeMode="cover" />
+                <Image
+                  source={{ uri }}
+                  style={styles.staticImg}
+                  resizeMode="cover"
+                  fadeDuration={0}
+                />
               </Pressable>
             </Animated.View>
           </View>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
@@ -17,6 +17,18 @@ import InstallmentsPhysioCard from '../components/physio/InstallmentsPhysioCard'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 
+function resolvePayWebView() {
+  try {
+    const m = require('react-native-webview')
+    if (m == null) return null
+    return m.default ?? m.WebView ?? m
+  } catch {
+    return null
+  }
+}
+
+const PayWebView = resolvePayWebView()
+
 export default function UserBookingDetailScreen({ route }) {
   const { id } = route.params || {}
   const [b, setB] = useState(null)
@@ -30,6 +42,13 @@ export default function UserBookingDetailScreen({ route }) {
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewComment, setReviewComment] = useState('')
   const [actionBusy, setActionBusy] = useState(false)
+  const [payModalOpen, setPayModalOpen] = useState(false)
+  const [payAmount, setPayAmount] = useState('')
+  const [payOrderData, setPayOrderData] = useState(null)
+  const [payWebviewOpen, setPayWebviewOpen] = useState(false)
+  const [payBusy, setPayBusy] = useState(false)
+  const [payErr, setPayErr] = useState('')
+  const webviewRef = useRef(null)
 
   const load = useCallback(async () => {
     if (!id) return
@@ -112,6 +131,123 @@ export default function UserBookingDetailScreen({ route }) {
     [actionBusy, b?._id, load, reviewComment, reviewRating],
   )
 
+  function openPayInstallmentModal() {
+    if (!b?.paymentSummary) return
+    const outstanding = Number(b.paymentSummary.outstanding || 0)
+    const perSession = Number(b.paymentSummary.amountPerSession || 0)
+    const defaultAmt = outstanding <= 0 ? '0' : perSession > 0 ? String(Math.min(perSession, outstanding)) : String(outstanding)
+    setPayAmount(defaultAmt)
+    setPayErr('')
+    setPayOrderData(null)
+    setPayModalOpen(true)
+  }
+
+  async function initiateRazorpayOrder() {
+    const amt = Math.round((Number(payAmount) + Number.EPSILON) * 100) / 100
+    const outstanding = Math.round((Number(b?.paymentSummary?.outstanding || 0) + Number.EPSILON) * 100) / 100
+    if (!Number.isFinite(amt) || amt <= 0) {
+      setPayErr('Enter an amount greater than zero')
+      return
+    }
+    if (amt > outstanding + 0.009) {
+      setPayErr(`Amount must be at most ₹${outstanding.toFixed(2)}`)
+      return
+    }
+    setPayBusy(true)
+    setPayErr('')
+    try {
+      const res = await api.post('/payment/installments/create', { bookingId: b._id, amount: amt })
+      const orderData = res.data
+      setPayOrderData(orderData)
+      setPayModalOpen(false)
+      setPayWebviewOpen(true)
+    } catch (e) {
+      setPayErr(e.response?.data?.message || 'Could not create order')
+    } finally {
+      setPayBusy(false)
+    }
+  }
+
+  async function handleRazorpayMessage(event) {
+    let msg
+    try { msg = JSON.parse(event.nativeEvent.data) } catch { return }
+    if (msg.type === 'dismissed') {
+      setPayWebviewOpen(false)
+      setPayOrderData(null)
+      return
+    }
+    if (msg.type === 'failed') {
+      setPayWebviewOpen(false)
+      setPayOrderData(null)
+      Toast.show({ type: 'error', text1: msg.error || 'Payment failed' })
+      return
+    }
+    if (msg.type === 'success') {
+      setPayWebviewOpen(false)
+      try {
+        await api.post('/payment/installments/verify', {
+          paymentId: payOrderData?.paymentId,
+          razorpay_payment_id: msg.razorpay_payment_id,
+          razorpay_order_id: msg.razorpay_order_id,
+          razorpay_signature: msg.razorpay_signature,
+        })
+        Toast.show({ type: 'success', text1: 'Payment successful!' })
+        setPayOrderData(null)
+        load()
+      } catch (e) {
+        Toast.show({ type: 'error', text1: e.response?.data?.message || 'Verification failed' })
+      }
+    }
+  }
+
+  const razorpayHtml = useMemo(() => {
+    if (!payOrderData) return ''
+    const { keyId, orderId, amount, currency } = payOrderData
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+  <style>body{margin:0;background:#0f766e;display:flex;align-items:center;justify-content:center;min-height:100vh;}</style>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body>
+<script>
+  window.onload = function() {
+    var options = {
+      key: ${JSON.stringify(keyId || '')},
+      amount: ${JSON.stringify(amount || 0)},
+      currency: ${JSON.stringify(currency || 'INR')},
+      name: 'PhysioKhom',
+      order_id: ${JSON.stringify(orderId || '')},
+      theme: { color: '#0d9488' },
+      handler: function(response) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'success',
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_signature: response.razorpay_signature
+        }));
+      },
+      modal: {
+        ondismiss: function() {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'dismissed' }));
+        }
+      }
+    };
+    var rzp = new Razorpay(options);
+    rzp.on('payment.failed', function(resp) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'failed',
+        error: resp.error && resp.error.description ? resp.error.description : 'Payment failed'
+      }));
+    });
+    rzp.open();
+  };
+</script>
+</body>
+</html>`
+  }, [payOrderData])
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -139,7 +275,7 @@ export default function UserBookingDetailScreen({ route }) {
   const isOnlineBooking = b.serviceType === 'online' || (b.serviceType === 'home' && b.homePlanPaymentMode === 'online')
   const outstanding = Number(paymentSummary?.outstanding || 0)
   const planReady = b.serviceType === 'online' || b.planStatus === 'approved'
-  const showInstallments = planReady && sessionsCount > 1 && (Number(b.totalAmount || 0) > 0 || paymentsList.length > 0)
+  const showInstallments = planReady && (sessionsCount > 1 || isOnlineBooking) && (Number(b.totalAmount || 0) > 0 || paymentsList.length > 0)
   const reviewedSessionIds = new Set(reviews.map((r) => (r.sessionId ? String(r.sessionId) : 'booking')))
   const overallReview = reviews.find((r) => !r.sessionId)
   const hasCompletedSession = rows.some((r) => r.status === 'completed')
@@ -238,10 +374,10 @@ export default function UserBookingDetailScreen({ route }) {
             {isOnlineBooking && outstanding > 0.009 ? (
               <Pressable
                 style={styles.payInstallmentBtn}
-                onPress={() => Toast.show({ type: 'info', text1: 'Payment flow will open here next.' })}
+                onPress={openPayInstallmentModal}
               >
-                <Ionicons name="card-outline" size={14} color={colors.brand} />
-                <Text style={styles.payInstallmentTxt}>Pay next installment</Text>
+                <Ionicons name="card" size={14} color={colors.white} />
+                <Text style={styles.payInstallmentTxt}>Pay ₹{outstanding.toFixed(2)} now</Text>
               </Pressable>
             ) : null}
           </InstallmentsPhysioCard>
@@ -502,6 +638,107 @@ export default function UserBookingDetailScreen({ route }) {
           </View>
         </View>
       </Modal>
+      {/* ── Pay installment amount modal ─────────── */}
+      <Modal transparent visible={payModalOpen} animationType="fade" onRequestClose={() => setPayModalOpen(false)}>
+        <View style={styles.modalRoot}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setPayModalOpen(false)} />
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={[styles.modalIconWrap, { backgroundColor: colors.teal50 }]}>
+                <Ionicons name="card-outline" size={16} color={colors.brand} />
+              </View>
+              <View style={styles.modalHeaderText}>
+                <Text style={styles.modalTitle}>Pay installment</Text>
+                <Text style={styles.modalSub}>
+                  Outstanding: ₹{Number(b?.paymentSummary?.outstanding || 0).toFixed(2)}
+                </Text>
+              </View>
+              <Pressable onPress={() => setPayModalOpen(false)} hitSlop={12} style={styles.modalClose}>
+                <Ionicons name="close" size={16} color={colors.slate400} />
+              </Pressable>
+            </View>
+            <View style={styles.modalDivider} />
+            <Text style={styles.inputLabel}>Amount (₹)</Text>
+            <TextInput
+              value={payAmount}
+              onChangeText={(v) => { setPayAmount(v); setPayErr('') }}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={colors.slate300}
+              style={styles.inp}
+            />
+            {b?.paymentSummary?.amountPerSession ? (
+              <Text style={styles.payAmtHint}>
+                Typical installment: ₹{Number(b.paymentSummary.amountPerSession).toFixed(2)} / session
+              </Text>
+            ) : null}
+            {payErr ? <Text style={styles.payErrTxt}>{payErr}</Text> : null}
+            <View style={styles.modalBtnRow}>
+              <Pressable style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setPayModalOpen(false)}>
+                <Text style={styles.modalBtnCancelTxt}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, styles.modalBtnSubmit, payBusy && { opacity: 0.7 }]}
+                onPress={initiateRazorpayOrder}
+                disabled={payBusy}
+              >
+                {payBusy ? <ActivityIndicator size="small" color={colors.white} /> : null}
+                <Text style={styles.modalBtnSubmitTxt}>
+                  {payBusy ? 'Creating order…' : `Pay ₹${Number(payAmount || 0).toFixed(2)}`}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Razorpay WebView modal ─────────────────── */}
+      <Modal
+        visible={payWebviewOpen}
+        animationType="slide"
+        onRequestClose={() => {
+          setPayWebviewOpen(false)
+          setPayOrderData(null)
+        }}
+      >
+        <View style={styles.webviewModal}>
+          <View style={styles.webviewHeader}>
+            <Text style={styles.webviewHeaderTxt}>Secure Payment</Text>
+            <Pressable
+              onPress={() => { setPayWebviewOpen(false); setPayOrderData(null) }}
+              style={styles.webviewCloseBtn}
+              hitSlop={12}
+            >
+              <Ionicons name="close" size={20} color={colors.white} />
+            </Pressable>
+          </View>
+          {razorpayHtml && PayWebView ? (
+            <PayWebView
+              ref={webviewRef}
+              source={{ html: razorpayHtml, baseUrl: 'https://localhost' }}
+              onMessage={handleRazorpayMessage}
+              javaScriptEnabled
+              domStorageEnabled
+              originWhitelist={['*']}
+              startInLoadingState
+              renderLoading={() => (
+                <View style={styles.webviewLoading}>
+                  <ActivityIndicator size="large" color={colors.brand} />
+                  <Text style={styles.webviewLoadingTxt}>Loading payment…</Text>
+                </View>
+              )}
+              style={styles.webview}
+            />
+          ) : razorpayHtml ? (
+            <View style={[styles.webviewLoading, { paddingHorizontal: 24 }]}>
+              <Text style={styles.webviewFallbackTxt}>
+                Payments in-app need a dev build with react-native-webview (not Expo Go).
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      </Modal>
+
     </ScrollView>
   )
 }
@@ -821,16 +1058,60 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: colors.teal50,
-    borderWidth: 1,
-    borderColor: colors.brandSoft,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 11,
+    backgroundColor: colors.brand,
     marginTop: 8,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  payInstallmentTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand },
+  payInstallmentTxt: { fontFamily: font.bold, fontSize: type.sm, color: colors.white },
+  payAmtHint: { marginTop: 5, fontFamily: font.regular, fontSize: type.xs, color: colors.textTertiary },
+  payErrTxt: { marginTop: 8, fontFamily: font.semiBold, fontSize: type.xs, color: colors.danger },
+
+  // Razorpay WebView
+  webviewModal: { flex: 1, backgroundColor: colors.brand },
+  webviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: colors.brand,
+  },
+  webviewHeaderTxt: { fontFamily: font.bold, fontSize: type.base, color: colors.white },
+  webviewCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  webview: { flex: 1, backgroundColor: colors.white },
+  webviewLoading: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    backgroundColor: colors.canvas,
+  },
+  webviewLoadingTxt: { fontFamily: font.medium, fontSize: type.sm, color: colors.textSecondary },
+  webviewFallbackTxt: {
+    fontFamily: font.regular,
+    fontSize: type.sm,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 
   // Modals
   modalRoot: {

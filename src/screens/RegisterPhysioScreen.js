@@ -1,10 +1,11 @@
 import DateTimePicker from '@react-native-community/datetimepicker'
+import { Ionicons } from '@expo/vector-icons'
 import * as DocumentPicker from 'expo-document-picker'
 import * as Location from 'expo-location'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -21,10 +22,12 @@ import { api } from '../api/client'
 import AppHeader from '../components/AppHeader'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
+import DropdownField from '../components/ui/DropdownField'
 import Input from '../components/ui/Input'
 import { ID_PROOF_TYPE_OPTIONS } from '../constants/idProofTypes'
 import { PHYSIO_DEGREE_OPTIONS } from '../constants/physioQualification'
 import { colors } from '../theme/colors'
+import { r } from '../theme/radius'
 import { font, type, leading } from '../theme/typography'
 import { normalizeIndianPhone, validateIndianMobile } from '../utils/phoneIndia'
 import {
@@ -37,6 +40,7 @@ import {
   validateRegistrationAccount,
 } from '../utils/onboardingValidation'
 import { formatPhysioSessionFeeLabel } from '../utils/physioSessionFee'
+import { appendFormDataFile, normalizePickedDocument } from '../utils/physioFormMultipart'
 
 const STEPS = [
   { n: 1, title: 'Account & basic' },
@@ -54,11 +58,16 @@ const GENDER_OPTIONS = [
   { value: 'prefer_not_to_say', label: 'Prefer not to say' },
 ]
 
+/** Inline dropdown — omit empty placeholder row used by legacy modal list. */
+const GENDER_DROPDOWN_OPTIONS = GENDER_OPTIONS.filter((o) => o.value !== '')
+
 const SERVICE_TYPE_OPTIONS = [
   { value: 'online', label: 'Online' },
   { value: 'home', label: 'Home visit' },
   { value: 'both', label: 'Both' },
 ]
+
+const DEGREE_DROPDOWN_OPTIONS = PHYSIO_DEGREE_OPTIONS.map((d) => ({ value: d, label: d }))
 
 const DOB_MIN = new Date(1900, 0, 1)
 const DOB_DEFAULT = new Date(1998, 0, 15)
@@ -79,13 +88,6 @@ function parseDobToDate(ymd) {
   return dt
 }
 
-function appendAsset(fd, field, asset) {
-  if (!asset?.uri) return
-  const name = asset.name || `${field}.jpg`
-  const type = asset.mimeType || 'application/octet-stream'
-  fd.append(field, { uri: asset.uri, name, type })
-}
-
 function ErrorBanner({ formError, fieldErrors }) {
   const entries = Object.entries(fieldErrors || {}).filter(([, v]) => Boolean(v))
   if (!formError && entries.length === 0) return null
@@ -101,32 +103,41 @@ function ErrorBanner({ formError, fieldErrors }) {
   )
 }
 
-function OptionPickRow({ label, valueLabel, error, onPress }) {
-  return (
-    <View style={{ marginBottom: 12 }}>
-      <Text style={styles.pickLabel}>{label}</Text>
-      <Pressable
-        onPress={onPress}
-        style={[styles.pickField, error ? styles.pickFieldErr : null]}
-      >
-        <Text style={[styles.pickFieldText, !valueLabel ? styles.pickPlaceholder : null]}>{valueLabel || 'Tap to choose'}</Text>
-      </Pressable>
-      {error ? <Text style={styles.fieldErr}>{error}</Text> : null}
-    </View>
-  )
-}
-
 function DocRow({ title, subtitle, asset, error, onPick }) {
+  const mime = String(asset?.mimeType || '').toLowerCase()
+  const isImage = mime.startsWith('image/')
+  const isPdf = mime === 'application/pdf' || /\.pdf$/i.test(String(asset?.name || ''))
+  const displayName = asset?.uri
+    ? asset.name && String(asset.name).trim()
+      ? asset.name
+      : 'Selected file'
+    : 'No file chosen'
+
   return (
     <View style={styles.docRow}>
       <Text style={styles.docTitle}>{title}</Text>
       {subtitle ? <Text style={styles.docSub}>{subtitle}</Text> : null}
-      <Text style={styles.docName} numberOfLines={2}>
-        {asset?.name || 'No file chosen'}
-      </Text>
+      {asset?.uri ? (
+        <View style={styles.docPreviewRow}>
+          {isImage ? (
+            <Image source={{ uri: asset.uri }} style={styles.docThumb} accessibilityIgnoresInvertColors />
+          ) : (
+            <View style={styles.docIconWrap}>
+              <Ionicons name={isPdf ? 'document-text-outline' : 'document-attach-outline'} size={28} color={colors.brand} />
+            </View>
+          )}
+          <Text style={[styles.docName, styles.docNameInRow]} numberOfLines={2}>
+            {displayName}
+          </Text>
+        </View>
+      ) : (
+        <Text style={styles.docName} numberOfLines={2}>
+          {displayName}
+        </Text>
+      )}
       {error ? <Text style={styles.fieldErr}>{error}</Text> : null}
       <View style={{ height: 8 }} />
-      <Button title={asset ? 'Replace file' : 'Choose file'} variant="outline" onPress={onPick} />
+      <Button title={asset?.uri ? 'Replace file' : 'Choose file'} variant="outline" onPress={onPick} />
     </View>
   )
 }
@@ -179,7 +190,7 @@ export default function RegisterPhysioScreen({ navigation }) {
   const [fieldErrors, setFieldErrors] = useState({})
   const [formError, setFormError] = useState('')
 
-  const [pickModal, setPickModal] = useState(null)
+  const [keyboardInset, setKeyboardInset] = useState(0)
   const [dobPickerVisible, setDobPickerVisible] = useState(false)
   const [pickerTempDate, setPickerTempDate] = useState(() => DOB_DEFAULT)
   const maxDob = useMemo(() => new Date(), [])
@@ -210,6 +221,22 @@ export default function RegisterPhysioScreen({ navigation }) {
     }
   }, [])
 
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+    const onShow = (e) => {
+      const h = e?.endCoordinates?.height
+      setKeyboardInset(Number.isFinite(h) ? h : 0)
+    }
+    const onHide = () => setKeyboardInset(0)
+    const subShow = Keyboard.addListener(showEvt, onShow)
+    const subHide = Keyboard.addListener(hideEvt, onHide)
+    return () => {
+      subShow.remove()
+      subHide.remove()
+    }
+  }, [])
+
   function syncCoordsFromStrings() {
     const la = parseFloat(String(latStr).trim())
     const ln = parseFloat(String(lngStr).trim())
@@ -225,20 +252,30 @@ export default function RegisterPhysioScreen({ navigation }) {
         type: avatar ? ['image/*'] : ['image/*', 'application/pdf'],
         copyToCacheDirectory: true,
         multiple: false,
+        base64: false,
       })
-      if (res.canceled) return
-      const asset =
-        res.assets?.[0] ||
-        (res.uri
-          ? { uri: res.uri, name: res.name || 'file', mimeType: res.mimeType || '', size: res.size ?? 0 }
-          : null)
-      if (!asset?.uri) return
-      const size = asset.size ?? asset.fileSize
-      const wrapped = {
-        uri: asset.uri,
-        name: asset.name || 'document',
-        mimeType: asset.mimeType || '',
-        size: size ?? 0,
+      if (res?.canceled === true || res?.assets == null) return
+      const raw = Array.isArray(res.assets) && res.assets.length > 0 ? res.assets[0] : null
+      const legacy =
+        !raw &&
+        typeof res.uri === 'string' &&
+        res.uri
+          ? {
+              uri: res.uri,
+              name: res.name,
+              mimeType: res.mimeType,
+              size: res.size,
+            }
+          : null
+      const wrappedRaw = raw || legacy
+      const wrapped = normalizePickedDocument(wrappedRaw)
+      if (!wrapped?.uri) {
+        Toast.show({
+          type: 'error',
+          text1: 'Could not read that file',
+          text2: 'Try another file or pick from device storage (not cloud-only).',
+        })
+        return
       }
       const v = avatar ? validateAvatarFile(wrapped) : validateFileAsset(wrapped, label)
       if (!v.ok) {
@@ -451,14 +488,14 @@ export default function RegisterPhysioScreen({ navigation }) {
       fd.append('serviceType', serviceType)
       fd.append('areas', areas)
       fd.append('feeMin', String(feeMin))
-      appendAsset(fd, 'avatar', avatarAsset)
-      appendAsset(fd, 'certificate', fCertificate)
-      appendAsset(fd, 'idProof', fIdProof)
+      appendFormDataFile(fd, 'avatar', avatarAsset)
+      appendFormDataFile(fd, 'certificate', fCertificate)
+      appendFormDataFile(fd, 'idProof', fIdProof)
       fd.append('idProofType', String(idProofType).trim().toLowerCase())
-      appendAsset(fd, 'registrationCertificate', fRegCert)
-      appendAsset(fd, 'selfieWithId', fSelfie)
-      if (fInternship) appendAsset(fd, 'internshipCertificate', fInternship)
-      if (fCouncil) appendAsset(fd, 'councilRegistrationCertificate', fCouncil)
+      appendFormDataFile(fd, 'registrationCertificate', fRegCert)
+      appendFormDataFile(fd, 'selfieWithId', fSelfie)
+      if (fInternship) appendFormDataFile(fd, 'internshipCertificate', fInternship)
+      if (fCouncil) appendFormDataFile(fd, 'councilRegistrationCertificate', fCouncil)
       fd.append('qualificationDeclaration', qualificationAgreed ? 'true' : 'false')
 
       await api.post('/auth/register-physio', fd)
@@ -483,23 +520,6 @@ export default function RegisterPhysioScreen({ navigation }) {
     }
   }
 
-  function genderLabel() {
-    const g = GENDER_OPTIONS.find((o) => o.value === gender)
-    return g?.label ?? ''
-  }
-  function degreeLabel() {
-    return degree || ''
-  }
-
-  function pickOptions() {
-    if (pickModal === 'genderAll') return GENDER_OPTIONS
-    if (pickModal === 'degree')
-      return [{ value: '', label: '—' }, ...PHYSIO_DEGREE_OPTIONS.map((d) => ({ value: d, label: d }))]
-    if (pickModal === 'service') return SERVICE_TYPE_OPTIONS
-    if (pickModal === 'idProof') return ID_PROOF_TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))
-    return []
-  }
-
   function openDobPicker() {
     setPickerTempDate(parseDobToDate(dob) || DOB_DEFAULT)
     setDobPickerVisible(true)
@@ -514,21 +534,44 @@ export default function RegisterPhysioScreen({ navigation }) {
   const coordsReviewStr =
     Number.isFinite(ccoords.lat) && Number.isFinite(ccoords.lng) ? `${ccoords.lat.toFixed(5)}, ${ccoords.lng.toFixed(5)}` : '—'
 
+  /** Space for footer row + safe area + keyboard so fields can scroll above the keyboard (esp. Android). */
+  const footerReserve = step < 5 ? 88 + insets.bottom : 0
+  const keyboardPad =
+    Platform.OS === 'android' ? keyboardInset : Math.min(100, Math.round(keyboardInset * 0.4))
+  const scrollBottomPad = 24 + footerReserve + keyboardPad
+
+  const kavOffset = Math.max(insets.top, 8) + 52
+
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={kavOffset}
+      enabled={Platform.OS === 'ios'}
+    >
       <AppHeader
-        title="Home"
-        onBack={() => navigation.navigate('Home')}
+        title="Register"
+        onBack={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Home'))}
         right={
-          <Pressable onPress={() => navigation.navigate('Login')} hitSlop={10}>
+          <Pressable
+            onPress={() => navigation.navigate('Login')}
+            hitSlop={10}
+            style={styles.headerSignIn}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in"
+          >
             <Text style={styles.headerLink}>Sign in</Text>
+            <Ionicons name="log-in-outline" size={18} color={colors.brand} />
           </Pressable>
         }
       />
       <View style={styles.mainCol}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[styles.scrollPad, { paddingBottom: 24 }]}
+        keyboardDismissMode="on-drag"
+        nestedScrollEnabled
+        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+        contentContainerStyle={[styles.scrollPad, { paddingBottom: scrollBottomPad }]}
         showsVerticalScrollIndicator={false}
         style={styles.scrollFlex}
       >
@@ -538,7 +581,12 @@ export default function RegisterPhysioScreen({ navigation }) {
           platform.
         </Text>
         <View style={{ height: 16 }} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stepRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          nestedScrollEnabled
+          contentContainerStyle={styles.stepRow}
+        >
           {STEPS.map((s) => (
             <Pressable
               key={s.n}
@@ -556,14 +604,28 @@ export default function RegisterPhysioScreen({ navigation }) {
         <ErrorBanner formError={formError} fieldErrors={fieldErrors} />
 
         {step === 1 && (
-          <Card style={styles.sectionCard}>
+          <Card padding="lg" style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Account & basic info</Text>
             <View style={{ height: 14 }} />
-            <Input label="Phone (for account)" keyboardType="phone-pad" value={phone} onChangeText={setPhone} error={fieldErrors.phone} />
+            <Input
+              label="Phone (for account)"
+              keyboardType="phone-pad"
+              value={phone}
+              onChangeText={setPhone}
+              error={fieldErrors.phone}
+              placeholder="Enter mobile number"
+            />
             <View style={{ height: 12 }} />
-            <Input label="Password (min 8)" secureTextEntry value={password} onChangeText={setPassword} error={fieldErrors.password} />
+            <Input
+              label="Password (min 8)"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+              error={fieldErrors.password}
+              placeholder="Enter password"
+            />
             <View style={{ height: 12 }} />
-            <Input label="Full name" value={name} onChangeText={setName} error={fieldErrors.name} />
+            <Input label="Full name" value={name} onChangeText={setName} error={fieldErrors.name} placeholder="Enter full name" />
             <View style={{ height: 12 }} />
             <Input
               label="Email"
@@ -572,6 +634,7 @@ export default function RegisterPhysioScreen({ navigation }) {
               value={email}
               onChangeText={setEmail}
               error={fieldErrors.email}
+              placeholder="Enter email address"
             />
             <View style={{ height: 12 }} />
             {Platform.OS !== 'web' ? (
@@ -580,31 +643,47 @@ export default function RegisterPhysioScreen({ navigation }) {
                 <Pressable
                   onPress={openDobPicker}
                   style={[styles.pickField, fieldErrors.dob ? styles.pickFieldErr : null]}
+                  accessibilityRole="button"
                 >
-                  <Text style={[styles.pickFieldText, !dob ? styles.pickPlaceholder : null]}>
-                    {dob || 'Tap to choose'}
+                  <Ionicons name="calendar-outline" size={18} color={colors.brand} style={styles.pickFieldIcon} />
+                  <Text style={[styles.pickFieldText, styles.pickFieldTextFlex, !dob ? styles.pickPlaceholder : null]}>
+                    {dob || 'Select date of birth'}
                   </Text>
+                  <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
                 </Pressable>
                 {fieldErrors.dob ? <Text style={styles.fieldErr}>{fieldErrors.dob}</Text> : null}
               </View>
             ) : (
-              <Input label="Date of birth (YYYY-MM-DD)" value={dob} onChangeText={setDob} error={fieldErrors.dob} />
+              <Input
+                label="Date of birth (YYYY-MM-DD)"
+                value={dob}
+                onChangeText={setDob}
+                error={fieldErrors.dob}
+                placeholder="YYYY-MM-DD"
+              />
             )}
             <View style={{ height: 12 }} />
-            <OptionPickRow
-              label="Gender"
-              valueLabel={gender ? genderLabel() : ''}
-              error={fieldErrors.gender}
-              onPress={() => setPickModal('genderAll')}
-            />
-            <View style={{ height: 4 }} />
+            <View style={{ marginBottom: 12 }}>
+              <DropdownField
+                label="Gender"
+                value={gender}
+                placeholder="Select gender"
+                options={GENDER_DROPDOWN_OPTIONS}
+                onSelect={(v) => {
+                  setGender(v)
+                  setFieldErrors((prev) => ({ ...prev, gender: '' }))
+                }}
+                variant="inline"
+              />
+              {fieldErrors.gender ? <Text style={styles.fieldErr}>{fieldErrors.gender}</Text> : null}
+            </View>
             <Text style={styles.pickLabel}>Address</Text>
             <TextInput
               style={[styles.textArea, fieldErrors.address ? styles.textAreaErr : null]}
               value={address}
               onChangeText={setAddress}
-              placeholder="Street, locality"
-              placeholderTextColor={colors.slate500}
+              placeholder="Enter street, locality"
+              placeholderTextColor={colors.textTertiary}
               multiline
             />
             {fieldErrors.address ? <Text style={styles.fieldErr}>{fieldErrors.address}</Text> : null}
@@ -614,7 +693,13 @@ export default function RegisterPhysioScreen({ navigation }) {
               Type a label patients will see and set latitude & longitude (GPS or paste from Maps). Both coordinates
               are required for bookings.
             </Text>
-            <Input label="Coverage label (area)" value={location} onChangeText={setLocation} error={fieldErrors.location} />
+            <Input
+              label="Coverage label (area)"
+              value={location}
+              onChangeText={setLocation}
+              error={fieldErrors.location}
+              placeholder="e.g. Central Guwahati, Beltola"
+            />
             <View style={{ height: 10 }} />
             <Button title="Use current GPS location" variant="outline" onPress={useCurrentLocation} />
             <View style={{ height: 12 }} />
@@ -627,6 +712,7 @@ export default function RegisterPhysioScreen({ navigation }) {
                 setLocationLat(Number.isFinite(v) ? v : null)
               }}
               keyboardType="decimal-pad"
+              placeholder="e.g. 26.144516"
             />
             <View style={{ height: 12 }} />
             <Input
@@ -638,6 +724,7 @@ export default function RegisterPhysioScreen({ navigation }) {
                 setLocationLng(Number.isFinite(v) ? v : null)
               }}
               keyboardType="decimal-pad"
+              placeholder="e.g. 91.736226"
             />
             {locationLat != null && locationLng != null && Number.isFinite(locationLat) && Number.isFinite(locationLng) ? (
               <Text style={styles.coordHint}>
@@ -656,38 +743,86 @@ export default function RegisterPhysioScreen({ navigation }) {
         )}
 
         {step === 2 && (
-          <Card style={styles.sectionCard}>
+          <Card padding="lg" style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Qualification</Text>
             <View style={{ height: 14 }} />
-            <OptionPickRow label="Degree" valueLabel={degreeLabel()} error={fieldErrors.degree} onPress={() => setPickModal('degree')} />
+            <View style={{ marginBottom: 12 }}>
+              <DropdownField
+                label="Degree"
+                value={degree}
+                placeholder="Select degree"
+                options={DEGREE_DROPDOWN_OPTIONS}
+                onSelect={(v) => {
+                  setDegree(v)
+                  setFieldErrors((prev) => ({ ...prev, degree: '' }))
+                }}
+                variant="inline"
+              />
+              {fieldErrors.degree ? <Text style={styles.fieldErr}>{fieldErrors.degree}</Text> : null}
+            </View>
             <View style={{ height: 12 }} />
-            <Input label="University" value={university} onChangeText={setUniversity} error={fieldErrors.university} />
+            <Input
+              label="University"
+              value={university}
+              onChangeText={setUniversity}
+              error={fieldErrors.university}
+              placeholder="Enter university or college"
+            />
             <View style={{ height: 12 }} />
-            <Input label="Passing year" keyboardType="number-pad" value={year} onChangeText={setYear} error={fieldErrors.year} />
+            <Input
+              label="Passing year"
+              keyboardType="number-pad"
+              value={year}
+              onChangeText={setYear}
+              error={fieldErrors.year}
+              placeholder="e.g. 2018"
+            />
             <View style={{ height: 12 }} />
             <Input
               label="Council registration no (optional)"
               value={registrationNumber}
               onChangeText={setRegistrationNumber}
               error={fieldErrors.registrationNumber}
+              placeholder="If registered, enter council number"
             />
           </Card>
         )}
 
         {step === 3 && (
-          <Card style={styles.sectionCard}>
+          <Card padding="lg" style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Practice details</Text>
             <View style={{ height: 14 }} />
-            <Input label="Experience (years)" keyboardType="decimal-pad" value={experience} onChangeText={setExperience} error={fieldErrors.experience} />
-            <View style={{ height: 12 }} />
-            <Input label="Specialization" value={specialization} onChangeText={setSpecialization} error={fieldErrors.specialization} />
-            <View style={{ height: 12 }} />
-            <OptionPickRow
-              label="Service type"
-              valueLabel={SERVICE_TYPE_OPTIONS.find((o) => o.value === serviceType)?.label || ''}
-              error={fieldErrors.serviceType}
-              onPress={() => setPickModal('service')}
+            <Input
+              label="Experience (years)"
+              keyboardType="decimal-pad"
+              value={experience}
+              onChangeText={setExperience}
+              error={fieldErrors.experience}
+              placeholder="e.g. 5"
             />
+            <View style={{ height: 12 }} />
+            <Input
+              label="Specialization"
+              value={specialization}
+              onChangeText={setSpecialization}
+              error={fieldErrors.specialization}
+              placeholder="e.g. Orthopaedic, sports injury"
+            />
+            <View style={{ height: 12 }} />
+            <View style={{ marginBottom: 12 }}>
+              <DropdownField
+                label="Service type"
+                value={serviceType}
+                placeholder="Select service type"
+                options={SERVICE_TYPE_OPTIONS}
+                onSelect={(v) => {
+                  setServiceType(v)
+                  setFieldErrors((prev) => ({ ...prev, serviceType: '' }))
+                }}
+                variant="inline"
+              />
+              {fieldErrors.serviceType ? <Text style={styles.fieldErr}>{fieldErrors.serviceType}</Text> : null}
+            </View>
             <View style={{ height: 12 }} />
             <Input
               label="Areas (comma-separated)"
@@ -697,12 +832,19 @@ export default function RegisterPhysioScreen({ navigation }) {
               error={fieldErrors.areas}
             />
             <View style={{ height: 12 }} />
-            <Input label="Fee per session (₹)" keyboardType="decimal-pad" value={feeMin} onChangeText={setFeeMin} error={fieldErrors.feeMin} />
+            <Input
+              label="Fee per session (₹)"
+              keyboardType="decimal-pad"
+              value={feeMin}
+              onChangeText={setFeeMin}
+              error={fieldErrors.feeMin}
+              placeholder="e.g. 800"
+            />
           </Card>
         )}
 
         {step === 4 && (
-          <Card style={styles.sectionCard}>
+          <Card padding="lg" style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Documents</Text>
             <Text style={styles.help}>PDF or image, max 2MB each.</Text>
             <View style={{ height: 12 }} />
@@ -721,12 +863,22 @@ export default function RegisterPhysioScreen({ navigation }) {
               error={fieldErrors.idProof || fieldErrors.idProofType}
               onPick={() => pickDoc('ID proof', setFIdProof)}
             />
-            <OptionPickRow
-              label="ID type"
-              valueLabel={ID_PROOF_TYPE_OPTIONS.find((o) => o.value === idProofType)?.label || ''}
-              error={fieldErrors.idProofType}
-              onPress={() => setPickModal('idProof')}
-            />
+            <View style={{ marginBottom: 12 }}>
+              <DropdownField
+                label="ID type"
+                value={idProofType}
+                placeholder="Select ID type"
+                options={ID_PROOF_TYPE_OPTIONS}
+                onSelect={(v) => {
+                  setIdProofType(v)
+                  setFieldErrors((prev) => ({ ...prev, idProofType: '', idProof: '' }))
+                }}
+                variant="inline"
+              />
+              {fieldErrors.idProofType || fieldErrors.idProof ? (
+                <Text style={styles.fieldErr}>{fieldErrors.idProofType || fieldErrors.idProof}</Text>
+              ) : null}
+            </View>
             <View style={{ height: 16 }} />
             <DocRow
               title="Professional registration"
@@ -765,7 +917,7 @@ export default function RegisterPhysioScreen({ navigation }) {
             </Text>
             <Pressable style={styles.checkRow} onPress={() => setQualificationAgreed((v) => !v)}>
               <View style={[styles.checkBox, qualificationAgreed ? styles.checkBoxOn : null]}>
-                {qualificationAgreed ? <Text style={styles.checkMark}>✓</Text> : null}
+                {qualificationAgreed ? <Ionicons name="checkmark" size={16} color={colors.white} /> : null}
               </View>
               <Text style={styles.checkLabel}>I have read and agree to the declaration above.</Text>
             </Pressable>
@@ -777,7 +929,7 @@ export default function RegisterPhysioScreen({ navigation }) {
         )}
 
         {step === 5 && (
-          <Card style={styles.sectionCard}>
+          <Card padding="lg" style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Review & submit</Text>
             <View style={{ height: 12 }} />
             <ReviewLine label="Phone" value={normalizeIndianPhone(phone) || '—'} />
@@ -825,36 +977,6 @@ export default function RegisterPhysioScreen({ navigation }) {
           </View>
         ) : null}
       </View>
-
-      <Modal transparent visible={Boolean(pickModal)} animationType="slide">
-        <View style={styles.modalRootPick}>
-          <Pressable style={styles.modalBackdropFill} onPress={() => setPickModal(null)} />
-          <View style={[styles.modalSheetPick, { paddingBottom: Math.max(16, insets.bottom + 16) }]}>
-            <Text style={styles.modalTitle}>Select</Text>
-            <FlatList
-              data={pickModal ? pickOptions() : []}
-              keyExtractor={(item, index) => `${item.value}-${index}`}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={styles.pickItem}
-                  onPress={() => {
-                    if (pickModal === 'genderAll') setGender(item.value)
-                    if (pickModal === 'degree') setDegree(item.value)
-                    if (pickModal === 'service') setServiceType(item.value)
-                    if (pickModal === 'idProof') {
-                      setIdProofType(item.value)
-                      setFieldErrors((prev) => ({ ...prev, idProofType: '' }))
-                    }
-                    setPickModal(null)
-                  }}
-                >
-                  <Text style={styles.pickItemText}>{item.label}</Text>
-                </Pressable>
-              )}
-            />
-          </View>
-        </View>
-      </Modal>
 
       {Platform.OS === 'ios' && (
         <Modal transparent visible={dobPickerVisible} animationType="fade">
@@ -920,42 +1042,46 @@ function ReviewLine({ label, value }) {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.canvas },
   scrollPad: { paddingHorizontal: 16, paddingTop: 10 },
-  headerLink: { fontFamily: font.bold, fontSize: type.sm, color: colors.brand },
-  h1: { fontFamily: font.bold, fontSize: type.xl, color: colors.textPrimary, letterSpacing: -0.3 },
-  lead: { marginTop: 6, fontFamily: font.regular, fontSize: type.sm, color: colors.textSecondary, lineHeight: leading.sm },
-  stepRow: { flexDirection: 'row', gap: 8 },
-  stepChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
+  headerSignIn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  headerLink: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand },
+  h1: { fontFamily: font.bold, fontSize: type['2xl'], color: colors.ink, letterSpacing: -0.3 },
+  lead: { marginTop: 6, fontFamily: font.regular, fontSize: type.sm, color: colors.inkMuted, lineHeight: leading.sm },
+  stepRow: { flexDirection: 'row', gap: 10, paddingVertical: 6, paddingRight: 8, alignItems: 'center' },
+  stepChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: r.full, borderWidth: 1, minHeight: 38, flexShrink: 0, justifyContent: 'center' },
   stepChipOff: { backgroundColor: colors.white, borderColor: colors.borderSubtle },
   stepChipOn: { backgroundColor: colors.brand, borderColor: colors.brand, shadowColor: colors.brand, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 },
-  stepChipText: { fontFamily: font.semiBold, fontSize: type.xs, color: colors.textSecondary },
+  stepChipText: { fontFamily: font.semiBold, fontSize: type.xs, color: colors.inkMuted },
   stepChipTextOn: { color: colors.white },
   sectionCard: { marginBottom: 10 },
-  sectionTitle: { fontFamily: font.bold, fontSize: type.base, color: colors.textPrimary },
+  sectionTitle: { fontFamily: font.bold, fontSize: type.base, color: colors.ink },
   help: { marginTop: 6, fontFamily: font.regular, fontSize: type.xs, color: colors.textTertiary, lineHeight: leading.xs },
-  pickLabel: { marginBottom: 6, fontFamily: font.semiBold, fontSize: type.sm, color: colors.textSecondary },
+  pickLabel: { marginBottom: 6, fontFamily: font.semiBold, fontSize: type.sm, color: colors.inkMuted },
   pickField: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: 12,
-    paddingHorizontal: 14,
+    borderRadius: r.xl,
+    paddingHorizontal: 12,
     paddingVertical: 12,
     backgroundColor: colors.white,
-    minHeight: 42,
-    justifyContent: 'center',
+    minHeight: 44,
   },
   pickFieldErr: { borderColor: colors.danger },
-  pickFieldText: { fontFamily: font.regular, fontSize: type.sm, color: colors.textPrimary },
-  pickPlaceholder: { color: colors.slate300 },
+  pickFieldText: { fontFamily: font.regular, fontSize: type.sm, color: colors.ink },
+  pickFieldTextFlex: { flex: 1 },
+  pickFieldIcon: { marginRight: 8 },
+  pickPlaceholder: { color: colors.textTertiary },
   textArea: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: 10,
+    borderRadius: r.lg,
     padding: 12,
     minHeight: 80,
     textAlignVertical: 'top',
     fontFamily: font.regular,
     fontSize: type.sm,
-    color: colors.textPrimary,
+    color: colors.ink,
     backgroundColor: colors.white,
   },
   textAreaErr: { borderColor: colors.danger },
@@ -965,22 +1091,47 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     backgroundColor: colors.canvas,
-    borderRadius: 12,
+    borderRadius: r.xl,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
   },
-  docTitle: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.textPrimary },
+  docTitle: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.ink },
   docSub: { marginTop: 3, fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
+  docPreviewRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  docThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: r.md,
+    backgroundColor: colors.slate100,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  docIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: r.md,
+    backgroundColor: colors.teal50,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   docName: { marginTop: 6, fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
+  docNameInRow: { marginTop: 0, flex: 1, fontSize: type.sm, color: colors.ink },
   declaration: {
     marginTop: 8,
     fontFamily: font.regular,
     fontSize: type.sm,
-    color: colors.textSecondary,
+    color: colors.inkMuted,
     lineHeight: leading.sm,
     padding: 12,
     backgroundColor: colors.slate50,
-    borderRadius: 10,
+    borderRadius: r.lg,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
   },
@@ -989,22 +1140,21 @@ const styles = StyleSheet.create({
     marginTop: 2,
     width: 24,
     height: 24,
-    borderRadius: 6,
+    borderRadius: r.sm,
     borderWidth: 2,
-    borderColor: colors.slate300,
+    borderColor: colors.borderSubtle,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   checkBoxOn: { backgroundColor: colors.brand, borderColor: colors.brand },
-  checkMark: { color: colors.white, fontSize: 14, fontFamily: font.bold },
-  checkLabel: { flex: 1, fontFamily: font.regular, fontSize: type.sm, color: colors.textSecondary, lineHeight: leading.sm },
+  checkLabel: { flex: 1, fontFamily: font.regular, fontSize: type.sm, color: colors.inkMuted, lineHeight: leading.sm },
   fieldErr: { marginTop: 5, fontFamily: font.regular, fontSize: type.xs, color: colors.danger },
   errorBanner: {
     marginBottom: 14,
     padding: 14,
-    borderRadius: 14,
+    borderRadius: r.xl,
     borderWidth: 1,
     borderColor: colors.dangerBorder,
     backgroundColor: colors.dangerBg,
@@ -1035,39 +1185,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
   },
-  reviewLabel: { fontFamily: font.regular, fontSize: type.sm, color: colors.textSecondary },
-  reviewVal: { flex: 1, fontFamily: font.semiBold, fontSize: type.sm, color: colors.textPrimary, textAlign: 'right' },
+  reviewLabel: { fontFamily: font.regular, fontSize: type.sm, color: colors.inkMuted },
+  reviewVal: { flex: 1, fontFamily: font.semiBold, fontSize: type.sm, color: colors.ink, textAlign: 'right' },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15,23,42,0.45)',
     justifyContent: 'flex-end',
   },
-  modalRootPick: { flex: 1, justifyContent: 'flex-end' },
-  modalBackdropFill: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15,23,42,0.45)',
-  },
-  modalSheetPick: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '55%',
-    paddingTop: 16,
-    paddingHorizontal: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  modalTitle: { fontFamily: font.bold, fontSize: type.base, color: colors.textPrimary, marginBottom: 8, paddingHorizontal: 12 },
-  pickItem: { paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle },
-  pickItemText: { fontFamily: font.regular, fontSize: type.base, color: colors.textPrimary },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: r['2xl'],
+    borderTopRightRadius: r['2xl'],
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },

@@ -29,6 +29,7 @@
       "softwareKeyboardLayoutMode": "resize"
     },
     "plugins": [
+      "expo-web-browser",
       "@react-native-community/datetimepicker",
       "@rnmapbox/maps",
       "expo-asset",

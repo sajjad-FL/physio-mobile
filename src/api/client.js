@@ -39,6 +39,19 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = 'Bearer ' + token
   }
+  // React Native / axios: never send multipart without a boundary. If something set a bare
+  // `multipart/form-data`, remove it so the runtime adds `multipart/form-data; boundary=...`.
+  const data = config.data
+  if (typeof FormData !== 'undefined' && data instanceof FormData) {
+    const h = config.headers
+    if (h && typeof h.delete === 'function') {
+      h.delete('Content-Type')
+      h.delete('content-type')
+    } else if (h) {
+      delete h['Content-Type']
+      delete h['content-type']
+    }
+  }
   // Any mutation clears inflight map so next GET gets fresh data.
   const method = String(config.method || 'get').toLowerCase()
   if (method !== 'get') {

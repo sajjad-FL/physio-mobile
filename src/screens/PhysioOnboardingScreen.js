@@ -36,6 +36,7 @@ import {
   validateSubmitForm,
 } from '../utils/onboardingValidation'
 import { formatPhysioSessionFeeLabel } from '../utils/physioSessionFee'
+import { appendFormDataFile, normalizePickedDocument } from '../utils/physioFormMultipart'
 
 const STEPS = [
   { n: 1, title: 'Basic info' },
@@ -76,13 +77,6 @@ function parseDobToDate(ymd) {
   const dt = new Date(y, mo - 1, d)
   if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null
   return dt
-}
-
-function appendAsset(fd, field, asset) {
-  if (!asset?.uri) return
-  const name = asset.name || `${field}.jpg`
-  const type = asset.mimeType || 'application/octet-stream'
-  fd.append(field, { uri: asset.uri, name, type })
 }
 
 function ErrorBanner({ formError, fieldErrors }) {
@@ -280,7 +274,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
     let n = 0
     function add(field, asset) {
       if (!asset?.uri) return
-      appendAsset(fd, field, asset)
+      appendFormDataFile(fd, field, asset)
       n += 1
     }
     if (formExtra.avatar) add('avatar', formExtra.avatar)
@@ -293,9 +287,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
       add('councilRegistrationCertificate', formExtra.councilRegistrationCertificate)
     }
     if (n === 0) return
-    await api.post('/physio/onboarding/upload', fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    await api.post('/physio/onboarding/upload', fd)
   }
 
   async function pickDoc(label, setter, avatar = false) {
@@ -304,20 +296,30 @@ export default function PhysioOnboardingScreen({ navigation }) {
         type: avatar ? ['image/*'] : ['image/*', 'application/pdf'],
         copyToCacheDirectory: true,
         multiple: false,
+        base64: false,
       })
-      if (res.canceled) return
-      const asset =
-        res.assets?.[0] ||
-        (res.uri
-          ? { uri: res.uri, name: res.name || 'file', mimeType: res.mimeType || '', size: res.size ?? 0 }
-          : null)
-      if (!asset?.uri) return
-      const size = asset.size ?? asset.fileSize
-      const wrapped = {
-        uri: asset.uri,
-        name: asset.name || 'document',
-        mimeType: asset.mimeType || '',
-        size: size ?? 0,
+      if (res?.canceled === true || res?.assets == null) return
+      const raw = Array.isArray(res.assets) && res.assets.length > 0 ? res.assets[0] : null
+      const legacy =
+        !raw &&
+        typeof res.uri === 'string' &&
+        res.uri
+          ? {
+              uri: res.uri,
+              name: res.name,
+              mimeType: res.mimeType,
+              size: res.size,
+            }
+          : null
+      const wrappedRaw = raw || legacy
+      const wrapped = normalizePickedDocument(wrappedRaw)
+      if (!wrapped?.uri) {
+        Toast.show({
+          type: 'error',
+          text1: 'Could not read that file',
+          text2: 'Try another file or pick from device storage (not cloud-only).',
+        })
+        return
       }
       const v = avatar ? validateAvatarFile(wrapped) : validateFileAsset(wrapped, label)
       if (!v.ok) {

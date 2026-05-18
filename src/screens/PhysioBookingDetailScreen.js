@@ -1,7 +1,7 @@
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { Ionicons } from '@expo/vector-icons'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Linking, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ScrollView } from 'react-native-gesture-handler'
 import Toast from 'react-native-toast-message'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -23,19 +23,33 @@ import {
 import { formatBookingDateAndSlot, formatBookingTimeSlot } from '../utils/date'
 import { openGoogleMapsDestination } from '../utils/googleMaps'
 import { normalizeSessionRows } from '../utils/physioBookingHelpers'
+import DropdownField from '../components/ui/DropdownField'
 
-const DETAIL_TABS = [
+const RESCHEDULE_SLOT_OPTIONS = DAILY_SLOTS.map((s) => ({
+  value: s,
+  label: formatBookingTimeSlot(s),
+}))
+
+const BASE_TABS = [
   { key: 'overview', label: 'Overview', icon: 'home-outline', iconOn: 'home' },
   { key: 'sessions', label: 'Sessions', icon: 'calendar-outline', iconOn: 'calendar' },
-  { key: 'payments', label: 'Payments', icon: 'card-outline', iconOn: 'card' },
+  { key: 'payments', label: 'Payment', icon: 'card-outline', iconOn: 'card' },
+  { key: 'plan', label: 'Plan', icon: 'clipboard-outline', iconOn: 'clipboard' },
   { key: 'notes', label: 'Notes', icon: 'document-text-outline', iconOn: 'document-text' },
 ]
 
-const TabBar = memo(function TabBar({ activeTab, onChange }) {
+const TabBar = memo(function TabBar({ activeTab, onChange, tabs, badges = {} }) {
   return (
-    <View style={styles.tabWrap}>
-      {DETAIL_TABS.map((tab) => {
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.tabScroll}
+      contentContainerStyle={styles.tabScrollContent}
+      nestedScrollEnabled
+    >
+      {tabs.map((tab) => {
         const active = activeTab === tab.key
+        const hasBadge = badges[tab.key]
         return (
           <Pressable
             key={tab.key}
@@ -44,16 +58,19 @@ const TabBar = memo(function TabBar({ activeTab, onChange }) {
             style={[styles.tabBtn, active && styles.tabBtnActive]}
             onPress={() => onChange(tab.key)}
           >
-            <Ionicons
-              name={active ? tab.iconOn : tab.icon}
-              size={13}
-              color={active ? colors.white : colors.slate400}
-            />
+            <View style={styles.tabIconWrap}>
+              <Ionicons
+                name={active ? tab.iconOn : tab.icon}
+                size={13}
+                color={active ? colors.white : colors.slate400}
+              />
+              {hasBadge && !active ? <View style={styles.tabBadgeDot} /> : null}
+            </View>
             <Text style={[styles.tabTxt, active && styles.tabTxtActive]}>{tab.label}</Text>
           </Pressable>
         )
       })}
-    </View>
+    </ScrollView>
   )
 })
 
@@ -98,10 +115,22 @@ function patientInitial(name) {
   return s ? s.slice(0, 1).toUpperCase() : '?'
 }
 
-const BookingDetailChrome = memo(function BookingDetailChrome({ navigation, insetsTop, children }) {
+function openWhatsApp(phone) {
+  const cleaned = String(phone || '').replace(/\D/g, '')
+  const number = cleaned.startsWith('91') && cleaned.length === 12 ? cleaned : '91' + cleaned.slice(-10)
+  Linking.openURL(`https://wa.me/${number}`)
+}
+
+function callPhone(phone) {
+  const cleaned = String(phone || '').replace(/\D/g, '')
+  const number = cleaned.startsWith('91') && cleaned.length === 12 ? cleaned : '91' + cleaned.slice(-10)
+  Linking.openURL(`tel:+${number}`)
+}
+
+const BookingDetailChrome = memo(function BookingDetailChrome({ navigation, insetsTop, title, subtitle, children }) {
   return (
     <View style={styles.screenRoot}>
-      <View style={[styles.customHeader, { paddingTop: insetsTop + 4 }]}>
+      <View style={[styles.customHeader, { paddingTop: insetsTop + 6 }]}>
         <Pressable
           accessibilityRole="button"
           onPress={() => navigation.goBack()}
@@ -110,10 +139,12 @@ const BookingDetailChrome = memo(function BookingDetailChrome({ navigation, inse
         >
           <Ionicons name="chevron-back" size={18} color={colors.white} />
         </Pressable>
-        <Text style={styles.customHeaderTitle} numberOfLines={1}>Booking</Text>
+        <View style={styles.customHeaderCenter}>
+          <Text style={styles.customHeaderTitle} numberOfLines={1}>{title || 'Booking Details'}</Text>
+          {subtitle ? <Text style={styles.customHeaderSub} numberOfLines={1}>{subtitle}</Text> : null}
+        </View>
         <View style={styles.customHeaderSpacer} />
       </View>
-      <View style={styles.headerBrandLine} />
       {children}
     </View>
   )
@@ -448,10 +479,16 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
   const b = booking
   const busy = busyId === b._id
   const canStartNavigation = Boolean(b.userId?.coordinates || String(b.userId?.location || '').trim())
+  const hasPhone = Boolean(b.userId?.phone)
   const scrollBottomPad = 14 + insets.bottom + 14
 
   return (
-    <BookingDetailChrome navigation={navigation} insetsTop={insets.top}>
+    <BookingDetailChrome
+      navigation={navigation}
+      insetsTop={insets.top}
+      title={b.userId?.name || 'Booking'}
+      subtitle={formatBookingDateAndSlot(b.date, b.timeSlot)}
+    >
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.pad, { paddingBottom: scrollBottomPad }]}
@@ -466,8 +503,26 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
 
         {/* ── Hero card ──────────────────────────────── */}
         <View style={styles.heroCard}>
+          {/* Brand band: service type + date + status pills */}
           <View style={styles.heroBand}>
-            <Text style={styles.heroBandLabel}>VISIT</Text>
+            <View style={styles.heroBandTopRow}>
+              <View style={styles.heroBandLabelWrap}>
+                <Ionicons
+                  name={b.serviceType === 'online' ? 'videocam-outline' : 'home-outline'}
+                  size={11}
+                  color="rgba(255,255,255,0.85)"
+                />
+                <Text style={styles.heroBandLabel}>
+                  {b.serviceType === 'online' ? 'ONLINE SESSION' : 'HOME VISIT'}
+                </Text>
+              </View>
+              {b.rescheduled ? (
+                <View style={styles.heroBandReschedTag}>
+                  <Ionicons name="refresh-outline" size={10} color={colors.amber800} />
+                  <Text style={styles.heroBandReschedTxt}>Rescheduled</Text>
+                </View>
+              ) : null}
+            </View>
             <Text style={styles.heroBandDate}>{formatBookingDateAndSlot(b.date, b.timeSlot)}</Text>
             <View style={styles.pillRow}>
               <View style={styles.pill}>
@@ -484,25 +539,69 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
             </View>
           </View>
 
+          {/* Patient section: avatar + name + phone + issue */}
           <View style={styles.heroPatientSection}>
-            <View style={styles.heroAvatarWrap}>
-              <Text style={styles.heroAvatarTxt}>{patientInitial(b.userId?.name)}</Text>
+            <View style={styles.heroPatientTop}>
+              <View style={styles.heroAvatarWrap}>
+                <Text style={styles.heroAvatarTxt}>{patientInitial(b.userId?.name)}</Text>
+              </View>
+              <View style={styles.heroPatientInfo}>
+                <Text style={styles.heroPatientName} numberOfLines={1}>{b.userId?.name ?? '—'}</Text>
+                {b.userId?.phone ? (
+                  <View style={styles.heroPhoneRow}>
+                    <Ionicons name="call-outline" size={11} color={colors.textTertiary} />
+                    <Text style={styles.heroPatientPhone}>{b.userId.phone}</Text>
+                  </View>
+                ) : null}
+                {b.issue ? (
+                  <View style={styles.heroIssueRow}>
+                    <Ionicons name="medical-outline" size={11} color={colors.brand} />
+                    <Text style={styles.heroIssue} numberOfLines={2}>{b.issue}</Text>
+                  </View>
+                ) : null}
+              </View>
             </View>
-            <View style={styles.heroPatientInfo}>
-              <Text style={styles.heroPatientName} numberOfLines={1}>{b.userId?.name ?? '—'}</Text>
-              {b.userId?.phone ? <Text style={styles.heroPatientPhone}>{b.userId.phone}</Text> : null}
+
+            {/* Contact + navigation actions */}
+            <View style={styles.heroContactRow}>
+              <Pressable
+                style={[styles.heroContactBtn, styles.heroCallBtn, !hasPhone && styles.heroContactBtnOff]}
+                disabled={!hasPhone}
+                onPress={() => callPhone(b.userId.phone)}
+              >
+                <Ionicons name="call" size={14} color={hasPhone ? colors.brand : colors.slate300} />
+                <Text style={[styles.heroContactBtnTxt, styles.heroCallBtnTxt, !hasPhone && styles.heroContactBtnTxtOff]}>
+                  Call
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.heroContactBtn, styles.heroWaBtn, !hasPhone && styles.heroContactBtnOff]}
+                disabled={!hasPhone}
+                onPress={() => openWhatsApp(b.userId.phone)}
+              >
+                <Ionicons name="logo-whatsapp" size={14} color={hasPhone ? '#25D366' : colors.slate300} />
+                <Text style={[styles.heroContactBtnTxt, styles.heroWaBtnTxt, !hasPhone && styles.heroContactBtnTxtOff]}>
+                  WhatsApp
+                </Text>
+              </Pressable>
+
+              {b.serviceType !== 'online' ? (
+                <Pressable
+                  style={[styles.heroContactBtn, styles.heroNavBtn, !canStartNavigation && styles.heroContactBtnOff]}
+                  disabled={!canStartNavigation}
+                  onPress={() => openGoogleMapsDestination({
+                    coordinates: b.userId?.coordinates,
+                    address: b.userId?.location,
+                  })}
+                >
+                  <Ionicons name="navigate" size={14} color={canStartNavigation ? colors.white : colors.slate300} />
+                  <Text style={[styles.heroContactBtnTxt, styles.heroNavBtnTxt, !canStartNavigation && styles.heroContactBtnTxtOff]}>
+                    Navigate
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
-            <Pressable
-              style={[styles.directionsBtn, !canStartNavigation && styles.directionsBtnOff]}
-              disabled={!canStartNavigation}
-              onPress={() => openGoogleMapsDestination({
-                coordinates: b.userId?.coordinates,
-                address: b.userId?.location,
-              })}
-            >
-              <Ionicons name="navigate" size={13} color={!canStartNavigation ? colors.slate400 : colors.white} />
-              <Text style={styles.directionsBtnTxt}>Directions</Text>
-            </Pressable>
           </View>
         </View>
 
@@ -515,7 +614,12 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
         ) : null}
 
         {/* ── Tab bar ────────────────────────────────── */}
-        <TabBar activeTab={activeTab} onChange={setActiveTab} />
+        <TabBar
+          activeTab={activeTab}
+          onChange={setActiveTab}
+          tabs={b.serviceType === 'home' ? BASE_TABS : BASE_TABS.filter((t) => t.key !== 'plan')}
+          badges={{ plan: showCreatePlan }}
+        />
 
         {/* ── Overview tab ───────────────────────────── */}
         {activeTab === 'overview' ? (
@@ -690,12 +794,57 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
               ) : null}
             </View>
 
+          </>
+        ) : null}
+
+        {/* ── Plan tab ─────────────────────────────────── */}
+        {activeTab === 'plan' ? (
+          <>
+            <View style={styles.sectionGap} />
             {showCreatePlan ? (
-              <View style={[styles.sectionCard, styles.footerCard]}>
-                <SectionTitle title="Create home plan" hint="Set sessions, fee, and coverage for the patient to approve." icon="document-text-outline" />
-                <HomePlanFormPhysio booking={b} busy={busy} onSubmit={(payload) => createPlan(b._id, payload)} />
+              <HomePlanFormPhysio booking={b} busy={busy} onSubmit={(payload) => createPlan(b._id, payload)} />
+            ) : showPlanPending ? (
+              <View style={styles.planPendingCard}>
+                <View style={styles.planPendingIconWrap}>
+                  <Ionicons name="hourglass-outline" size={28} color={colors.warning} />
+                </View>
+                <Text style={styles.planPendingTitle}>Awaiting patient approval</Text>
+                <Text style={styles.planPendingBody}>
+                  You submitted a plan with {b.sessions} session{b.sessions !== 1 ? 's' : ''} at ₹{b.amountPerSession}/session.
+                  The patient will review and approve it.
+                </Text>
+                <View style={styles.planPendingKVs}>
+                  <PlanKV label="Sessions" value={String(b.sessions ?? '—')} />
+                  <PlanKV label="Fee/session" value={b.amountPerSession != null ? `₹${b.amountPerSession}` : '—'} />
+                  {b.discountPercent != null ? <PlanKV label="Discount" value={`${b.discountPercent}%`} /> : null}
+                  <PlanKV label="Total" value={paymentAmountLabel(b)} highlight />
+                </View>
               </View>
-            ) : null}
+            ) : b.planStatus === 'approved' ? (
+              <View style={styles.planApprovedCard}>
+                <View style={styles.planApprovedHead}>
+                  <View style={styles.planApprovedIconWrap}>
+                    <Ionicons name="checkmark-circle" size={22} color={colors.success} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.planApprovedTitle}>Plan approved</Text>
+                    <Text style={styles.planApprovedSub}>Patient accepted the plan. Sessions are active.</Text>
+                  </View>
+                </View>
+                <View style={styles.planPendingKVs}>
+                  <PlanKV label="Sessions" value={String(b.sessions ?? '—')} />
+                  <PlanKV label="Fee/session" value={b.amountPerSession != null ? `₹${b.amountPerSession}` : '—'} />
+                  {b.discountPercent != null ? <PlanKV label="Discount" value={`${b.discountPercent}%`} /> : null}
+                  <PlanKV label="Mode" value={paymentModeLabel(b)} />
+                  <PlanKV label="Total" value={paymentAmountLabel(b)} highlight />
+                </View>
+              </View>
+            ) : (
+              <View style={styles.planNaCard}>
+                <Ionicons name="clipboard-outline" size={28} color={colors.slate300} />
+                <Text style={styles.planNaTxt}>No plan for this booking type.</Text>
+              </View>
+            )}
           </>
         ) : null}
 
@@ -963,19 +1112,14 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
               )}
 
               <Text style={[styles.rescheduleLabel, { marginTop: 18 }]}>New time slot</Text>
-              <View style={styles.slotGrid}>
-                {DAILY_SLOTS.map((s) => (
-                  <Pressable
-                    key={s}
-                    style={[styles.slotPick, rescheduleSlot === s && styles.slotPickOn]}
-                    onPress={() => setRescheduleSlot(s)}
-                  >
-                    <Text style={[styles.slotPickTxt, rescheduleSlot === s && styles.slotPickTxtOn]}>
-                      {formatBookingTimeSlot(s)}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+              <DropdownField
+                label={null}
+                value={rescheduleSlot}
+                placeholder="Select a time"
+                options={RESCHEDULE_SLOT_OPTIONS}
+                onSelect={setRescheduleSlot}
+                variant="inline"
+              />
 
               <View style={styles.modalActions}>
                 <Pressable style={styles.modalCancelBtn} onPress={closeRescheduleModal} disabled={rescheduleBusy}>
@@ -1011,6 +1155,15 @@ const KV = memo(function KV({ k, v, cap, bold, last }) {
   )
 })
 
+const PlanKV = memo(function PlanKV({ label, value, highlight }) {
+  return (
+    <View style={styles.planKVRow}>
+      <Text style={styles.planKVLabel}>{label}</Text>
+      <Text style={[styles.planKVValue, highlight && styles.planKVValueHL]}>{value}</Text>
+    </View>
+  )
+})
+
 const styles = StyleSheet.create({
   screenRoot: { flex: 1, backgroundColor: colors.canvas },
   sectionGap: { height: 10 },
@@ -1021,32 +1174,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    paddingBottom: 12,
-    backgroundColor: colors.white,
+    paddingBottom: 14,
+    backgroundColor: colors.brand,
+    gap: 10,
   },
   backBtn: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: colors.brand,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
     flexShrink: 0,
   },
+  customHeaderCenter: { flex: 1, minWidth: 0 },
   customHeaderTitle: {
-    flex: 1,
-    textAlign: 'center',
     fontFamily: font.bold,
     fontSize: type.base,
-    color: colors.textPrimary,
+    color: colors.white,
+  },
+  customHeaderSub: {
+    marginTop: 1,
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: 'rgba(255,255,255,0.75)',
   },
   customHeaderSpacer: { width: 34 },
-  headerBrandLine: { height: 3, backgroundColor: colors.brand },
 
   // ── Hero card ────────────────────────────────────
   heroCard: {
@@ -1063,73 +1218,111 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   heroBand: {
-    backgroundColor: colors.brand,
+    backgroundColor: colors.brandHover,
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 16,
   },
+  heroBandTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  heroBandLabelWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
   heroBandLabel: {
     fontFamily: font.bold,
     fontSize: 9,
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.75)',
     textTransform: 'uppercase',
     letterSpacing: 1.2,
   },
+  heroBandReschedTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: colors.amber50,
+  },
+  heroBandReschedTxt: { fontFamily: font.bold, fontSize: 9, color: colors.amber800 },
   heroBandDate: {
-    marginTop: 4,
     fontFamily: font.bold,
     fontSize: type.xl,
     color: colors.white,
+    lineHeight: 26,
   },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   pill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
   },
   pillTxt: { fontFamily: font.semiBold, fontSize: 10, color: colors.white },
+
+  // Patient section
   heroPatientSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 14,
     gap: 12,
   },
+  heroPatientTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
   heroAvatarWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 13,
     backgroundColor: colors.teal50,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.brandSoft,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   heroAvatarTxt: { fontFamily: font.bold, fontSize: type.lg, color: colors.brand },
-  heroPatientInfo: { flex: 1, minWidth: 0 },
-  heroPatientName: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textPrimary },
-  heroPatientPhone: { marginTop: 2, fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
-  directionsBtn: {
+  heroPatientInfo: { flex: 1, minWidth: 0, gap: 3 },
+  heroPatientName: { fontFamily: font.bold, fontSize: type.md, color: colors.textPrimary, lineHeight: 22 },
+  heroPhoneRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  heroPatientPhone: { fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
+  heroIssueRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 2 },
+  heroIssue: { flex: 1, fontFamily: font.medium, fontSize: type.xs, color: colors.brand, lineHeight: 16 },
+
+  // Contact action row
+  heroContactRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingTop: 2,
+  },
+  heroContactBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: colors.brand,
-    flexShrink: 0,
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.22,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingVertical: 9,
+    borderRadius: 11,
+    borderWidth: 1,
   },
-  directionsBtnOff: { backgroundColor: colors.slate100, shadowOpacity: 0 },
-  directionsBtnTxt: { fontFamily: font.semiBold, fontSize: type.xs, color: colors.white },
+  heroContactBtnOff: { opacity: 0.4 },
+  heroContactBtnTxt: { fontFamily: font.semiBold, fontSize: type.xs },
+  heroContactBtnTxtOff: { color: colors.slate300 },
+  heroCallBtn: { backgroundColor: colors.teal50, borderColor: colors.brandSoft },
+  heroCallBtnTxt: { color: colors.brand },
+  heroWaBtn: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' },
+  heroWaBtnTxt: { color: '#16a34a' },
+  heroNavBtn: { backgroundColor: colors.brand, borderColor: colors.brand },
+  heroNavBtnTxt: { color: colors.white },
 
   // ── Banner ───────────────────────────────────────
   bannerMint: {
@@ -1146,30 +1339,49 @@ const styles = StyleSheet.create({
   bannerMintTxt: { flex: 1, fontFamily: font.semiBold, fontSize: type.xs, color: colors.teal800, lineHeight: 16 },
 
   // ── Tab bar ──────────────────────────────────────
-  tabWrap: {
-    flexDirection: 'row',
+  tabIconWrap: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  tabBadgeDot: {
+    position: 'absolute',
+    top: -3,
+    right: -5,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#22c55e',
+    borderWidth: 1.5,
+    borderColor: colors.white,
+  },
+  tabScroll: {
     marginTop: 12,
-    padding: 4,
+    maxWidth: '100%',
     borderRadius: 16,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    gap: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 1,
   },
+  tabScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    paddingRight: 10,
+    gap: 10,
+    flexGrow: 1,
+  },
   tabBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    minHeight: 34,
+    gap: 6,
+    minHeight: 38,
     borderRadius: 10,
-    paddingHorizontal: 4,
+    paddingHorizontal: 12,
+    flexShrink: 0,
   },
   tabBtnActive: { backgroundColor: colors.brand },
   tabTxt: { fontFamily: font.semiBold, fontSize: type.xs, color: colors.slate400 },
@@ -1482,18 +1694,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.canvas,
   },
   rescheduleDateTapTxt: { flex: 1, fontFamily: font.semiBold, fontSize: type.base, color: colors.textPrimary },
-  slotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  slotPick: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.white,
-  },
-  slotPickOn: { borderColor: colors.brand, backgroundColor: colors.teal50 },
-  slotPickTxt: { fontFamily: font.medium, fontSize: type.xs, color: colors.slate600 },
-  slotPickTxtOn: { fontFamily: font.semiBold, color: colors.brand },
 
   // ── Misc ──────────────────────────────────────────
   scroll: { flex: 1, backgroundColor: colors.canvas },
@@ -1546,4 +1746,128 @@ const styles = StyleSheet.create({
     backgroundColor: colors.canvas,
   },
   sep: { height: StyleSheet.hairlineWidth, backgroundColor: colors.borderSubtle, marginVertical: 10 },
+
+  // ── Plan tab ─────────────────────────────────────
+  planPendingCard: {
+    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.warningBorder,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  planPendingIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 15,
+    backgroundColor: colors.warningBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  planPendingTitle: {
+    fontFamily: font.bold,
+    fontSize: type.lg,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  planPendingBody: {
+    fontFamily: font.regular,
+    fontSize: type.sm,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  planPendingKVs: {
+    borderRadius: 12,
+    backgroundColor: colors.canvas,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    overflow: 'hidden',
+  },
+  planApprovedCard: {
+    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  planApprovedHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 14,
+  },
+  planApprovedIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#dcfce7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  planApprovedTitle: {
+    fontFamily: font.bold,
+    fontSize: type.lg,
+    color: colors.textPrimary,
+  },
+  planApprovedSub: {
+    marginTop: 3,
+    fontFamily: font.regular,
+    fontSize: type.sm,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  planNaCard: {
+    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 32,
+    alignItems: 'center',
+    gap: 10,
+  },
+  planNaTxt: {
+    fontFamily: font.medium,
+    fontSize: type.sm,
+    color: colors.textTertiary,
+    textAlign: 'center',
+  },
+  planKVRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+  },
+  planKVLabel: {
+    fontFamily: font.regular,
+    fontSize: type.sm,
+    color: colors.textSecondary,
+  },
+  planKVValue: {
+    fontFamily: font.semiBold,
+    fontSize: type.sm,
+    color: colors.textPrimary,
+  },
+  planKVValueHL: {
+    fontFamily: font.bold,
+    fontSize: type.base,
+    color: colors.brand,
+  },
 })

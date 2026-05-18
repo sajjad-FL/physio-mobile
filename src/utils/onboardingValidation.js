@@ -155,7 +155,11 @@ export function validateFileAsset(asset, label = 'File') {
     return { ok: false, message: `${label} must be 2MB or smaller` }
   }
   const mime = String(asset.mimeType || '').toLowerCase()
-  const okType = mime.startsWith('image/') || mime === 'application/pdf' || mime === ''
+  const okType =
+    mime.startsWith('image/') ||
+    mime === 'application/pdf' ||
+    mime === '' ||
+    mime === 'application/octet-stream'
   if (!okType) {
     return { ok: false, message: `${label} must be an image (JPEG, PNG, WebP) or PDF` }
   }
@@ -169,7 +173,11 @@ export function validateAvatarFile(asset) {
     return { ok: false, message: 'Profile photo must be 2MB or smaller' }
   }
   const mime = String(asset.mimeType || '').toLowerCase()
-  if (mime && !mime.startsWith('image/')) {
+  if (
+    mime &&
+    !mime.startsWith('image/') &&
+    mime !== 'application/octet-stream'
+  ) {
     return { ok: false, message: 'Profile photo must be an image' }
   }
   return { ok: true }

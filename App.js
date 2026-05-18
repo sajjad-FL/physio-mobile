@@ -16,6 +16,7 @@ import {
 } from '@expo-google-fonts/inter'
 import { ActivityIndicator, View } from 'react-native'
 import { AuthProvider } from './src/context/AuthContext'
+import ProfileCompletionHost from './src/components/ProfileCompletionHost'
 import RootNavigator from './src/navigation/RootNavigator'
 import { colors } from './src/theme/colors'
 import { queryClient } from './src/api/queryClient'
@@ -47,6 +48,7 @@ export default function App() {
                 <RootNavigator />
               </View>
             </NavigationContainer>
+            <ProfileCompletionHost />
           </QueryClientProvider>
           <Toast />
         </AuthProvider>

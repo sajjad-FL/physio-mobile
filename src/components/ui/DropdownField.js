@@ -6,12 +6,57 @@ import { font, type } from '../../theme/typography'
 import { r } from '../../theme/radius'
 
 /**
- * Single-select dropdown field with modal option list.
+ * Single-select dropdown.
  * Props: label, value, placeholder, options ([{ value, label }]), onSelect
+ * variant: 'modal' (default) — centered sheet; 'inline' — list expands below control (no second modal).
  */
-function DropdownField({ label, value, placeholder = 'Select…', options, onSelect }) {
+function DropdownField({ label, value, placeholder = 'Select…', options, onSelect, variant = 'modal' }) {
   const [open, setOpen] = useState(false)
   const selected = options?.find((o) => o.value === value)
+
+  const optionList = (options || []).map((opt) => {
+    const active = value === opt.value
+    return (
+      <Pressable
+        key={String(opt.value)}
+        style={[styles.item, active && styles.itemActive]}
+        onPress={() => {
+          onSelect(opt.value)
+          setOpen(false)
+        }}
+      >
+        <Text style={[styles.itemTxt, active && styles.itemTxtActive]}>{opt.label}</Text>
+        {active ? <Ionicons name="checkmark" size={16} color={colors.brand} /> : null}
+      </Pressable>
+    )
+  })
+
+  if (variant === 'inline') {
+    return (
+      <View>
+        {label ? <Text style={styles.label}>{label}</Text> : null}
+        <Pressable
+          style={styles.btn}
+          onPress={() => setOpen((o) => !o)}
+          disabled={!options?.length}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: open }}
+        >
+          <Text style={[styles.btnTxt, !selected && styles.placeholder]} numberOfLines={1}>
+            {selected ? selected.label : placeholder}
+          </Text>
+          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={15} color={colors.textSecondary} />
+        </Pressable>
+        {open ? (
+          <View style={styles.inlineSheet}>
+            <ScrollView bounces={false} keyboardShouldPersistTaps="handled" nestedScrollEnabled style={styles.inlineScroll}>
+              {optionList}
+            </ScrollView>
+          </View>
+        ) : null}
+      </View>
+    )
+  }
 
   return (
     <View>
@@ -34,22 +79,7 @@ function DropdownField({ label, value, placeholder = 'Select…', options, onSel
           <View style={styles.sheet}>
             {label ? <Text style={styles.sheetTitle}>{label}</Text> : null}
             <ScrollView bounces={false} keyboardShouldPersistTaps="handled">
-              {(options || []).map((opt) => {
-                const active = value === opt.value
-                return (
-                  <Pressable
-                    key={opt.value}
-                    style={[styles.item, active && styles.itemActive]}
-                    onPress={() => {
-                      onSelect(opt.value)
-                      setOpen(false)
-                    }}
-                  >
-                    <Text style={[styles.itemTxt, active && styles.itemTxtActive]}>{opt.label}</Text>
-                    {active ? <Ionicons name="checkmark" size={16} color={colors.brand} /> : null}
-                  </Pressable>
-                )
-              })}
+              {optionList}
             </ScrollView>
           </View>
         </View>
@@ -104,6 +134,16 @@ const styles = StyleSheet.create({
   itemActive: { backgroundColor: colors.teal50 },
   itemTxt: { fontFamily: font.regular, fontSize: type.base, color: colors.slate700, flex: 1 },
   itemTxtActive: { fontFamily: font.semiBold, color: colors.brand },
+
+  inlineSheet: {
+    marginTop: 6,
+    borderRadius: r.md,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.white,
+    overflow: 'hidden',
+  },
+  inlineScroll: { maxHeight: 260 },
 })
 
 export default memo(DropdownField)

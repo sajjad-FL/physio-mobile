@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import {
   ActivityIndicator,
   Image,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -27,6 +28,61 @@ import DropdownField from '../components/ui/DropdownField'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 
+function createAppURL(path) {
+  return `physiokhom://${path}`
+}
+
+function parseAppURL(url) {
+  try {
+    const u = new URL(url)
+    const queryParams = {}
+    u.searchParams.forEach((v, k) => { queryParams[k] = v })
+    return { scheme: u.protocol.replace(':', ''), path: u.hostname + u.pathname, queryParams }
+  } catch {
+    return { scheme: '', path: '', queryParams: {} }
+  }
+}
+
+const ISSUE_DROPDOWN_OPTIONS = [
+  ...ISSUE_OPTIONS.map((opt) => ({ label: opt, value: opt })),
+  { label: 'Other', value: ISSUE_OTHER_VALUE },
+]
+
+function buildRazorpayPrefillEmbedded(prefill) {
+  const p = prefill && typeof prefill === 'object' ? prefill : {}
+  const out = {}
+  const name = p.name != null ? String(p.name).trim() : ''
+  if (name) out.name = name
+  const email = p.email != null ? String(p.email).trim() : ''
+  if (email) out.email = email
+  const digits = String(p.phone ?? p.contact ?? '').replace(/\D/g, '')
+  if (digits.length >= 10) out.contact = digits.slice(-10)
+  return JSON.stringify(out)
+}
+
+/** Metro can leave `import { WebView }` undefined; match MapPickerModal pattern. */
+function resolveWebViewComponent() {
+  try {
+    const m = require('react-native-webview')
+    if (m == null) return null
+    return m.default ?? m.WebView ?? m
+  } catch {
+    return null
+  }
+}
+
+const OnlineCheckoutWebView = resolveWebViewComponent()
+
+/** Lazy-load expo-linking — not available as a native module in some Expo Go versions. */
+function getExpoLinking() {
+  try { return require('expo-linking') } catch { return null }
+}
+
+/** Lazy-load expo-web-browser — same reason. */
+function getWebBrowser() {
+  try { return require('expo-web-browser') } catch { return null }
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function todayISO() {
@@ -44,6 +100,20 @@ function prettyDate(iso) {
 
 function physioInitial(name) {
   return String(name || '').trim().charAt(0).toUpperCase() || 'P'
+}
+
+/** Fee for `/physios/nearby`: `pricePerSession` + optional `pricePerSessionMax`. */
+function nearbyPhysioFeeLabel(p) {
+  if (!p) return null
+  const lo = Number(p.pricePerSession ?? p.feePerSession)
+  const hiRaw = p.pricePerSessionMax
+  const hi = hiRaw != null && hiRaw !== '' ? Number(hiRaw) : null
+  if (!Number.isFinite(lo) || lo < 0) return null
+  if (hi != null && Number.isFinite(hi) && hi > lo) {
+    return `₹${lo}–₹${hi}`
+  }
+  if (lo === 0) return null
+  return `₹${lo}`
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -77,6 +147,7 @@ function PhysioPickerCard({ physio: p, selected, onSelect }) {
   const total = Number(p.totalReviews) || 0
   const dist = p.distanceKm == null ? null : `${Number(p.distanceKm).toFixed(1)} km`
   const avatarUri = assetUrl(p.avatar)
+  const feeLabel = nearbyPhysioFeeLabel(p)
 
   return (
     <Pressable
@@ -102,9 +173,7 @@ function PhysioPickerCard({ physio: p, selected, onSelect }) {
         <View style={styles.physioCardBody}>
           <View style={styles.physioCardTopRow}>
             <Text style={styles.physioCardName} numberOfLines={1}>{p.name}</Text>
-            {p.feePerSession ? (
-              <Text style={styles.physioCardFee}>₹{p.feePerSession}</Text>
-            ) : null}
+            {feeLabel ? <Text style={styles.physioCardFee}>{feeLabel}</Text> : null}
           </View>
           {p.specialization ? (
             <Text style={styles.physioCardSpec} numberOfLines={1}>{p.specialization}</Text>
@@ -224,6 +293,9 @@ export default function PhysioListScreen({ navigation }) {
 
   // Submit
   const [submitting, setSubmitting] = useState(false)
+  const onlineCheckoutSessionIdRef = useRef('')
+  const [onlinePayWebviewOpen, setOnlinePayWebviewOpen] = useState(false)
+  const [onlineCheckoutPayData, setOnlineCheckoutPayData] = useState(null)
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const resolvedIssue = useMemo(() => {
@@ -240,6 +312,157 @@ export default function PhysioListScreen({ navigation }) {
     [availablePhysios, selectedPhysioId],
   )
   const selectedPhysioAvatarUri = useMemo(() => assetUrl(selectedPhysio?.avatar), [selectedPhysio])
+  const selectedPhysioFeeLabel = useMemo(() => nearbyPhysioFeeLabel(selectedPhysio), [selectedPhysio])
+
+  const navigateToPaidOnlineBooking = useCallback((bookingId) => {
+    const id = String(bookingId)
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [
+          {
+            name: 'UserTabs',
+            state: {
+              routes: [
+                { name: 'DashboardHome' },
+                {
+                  name: 'Bookings',
+                  state: {
+                    routes: [{ name: 'BookingsList' }, { name: 'BookingDetail', params: { id } }],
+                    index: 1,
+                  },
+                },
+                { name: 'Wallet' },
+                { name: 'Profile' },
+                { name: 'Disputes' },
+              ],
+              index: 1,
+            },
+          },
+        ],
+      }),
+    )
+  }, [navigation])
+
+  const onlineCheckoutRazorpayHtml = useMemo(() => {
+    if (!onlineCheckoutPayData) return ''
+    const { keyId, orderId, amount, currency, prefill } = onlineCheckoutPayData
+    const prefillJson = buildRazorpayPrefillEmbedded(prefill)
+    const keyS = JSON.stringify(keyId || '')
+    const orderS = JSON.stringify(orderId || '')
+    const curS = JSON.stringify(currency || 'INR')
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+  <style>body{margin:0;background:#0f766e;display:flex;align-items:center;justify-content:center;min-height:100vh;}</style>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body>
+<script>
+  window.onload = function() {
+    var prefill = ${prefillJson};
+    var options = {
+      key: ${keyS},
+      amount: ${Number(amount) || 0},
+      currency: ${curS},
+      name: 'PhysioKhom',
+      description: 'Online consultation',
+      order_id: ${orderS},
+      prefill: prefill,
+      theme: { color: '#0d9488' },
+      handler: function(response) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'success',
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature
+        }));
+      },
+      modal: {
+        ondismiss: function() {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'dismissed' }));
+        }
+      }
+    };
+    var rzp = new Razorpay(options);
+    rzp.on('payment.failed', function(resp) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'failed',
+        error: resp.error && resp.error.description ? resp.error.description : 'Payment failed'
+      }));
+    });
+    rzp.open();
+  };
+</script>
+</body>
+</html>`
+  }, [onlineCheckoutPayData])
+
+  const handleOnlineCheckoutWebViewMessage = useCallback(
+    async (event) => {
+      let msg
+      try {
+        msg = JSON.parse(event.nativeEvent.data)
+      } catch {
+        return
+      }
+      if (msg.type === 'dismissed') {
+        setOnlinePayWebviewOpen(false)
+        setOnlineCheckoutPayData(null)
+        onlineCheckoutSessionIdRef.current = ''
+        return
+      }
+      if (msg.type === 'failed') {
+        setOnlinePayWebviewOpen(false)
+        setOnlineCheckoutPayData(null)
+        onlineCheckoutSessionIdRef.current = ''
+        Toast.show({ type: 'error', text1: msg.error || 'Payment was not completed' })
+        return
+      }
+      if (msg.type !== 'success') return
+
+      const sid = onlineCheckoutSessionIdRef.current
+      const oid = msg.razorpay_order_id
+      const pid = msg.razorpay_payment_id
+      const sig = msg.razorpay_signature
+      if (!sid || !oid || !pid || !sig) {
+        setOnlinePayWebviewOpen(false)
+        setOnlineCheckoutPayData(null)
+        onlineCheckoutSessionIdRef.current = ''
+        Toast.show({
+          type: 'error',
+          text1: 'Checkout did not return full payment details. Complete payment in test mode or try again.',
+        })
+        return
+      }
+
+      setOnlinePayWebviewOpen(false)
+      setOnlineCheckoutPayData(null)
+      try {
+        const done = await api.post('/bookings/online-checkout/complete', {
+          checkoutSessionId: sid,
+          razorpay_order_id: oid,
+          razorpay_payment_id: pid,
+          razorpay_signature: sig,
+        })
+        onlineCheckoutSessionIdRef.current = ''
+        const bookingId = done.data?._id
+        Toast.show({
+          type: 'success',
+          text1: 'Payment successful',
+          text2: 'Your online consultation is confirmed.',
+        })
+        if (bookingId) navigateToPaidOnlineBooking(bookingId)
+        else navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'UserTabs' }] }))
+      } catch (e) {
+        onlineCheckoutSessionIdRef.current = ''
+        Toast.show({ type: 'error', text1: e.response?.data?.message || e.message || 'Could not confirm payment' })
+      }
+    },
+    [navigateToPaidOnlineBooking, navigation],
+  )
+
   const canSubmit = Boolean(
     profileName.trim() && location.trim() && date && timeSlot && resolvedIssue &&
     (serviceType === 'home' || selectedPhysioId),
@@ -333,12 +556,92 @@ export default function PhysioListScreen({ navigation }) {
           text1: 'Request sent!',
           text2: 'Our team will assign a physiotherapist soon.',
         })
-      } else {
-        await api.post('/bookings/request-home', { ...body, physioId: selectedPhysioId })
-        Toast.show({ type: 'success', text1: 'Booking confirmed!' })
+        navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'UserTabs' }] }))
+        return
       }
 
-      navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'UserTabs' }] }))
+      const startRes = await api.post('/bookings/online-checkout/start', {
+        ...body,
+        physioId: selectedPhysioId,
+      })
+      const {
+        checkoutSessionId,
+        orderId,
+        amount,
+        currency,
+        keyId,
+        prefill,
+        hostedPayUrl,
+      } = startRes.data || {}
+      if (!checkoutSessionId || !orderId || !keyId) {
+        Toast.show({ type: 'error', text1: 'Could not start payment. Please try again.' })
+        return
+      }
+      if (!OnlineCheckoutWebView && !hostedPayUrl) {
+        Toast.show({
+          type: 'error',
+          text1: 'Update the API server, or use a development build with WebView for in-app checkout.',
+        })
+        return
+      }
+      const amountPaise = Number(amount)
+      if (!Number.isFinite(amountPaise) || amountPaise <= 0) {
+        Toast.show({ type: 'error', text1: 'Invalid payment amount from server.' })
+        return
+      }
+
+      if (OnlineCheckoutWebView) {
+        onlineCheckoutSessionIdRef.current = String(checkoutSessionId)
+        setOnlineCheckoutPayData({
+          keyId: String(keyId),
+          orderId: String(orderId),
+          amount: amountPaise,
+          currency: currency || 'INR',
+          prefill: prefill && typeof prefill === 'object' ? prefill : {},
+        })
+        setOnlinePayWebviewOpen(true)
+        return
+      }
+
+      // Expo Go (no RNCWebView): pay in system browser, return via deep link
+      setSubmitting(false)
+      const ExpoLinking = getExpoLinking()
+      const WebBrowser = getWebBrowser()
+      if (!ExpoLinking || !WebBrowser) {
+        Toast.show({
+          type: 'error',
+          text1: 'In-app checkout needs a dev build (not Expo Go).',
+        })
+        return
+      }
+      const redirect = ExpoLinking.createURL('online-payment-return/')
+      const payUrl = `${hostedPayUrl}${hostedPayUrl.includes('?') ? '&' : '?'}next=${encodeURIComponent(redirect)}`
+      try {
+        WebBrowser.maybeCompleteAuthSession()
+        const result = await WebBrowser.openAuthSessionAsync(payUrl, redirect)
+        if (result.type === 'success' && result.url) {
+          const parsed = ExpoLinking.parse(result.url)
+          const bookingId = parsed.queryParams?.id
+          if (bookingId) {
+            Toast.show({
+              type: 'success',
+              text1: 'Payment successful',
+              text2: 'Your online consultation is confirmed.',
+            })
+            navigateToPaidOnlineBooking(String(bookingId))
+            return
+          }
+        }
+        if (result.type === 'cancel') {
+          Toast.show({ type: 'info', text1: 'Payment window closed' })
+        }
+      } catch (browserErr) {
+        Toast.show({
+          type: 'error',
+          text1: browserErr?.message || 'Could not open payment',
+        })
+      }
+      return
     } catch (e) {
       Toast.show({ type: 'error', text1: e.response?.data?.message || 'Could not create booking' })
     } finally {
@@ -650,6 +953,7 @@ export default function PhysioListScreen({ navigation }) {
                   value: s.timeSlot,
                 }))}
                 onSelect={setTimeSlot}
+                variant="inline"
               />
             )}
           </View>
@@ -663,23 +967,17 @@ export default function PhysioListScreen({ navigation }) {
           locked={!dateSlotOk}
           done={issueOk}
         >
-          <View style={styles.issueGrid}>
-            {ISSUE_OPTIONS.map((opt) => (
-              <Pressable
-                key={opt}
-                style={[styles.issueChip, issue === opt && styles.issueChipOn]}
-                onPress={() => { setIssue(opt); setIssueOther('') }}
-              >
-                <Text style={[styles.issueChipTxt, issue === opt && styles.issueChipTxtOn]}>{opt}</Text>
-              </Pressable>
-            ))}
-            <Pressable
-              style={[styles.issueChip, issue === ISSUE_OTHER_VALUE && styles.issueChipOn]}
-              onPress={() => setIssue(ISSUE_OTHER_VALUE)}
-            >
-              <Text style={[styles.issueChipTxt, issue === ISSUE_OTHER_VALUE && styles.issueChipTxtOn]}>Other</Text>
-            </Pressable>
-          </View>
+          <DropdownField
+            label="ISSUE"
+            value={issue}
+            placeholder="Select your concern"
+            options={ISSUE_DROPDOWN_OPTIONS}
+            onSelect={(v) => {
+              setIssue(v)
+              if (v !== ISSUE_OTHER_VALUE) setIssueOther('')
+            }}
+            variant="inline"
+          />
 
           {issue === ISSUE_OTHER_VALUE ? (
             <View style={[styles.fieldWrap, { marginTop: 12 }]}>
@@ -740,6 +1038,11 @@ export default function PhysioListScreen({ navigation }) {
                       <Text style={styles.physioSelectorName}>{selectedPhysio.name}</Text>
                       {selectedPhysio.specialization ? (
                         <Text style={styles.physioSelectorSpec} numberOfLines={1}>{selectedPhysio.specialization}</Text>
+                      ) : null}
+                      {selectedPhysioFeeLabel ? (
+                        <Text style={styles.physioSelectorFee} numberOfLines={1}>
+                          {selectedPhysioFeeLabel} / session
+                        </Text>
                       ) : null}
                     </View>
                     <View style={styles.physioSelectorChangePill}>
@@ -952,6 +1255,81 @@ export default function PhysioListScreen({ navigation }) {
               </Pressable>
             </View>
           </SafeAreaView>
+        </View>
+      </Modal>
+
+      {/* ── Online consultation: Razorpay (matches web `/bookings/online-checkout/*`) ── */}
+      <Modal
+        visible={onlinePayWebviewOpen}
+        animationType="slide"
+        onRequestClose={() => {
+          setOnlinePayWebviewOpen(false)
+          setOnlineCheckoutPayData(null)
+          onlineCheckoutSessionIdRef.current = ''
+        }}
+      >
+        <View style={styles.webviewModal}>
+          <View style={styles.webviewHeader}>
+            <Text style={styles.webviewHeaderTxt}>Secure payment</Text>
+            <Pressable
+              onPress={() => {
+                setOnlinePayWebviewOpen(false)
+                setOnlineCheckoutPayData(null)
+                onlineCheckoutSessionIdRef.current = ''
+              }}
+              style={styles.webviewCloseBtn}
+              hitSlop={12}
+            >
+              <Ionicons name="close" size={20} color={colors.white} />
+            </Pressable>
+          </View>
+          {onlineCheckoutRazorpayHtml && OnlineCheckoutWebView ? (
+            <OnlineCheckoutWebView
+              source={{ html: onlineCheckoutRazorpayHtml, baseUrl: 'https://checkout.razorpay.com' }}
+              onMessage={handleOnlineCheckoutWebViewMessage}
+              javaScriptEnabled
+              domStorageEnabled
+              originWhitelist={['*']}
+              startInLoadingState
+              onShouldStartLoadWithRequest={(request) => {
+                const url = request.url || ''
+                if (
+                  url.startsWith('http://') ||
+                  url.startsWith('https://') ||
+                  url.startsWith('about:') ||
+                  url === ''
+                ) {
+                  return true
+                }
+                // Open UPI / intent / custom-scheme URLs natively (e.g. upi://, intent://)
+                Linking.openURL(url).catch(() => {})
+                return false
+              }}
+              renderLoading={() => (
+                <View style={styles.webviewLoading}>
+                  <ActivityIndicator size="large" color={colors.brand} />
+                  <Text style={styles.webviewLoadingTxt}>Opening Razorpay…</Text>
+                </View>
+              )}
+              style={styles.webview}
+            />
+          ) : onlineCheckoutRazorpayHtml ? (
+            <View style={[styles.webviewLoading, { paddingHorizontal: 24 }]}>
+              <Text style={styles.webviewFallbackTxt}>
+                In-app payments need a dev build with react-native-webview linked (Expo: run prebuild, not Expo Go).
+              </Text>
+              <Pressable
+                style={styles.webviewFallbackBtn}
+                onPress={() => {
+                  setOnlinePayWebviewOpen(false)
+                  setOnlineCheckoutPayData(null)
+                  onlineCheckoutSessionIdRef.current = ''
+                }}
+              >
+                <Text style={styles.webviewFallbackBtnTxt}>Close</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       </Modal>
 
@@ -1236,23 +1614,6 @@ const styles = StyleSheet.create({
   },
   noSlotsTxt: { fontFamily: font.regular, fontSize: type.sm, color: colors.textTertiary },
 
-  // Issue chips
-  issueGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  issueChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.white,
-  },
-  issueChipOn: {
-    borderColor: colors.brand,
-    backgroundColor: colors.teal50,
-  },
-  issueChipTxt: { fontFamily: font.medium, fontSize: type.sm, color: colors.textSecondary },
-  issueChipTxtOn: { fontFamily: font.semiBold, color: colors.brand },
-
   // How it works
   howItWorksCard: {
     backgroundColor: colors.canvas,
@@ -1314,6 +1675,12 @@ const styles = StyleSheet.create({
   physioSelectorBody: { flex: 1, minWidth: 0 },
   physioSelectorName: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textPrimary },
   physioSelectorSpec: { marginTop: 1, fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
+  physioSelectorFee: {
+    marginTop: 4,
+    fontFamily: font.semiBold,
+    fontSize: type.sm,
+    color: colors.brand,
+  },
   physioSelectorChangePill: {
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -1404,6 +1771,54 @@ const styles = StyleSheet.create({
   },
   summaryConfirmBtnDisabled: { backgroundColor: colors.slate300, shadowOpacity: 0 },
   summaryConfirmTxt: { fontFamily: font.bold, fontSize: type.sm, color: colors.white },
+
+  // Razorpay WebView (online checkout)
+  webviewModal: { flex: 1, backgroundColor: colors.brand },
+  webviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: colors.brand,
+  },
+  webviewHeaderTxt: { fontFamily: font.bold, fontSize: type.base, color: colors.white },
+  webviewCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  webview: { flex: 1, backgroundColor: colors.white },
+  webviewLoading: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    backgroundColor: colors.canvas,
+  },
+  webviewLoadingTxt: { fontFamily: font.medium, fontSize: type.sm, color: colors.textSecondary },
+  webviewFallbackTxt: {
+    fontFamily: font.regular,
+    fontSize: type.sm,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  webviewFallbackBtn: {
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  webviewFallbackBtnTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.white, textAlign: 'center' },
 
   // Modal overlay
   modalOverlay: {
