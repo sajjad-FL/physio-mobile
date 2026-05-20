@@ -278,127 +278,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
     [actionBusy, b?._id, load, reviewComment, reviewRating],
   )
 
-  function openPayInstallmentModal() {
-    if (!b?.paymentSummary) return
-    const outstanding = Number(b.paymentSummary.outstanding || 0)
-    const perSession = Number(b.paymentSummary.amountPerSession || 0)
-    const defaultAmt = outstanding <= 0 ? '0' : perSession > 0 ? String(Math.min(perSession, outstanding)) : String(outstanding)
-    setPayAmount(defaultAmt)
-    setPayErr('')
-    setPayOrderData(null)
-    setPayModalOpen(true)
-  }
 
-  async function initiateRazorpayOrder() {
-    const amt = Math.round((Number(payAmount) + Number.EPSILON) * 100) / 100
-    const outstanding = Math.round((Number(b?.paymentSummary?.outstanding || 0) + Number.EPSILON) * 100) / 100
-    if (!Number.isFinite(amt) || amt <= 0) {
-      setPayErr('Enter an amount greater than zero')
-      return
-    }
-    if (amt > outstanding + 0.009) {
-      setPayErr(`Amount must be at most ₹${outstanding.toFixed(2)}`)
-      return
-    }
-    setPayBusy(true)
-    setPayErr('')
-    try {
-      const res = await api.post('/payment/installments/create', {
-        bookingId: b._id,
-        amount: amt,
-        ...(useWalletCredit && walletBalance > 0 ? { useWalletCredit: true } : {}),
-      })
-      const orderData = res.data
-      setPayOrderData(orderData)
-      setPayModalOpen(false)
-      setPayWebviewOpen(true)
-    } catch (e) {
-      setPayErr(e.response?.data?.message || 'Could not create order')
-    } finally {
-      setPayBusy(false)
-    }
-  }
-
-  async function handleRazorpayMessage(event) {
-    let msg
-    try { msg = JSON.parse(event.nativeEvent.data) } catch { return }
-    if (msg.type === 'dismissed') {
-      setPayWebviewOpen(false)
-      setPayOrderData(null)
-      return
-    }
-    if (msg.type === 'failed') {
-      setPayWebviewOpen(false)
-      setPayOrderData(null)
-      Toast.show({ type: 'error', text1: msg.error || 'Payment failed' })
-      return
-    }
-    if (msg.type === 'success') {
-      setPayWebviewOpen(false)
-      try {
-        await api.post('/payment/installments/verify', {
-          paymentId: payOrderData?.paymentId,
-          razorpay_payment_id: msg.razorpay_payment_id,
-          razorpay_order_id: msg.razorpay_order_id,
-          razorpay_signature: msg.razorpay_signature,
-        })
-        Toast.show({ type: 'success', text1: 'Payment successful!' })
-        setPayOrderData(null)
-        load()
-        refetchWallet()
-      } catch (e) {
-        Toast.show({ type: 'error', text1: e.response?.data?.message || 'Verification failed' })
-      }
-    }
-  }
-
-  const razorpayHtml = useMemo(() => {
-    if (!payOrderData) return ''
-    const { keyId, orderId, amount, currency } = payOrderData
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
-  <style>body{margin:0;background:#0f766e;display:flex;align-items:center;justify-content:center;min-height:100vh;}</style>
-  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-</head>
-<body>
-<script>
-  window.onload = function() {
-    var options = {
-      key: ${JSON.stringify(keyId || '')},
-      amount: ${JSON.stringify(amount || 0)},
-      currency: ${JSON.stringify(currency || 'INR')},
-      name: 'PhysioKhom',
-      order_id: ${JSON.stringify(orderId || '')},
-      theme: { color: '#0d9488' },
-      handler: function(response) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'success',
-          razorpay_payment_id: response.razorpay_payment_id,
-          razorpay_order_id: response.razorpay_order_id,
-          razorpay_signature: response.razorpay_signature
-        }));
-      },
-      modal: {
-        ondismiss: function() {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'dismissed' }));
-        }
-      }
-    };
-    var rzp = new Razorpay(options);
-    rzp.on('payment.failed', function(resp) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'failed',
-        error: resp.error && resp.error.description ? resp.error.description : 'Payment failed'
-      }));
-    });
-    rzp.open();
-  };
-</script>
-</body>
-</html>`
-  }, [payOrderData])
 
   if (loading) {
     return (
@@ -428,7 +308,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
   const outstanding = Number(paymentSummary?.outstanding || 0)
   const perSession = Number(paymentSummary?.amountPerSession || 0)
   const planReady = b.serviceType === 'online' || b.planStatus === 'approved'
-  const showInstallments = planReady && sessionsCount > 1 && (Number(b.totalAmount || 0) > 0 || paymentsList.length > 0)
+  const showInstallments = planReady && (sessionsCount > 1 || isOnlineBooking) && (Number(b.totalAmount || 0) > 0 || paymentsList.length > 0)
   const showLegacyPay = b.paymentStatus === 'pending' && planReady && !(b.serviceType === 'home' && b.homePlanPaymentMode === 'offline')
   const reviewedSessionIds = new Set(reviews.map((r) => (r.sessionId ? String(r.sessionId) : 'booking')))
   const overallReview = reviews.find((r) => !r.sessionId)
@@ -807,6 +687,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
           </View>
         </View>
       </Modal>
+
       {/* ── Installment Payment modal ───────────────── */}
       <Modal transparent visible={installmentOpen} animationType="fade" onRequestClose={() => !paymentLoading && setInstallmentOpen(false)}>
         <View style={styles.modalRoot}>
