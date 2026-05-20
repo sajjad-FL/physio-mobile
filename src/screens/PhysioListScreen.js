@@ -50,7 +50,26 @@ const ISSUE_DROPDOWN_OPTIONS = [
   { label: 'Other', value: ISSUE_OTHER_VALUE },
 ]
 
+function cleanRazorpayPrefill(prefill) {
+  const out = {}
+  if (!prefill || typeof prefill !== 'object') return out
+  const name = String(prefill.name || '').trim()
+  if (name) out.name = name
 
+  const rawPhone = String(prefill.contact || prefill.phone || '').trim()
+  const digits = rawPhone.replace(/\D/g, '')
+  if (digits.length >= 10) {
+    out.contact = digits.slice(-10)
+  } else if (rawPhone) {
+    out.contact = rawPhone
+  }
+
+  const email = String(prefill.email || '').trim()
+  if (email && email.includes('@')) {
+    out.email = email
+  }
+  return out
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -457,7 +476,7 @@ export default function PhysioListScreen({ navigation }) {
         name: 'PhysioKhom',
         description: 'Online Consultation booking',
         order_id: orderId,
-        prefill: prefillData,
+        prefill: cleanRazorpayPrefill(prefillData),
         theme: { color: colors.brand },
       }
 

@@ -18,6 +18,27 @@ import InstallmentsPhysioCard from '../components/physio/InstallmentsPhysioCard'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 
+function cleanRazorpayPrefill(prefill) {
+  const out = {}
+  if (!prefill || typeof prefill !== 'object') return out
+  const name = String(prefill.name || '').trim()
+  if (name) out.name = name
+
+  const rawPhone = String(prefill.contact || prefill.phone || '').trim()
+  const digits = rawPhone.replace(/\D/g, '')
+  if (digits.length >= 10) {
+    out.contact = digits.slice(-10)
+  } else if (rawPhone) {
+    out.contact = rawPhone
+  }
+
+  const email = String(prefill.email || '').trim()
+  if (email && email.includes('@')) {
+    out.email = email
+  }
+  return out
+}
+
 export default function UserBookingDetailScreen({ route, navigation }) {
   const { id } = route.params || {}
   const [b, setB] = useState(null)
@@ -71,7 +92,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
         name: 'PhysioKhom',
         description: 'Physiotherapy Booking Payment',
         order_id: orderId,
-        prefill,
+        prefill: cleanRazorpayPrefill(prefill),
         theme: { color: colors.brand },
       }
 
@@ -157,7 +178,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
         name: 'PhysioKhom',
         description: 'Physiotherapy Installment Payment',
         order_id: orderId,
-        prefill,
+        prefill: cleanRazorpayPrefill(prefill),
         theme: { color: colors.brand },
       }
 
