@@ -17,6 +17,7 @@ import PhysioVerificationRedirectScreen from '../screens/PhysioVerificationRedir
 import RegisterPhysioScreen from '../screens/RegisterPhysioScreen'
 import PhysioListScreen from '../screens/PhysioListScreen'
 import ReferEarnScreen from '../screens/ReferEarnScreen'
+import PublicPhysicianScreen from '../screens/PublicPhysicianScreen'
 import UserTabNavigator from './UserTabNavigator'
 import PhysioTabNavigator from './PhysioTabNavigator'
 import { defaultNativeStackScreenOptions } from './navLayout'
@@ -51,7 +52,7 @@ export default function RootNavigator() {
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ headerShown: false }} />
       <Stack.Screen name="RegisterPhysio" component={RegisterPhysioScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Unauthorized" component={UnauthorizedScreen} options={{ title: 'Unauthorized' }} />
-      <Stack.Screen name="PublicPhysician" component={PlaceholderScreen} options={{ title: 'Physician' }} />
+      <Stack.Screen name="PublicPhysician" component={PublicPhysicianScreen} options={{ title: 'Physician' }} />
       {/**
        * Register role dashboards on the root stack so CommonActions.reset targets
        * (e.g. PhysioTabs after login) always resolve. UserTabNavigator / PhysioTabNavigator

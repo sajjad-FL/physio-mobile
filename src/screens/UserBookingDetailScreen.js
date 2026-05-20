@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
+import RazorpayCheckout from 'react-native-razorpay'
 import { api } from '../api/client'
-import { useReferralMyCode } from '../api/queries'
 import { formatBookingDateAndSlot } from '../utils/date'
 import { bookingStatusBadge, paymentBadge } from '../utils/dashboardUtils'
 import {
@@ -18,19 +18,7 @@ import InstallmentsPhysioCard from '../components/physio/InstallmentsPhysioCard'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 
-function resolvePayWebView() {
-  try {
-    const m = require('react-native-webview')
-    if (m == null) return null
-    return m.default ?? m.WebView ?? m
-  } catch {
-    return null
-  }
-}
-
-const PayWebView = resolvePayWebView()
-
-export default function UserBookingDetailScreen({ route }) {
+export default function UserBookingDetailScreen({ route, navigation }) {
   const { id } = route.params || {}
   const [b, setB] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -43,16 +31,171 @@ export default function UserBookingDetailScreen({ route }) {
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewComment, setReviewComment] = useState('')
   const [actionBusy, setActionBusy] = useState(false)
-  const [payModalOpen, setPayModalOpen] = useState(false)
-  const [payAmount, setPayAmount] = useState('')
-  const [payOrderData, setPayOrderData] = useState(null)
-  const [payWebviewOpen, setPayWebviewOpen] = useState(false)
-  const [payBusy, setPayBusy] = useState(false)
-  const [payErr, setPayErr] = useState('')
-  const [useWalletCredit, setUseWalletCredit] = useState(false)
-  const { data: referralData, refetch: refetchWallet } = useReferralMyCode()
-  const walletBalance = Number(referralData?.walletBalance) || 0
-  const webviewRef = useRef(null)
+
+  // Payment states & handlers
+  const [installmentOpen, setInstallmentOpen] = useState(false)
+  const [installmentAmount, setInstallmentAmount] = useState('')
+  const [paymentError, setPaymentError] = useState('')
+  const [paymentLoading, setPaymentLoading] = useState(false)
+
+  const payLegacy = useCallback(async () => {
+    if (!b?._id || paymentLoading) return
+    setPaymentLoading(true)
+    setPaymentError('')
+    try {
+      // 1. Create order on backend
+      const orderRes = await api.post('/payment/create-order', { bookingId: b._id })
+      const { orderId, amount, currency, keyId } = orderRes.data || {}
+
+      // 2. Fetch profile details for prefill
+      let prefill = {}
+      try {
+        const pr = await api.get('/profile')
+        prefill = {
+          name: pr.data?.name || '',
+          contact: pr.data?.phone || '',
+          email: pr.data?.email || '',
+        }
+      } catch {
+        prefill = {
+          name: b.userId?.name || '',
+          contact: b.userId?.phone || '',
+        }
+      }
+
+      // 3. Open Razorpay native checkout
+      const options = {
+        key: keyId,
+        amount,
+        currency,
+        name: 'PhysioKhom',
+        description: 'Physiotherapy Booking Payment',
+        order_id: orderId,
+        prefill,
+        theme: { color: colors.brand },
+      }
+
+      RazorpayCheckout.open(options)
+        .then(async (response) => {
+          try {
+            // 4. Verify signature on backend
+            await api.post('/payment/verify', {
+              bookingId: b._id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            })
+            Toast.show({ type: 'success', text1: 'Payment successful!' })
+            load()
+          } catch (e) {
+            Toast.show({
+              type: 'error',
+              text1: e.response?.data?.message || e.message || 'Payment verification failed',
+            })
+          }
+        })
+        .catch((error) => {
+          Toast.show({
+            type: 'error',
+            text1: error.description ? `Payment failed: ${error.description}` : 'Payment cancelled',
+          })
+        })
+    } catch (e) {
+      Toast.show({
+        type: 'error',
+        text1: e.response?.data?.message || e.message || 'Failed to start payment',
+      })
+    } finally {
+      setPaymentLoading(false)
+    }
+  }, [b, paymentLoading, load])
+
+  const payInstallment = useCallback(async (amtStr) => {
+    if (!b?._id || paymentLoading) return
+    const amt = Math.round((Number(amtStr) + Number.EPSILON) * 100) / 100
+    if (!Number.isFinite(amt) || amt <= 0) {
+      setPaymentError('Enter an amount greater than zero')
+      return
+    }
+    const outstandingVal = Number(b.paymentSummary?.outstanding || 0)
+    if (amt > outstandingVal + 0.009) {
+      setPaymentError(`Amount must be at most ₹${outstandingVal.toFixed(2)}`)
+      return
+    }
+
+    setPaymentLoading(true)
+    setPaymentError('')
+    try {
+      // 1. Create installment order on backend
+      const created = await api.post('/payment/installments/create', {
+        bookingId: b._id,
+        amount: amt,
+      })
+      const { paymentId, orderId, amount: orderAmount, currency, keyId } = created.data || {}
+
+      // 2. Fetch profile details for prefill
+      let prefill = {}
+      try {
+        const pr = await api.get('/profile')
+        prefill = {
+          name: pr.data?.name || '',
+          contact: pr.data?.phone || '',
+          email: pr.data?.email || '',
+        }
+      } catch {
+        prefill = {
+          name: b.userId?.name || '',
+          contact: b.userId?.phone || '',
+        }
+      }
+
+      // 3. Open Razorpay native checkout
+      const options = {
+        key: keyId,
+        amount: orderAmount,
+        currency,
+        name: 'PhysioKhom',
+        description: 'Physiotherapy Installment Payment',
+        order_id: orderId,
+        prefill,
+        theme: { color: colors.brand },
+      }
+
+      RazorpayCheckout.open(options)
+        .then(async (response) => {
+          try {
+            // 4. Verify signature on backend
+            await api.post('/payment/installments/verify', {
+              paymentId,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            })
+            Toast.show({ type: 'success', text1: 'Installment paid successfully!' })
+            setInstallmentOpen(false)
+            load()
+          } catch (e) {
+            setPaymentError(e.response?.data?.message || e.message || 'Verification failed')
+          }
+        })
+        .catch((error) => {
+          setPaymentError(error.description ? `Payment failed: ${error.description}` : 'Payment cancelled')
+        })
+    } catch (e) {
+      setPaymentError(e.response?.data?.message || e.message || 'Could not start payment')
+    } finally {
+      setPaymentLoading(false)
+    }
+  }, [b, paymentLoading, load])
+
+  const openInstallmentModal = useCallback(() => {
+    const outstandingVal = Number(b?.paymentSummary?.outstanding || 0)
+    const perSessionVal = Number(b?.paymentSummary?.amountPerSession || 0)
+    const defaultAmt = outstandingVal <= 0 ? 0 : (perSessionVal > 0 ? Math.min(perSessionVal, outstandingVal) : outstandingVal)
+    setInstallmentAmount(defaultAmt.toFixed(2))
+    setPaymentError('')
+    setInstallmentOpen(true)
+  }, [b])
 
   const load = useCallback(async () => {
     if (!id) return
@@ -283,8 +426,10 @@ export default function UserBookingDetailScreen({ route }) {
   const isOfflinePlan = b.serviceType === 'home' && b.homePlanPaymentMode === 'offline'
   const isOnlineBooking = b.serviceType === 'online' || (b.serviceType === 'home' && b.homePlanPaymentMode === 'online')
   const outstanding = Number(paymentSummary?.outstanding || 0)
+  const perSession = Number(paymentSummary?.amountPerSession || 0)
   const planReady = b.serviceType === 'online' || b.planStatus === 'approved'
-  const showInstallments = planReady && (sessionsCount > 1 || isOnlineBooking) && (Number(b.totalAmount || 0) > 0 || paymentsList.length > 0)
+  const showInstallments = planReady && sessionsCount > 1 && (Number(b.totalAmount || 0) > 0 || paymentsList.length > 0)
+  const showLegacyPay = b.paymentStatus === 'pending' && planReady && !(b.serviceType === 'home' && b.homePlanPaymentMode === 'offline')
   const reviewedSessionIds = new Set(reviews.map((r) => (r.sessionId ? String(r.sessionId) : 'booking')))
   const overallReview = reviews.find((r) => !r.sessionId)
   const hasCompletedSession = rows.some((r) => r.status === 'completed')
@@ -355,6 +500,11 @@ export default function UserBookingDetailScreen({ route }) {
           label="Physiotherapist"
           value={typeof b.physioId === 'object' ? b.physioId?.name : 'Not assigned yet'}
           sub={b.physioId?.phone || b.physioId?.specialization}
+          onPress={
+            typeof b.physioId === 'object' && b.physioId?._id
+              ? () => navigation.navigate('PublicPhysician', { id: b.physioId._id })
+              : undefined
+          }
         />
         <View style={styles.rowDivider} />
         <InfoRow icon="fitness-outline" label="Issue" value={b.issue || '—'} />
@@ -383,10 +533,10 @@ export default function UserBookingDetailScreen({ route }) {
             {isOnlineBooking && outstanding > 0.009 ? (
               <Pressable
                 style={styles.payInstallmentBtn}
-                onPress={openPayInstallmentModal}
+                onPress={openInstallmentModal}
               >
-                <Ionicons name="card" size={14} color={colors.white} />
-                <Text style={styles.payInstallmentTxt}>Pay ₹{outstanding.toFixed(2)} now</Text>
+                <Ionicons name="card-outline" size={14} color={colors.brand} />
+                <Text style={styles.payInstallmentTxt}>Pay next installment</Text>
               </Pressable>
             ) : null}
           </InstallmentsPhysioCard>
@@ -459,7 +609,17 @@ export default function UserBookingDetailScreen({ route }) {
         <KV k="Mode" v={paymentModeLabel(b)} />
         <KV k="Amount" v={paymentAmountLabel(b)} />
         <KV k="Payment hold" v={paymentStatusLabel(b.paymentStatus)} />
-        <KV k="Payment step" v={marketplacePaymentStatusLabel(b.payment?.status)} last />
+        <KV k="Payment step" v={marketplacePaymentStatusLabel(b.payment?.status)} last={!showLegacyPay} />
+        {showLegacyPay ? (
+          <Pressable
+            style={[styles.payFullBtn, paymentLoading && { opacity: 0.7 }]}
+            onPress={payLegacy}
+            disabled={paymentLoading}
+          >
+            <Ionicons name="card-outline" size={18} color={colors.white} />
+            <Text style={styles.payFullBtnTxt}>{paymentLoading ? 'Processing…' : 'Pay full amount'}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {/* ── Feedback ──────────────────────────────── */}
@@ -647,10 +807,10 @@ export default function UserBookingDetailScreen({ route }) {
           </View>
         </View>
       </Modal>
-      {/* ── Pay installment amount modal ─────────── */}
-      <Modal transparent visible={payModalOpen} animationType="fade" onRequestClose={() => setPayModalOpen(false)}>
+      {/* ── Installment Payment modal ───────────────── */}
+      <Modal transparent visible={installmentOpen} animationType="fade" onRequestClose={() => !paymentLoading && setInstallmentOpen(false)}>
         <View style={styles.modalRoot}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setPayModalOpen(false)} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => !paymentLoading && setInstallmentOpen(false)} />
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <View style={[styles.modalIconWrap, { backgroundColor: colors.teal50 }]}>
@@ -659,110 +819,64 @@ export default function UserBookingDetailScreen({ route }) {
               <View style={styles.modalHeaderText}>
                 <Text style={styles.modalTitle}>Pay installment</Text>
                 <Text style={styles.modalSub}>
-                  Outstanding: ₹{Number(b?.paymentSummary?.outstanding || 0).toFixed(2)}
+                  Outstanding balance: ₹{outstanding.toFixed(2)}
                 </Text>
               </View>
-              <Pressable onPress={() => setPayModalOpen(false)} hitSlop={12} style={styles.modalClose}>
+              <Pressable
+                onPress={() => !paymentLoading && setInstallmentOpen(false)}
+                hitSlop={12}
+                style={styles.modalClose}
+                disabled={paymentLoading}
+              >
                 <Ionicons name="close" size={16} color={colors.slate400} />
               </Pressable>
             </View>
             <View style={styles.modalDivider} />
-            {walletBalance > 0 ? (
-              <Pressable
-                style={styles.walletToggle}
-                onPress={() => setUseWalletCredit((v) => !v)}
-              >
-                <Ionicons
-                  name={useWalletCredit ? 'checkbox' : 'square-outline'}
-                  size={22}
-                  color={useWalletCredit ? colors.brand : colors.slate400}
-                />
-                <Text style={styles.walletToggleTxt}>
-                  Apply up to ₹{Math.min(walletBalance, Number(b?.paymentSummary?.outstanding || 0)).toFixed(0)} wallet credit
-                </Text>
-              </Pressable>
-            ) : null}
-            <Text style={styles.inputLabel}>Amount (₹)</Text>
+
+            <Text style={styles.inputLabel}>Payment Amount (₹)</Text>
             <TextInput
-              value={payAmount}
-              onChangeText={(v) => { setPayAmount(v); setPayErr('') }}
-              keyboardType="decimal-pad"
+              value={installmentAmount}
+              onChangeText={setInstallmentAmount}
+              style={styles.inp}
               placeholder="0.00"
               placeholderTextColor={colors.slate300}
-              style={styles.inp}
+              keyboardType="decimal-pad"
+              editable={!paymentLoading}
             />
-            {b?.paymentSummary?.amountPerSession ? (
-              <Text style={styles.payAmtHint}>
-                Typical installment: ₹{Number(b.paymentSummary.amountPerSession).toFixed(2)} / session
+            {perSession > 0 ? (
+              <Text style={{ fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary, marginTop: 6 }}>
+                Typical installment: ₹{perSession.toFixed(2)} per session.
               </Text>
             ) : null}
-            {payErr ? <Text style={styles.payErrTxt}>{payErr}</Text> : null}
+
+            {paymentError ? (
+              <View style={{ marginTop: 12, padding: 10, backgroundColor: colors.rose50, borderRadius: 8, borderWidth: 1, borderColor: colors.borderSubtle, borderStyle: 'solid' }}>
+                <Text style={{ fontFamily: font.regular, fontSize: type.xs, color: colors.rose900 }}>{paymentError}</Text>
+              </View>
+            ) : null}
+
             <View style={styles.modalBtnRow}>
-              <Pressable style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setPayModalOpen(false)}>
+              <Pressable
+                style={[styles.modalBtn, styles.modalBtnCancel]}
+                onPress={() => setInstallmentOpen(false)}
+                disabled={paymentLoading}
+              >
                 <Text style={styles.modalBtnCancelTxt}>Cancel</Text>
               </Pressable>
               <Pressable
-                style={[styles.modalBtn, styles.modalBtnSubmit, payBusy && { opacity: 0.7 }]}
-                onPress={initiateRazorpayOrder}
-                disabled={payBusy}
+                style={[styles.modalBtn, styles.modalBtnSubmit, paymentLoading && { opacity: 0.7 }]}
+                onPress={() => payInstallment(installmentAmount)}
+                disabled={paymentLoading}
               >
-                {payBusy ? <ActivityIndicator size="small" color={colors.white} /> : null}
+                {paymentLoading ? <ActivityIndicator size="small" color={colors.white} style={{ marginRight: 6 }} /> : null}
                 <Text style={styles.modalBtnSubmitTxt}>
-                  {payBusy ? 'Creating order…' : `Pay ₹${Number(payAmount || 0).toFixed(2)}`}
+                  {paymentLoading ? 'Processing…' : `Pay ₹${Number(installmentAmount || 0).toFixed(2)}`}
                 </Text>
               </Pressable>
             </View>
           </View>
         </View>
       </Modal>
-
-      {/* ── Razorpay WebView modal ─────────────────── */}
-      <Modal
-        visible={payWebviewOpen}
-        animationType="slide"
-        onRequestClose={() => {
-          setPayWebviewOpen(false)
-          setPayOrderData(null)
-        }}
-      >
-        <View style={styles.webviewModal}>
-          <View style={styles.webviewHeader}>
-            <Text style={styles.webviewHeaderTxt}>Secure Payment</Text>
-            <Pressable
-              onPress={() => { setPayWebviewOpen(false); setPayOrderData(null) }}
-              style={styles.webviewCloseBtn}
-              hitSlop={12}
-            >
-              <Ionicons name="close" size={20} color={colors.white} />
-            </Pressable>
-          </View>
-          {razorpayHtml && PayWebView ? (
-            <PayWebView
-              ref={webviewRef}
-              source={{ html: razorpayHtml, baseUrl: 'https://localhost' }}
-              onMessage={handleRazorpayMessage}
-              javaScriptEnabled
-              domStorageEnabled
-              originWhitelist={['*']}
-              startInLoadingState
-              renderLoading={() => (
-                <View style={styles.webviewLoading}>
-                  <ActivityIndicator size="large" color={colors.brand} />
-                  <Text style={styles.webviewLoadingTxt}>Loading payment…</Text>
-                </View>
-              )}
-              style={styles.webview}
-            />
-          ) : razorpayHtml ? (
-            <View style={[styles.webviewLoading, { paddingHorizontal: 24 }]}>
-              <Text style={styles.webviewFallbackTxt}>
-                Payments in-app need a dev build with react-native-webview (not Expo Go).
-              </Text>
-            </View>
-          ) : null}
-        </View>
-      </Modal>
-
     </ScrollView>
   )
 }
@@ -786,8 +900,8 @@ function BandChip({ label }) {
   )
 }
 
-function InfoRow({ icon, label, value, sub }) {
-  return (
+function InfoRow({ icon, label, value, sub, onPress }) {
+  const content = (
     <View style={styles.infoRow}>
       <View style={styles.infoIconWrap}>
         <Ionicons name={icon} size={14} color={colors.brand} />
@@ -797,8 +911,21 @@ function InfoRow({ icon, label, value, sub }) {
         <Text style={styles.infoValue}>{value}</Text>
         {sub ? <Text style={styles.infoSub}>{sub}</Text> : null}
       </View>
+      {onPress ? (
+        <Ionicons name="chevron-forward" size={14} color={colors.slate400} style={{ alignSelf: 'center', marginLeft: 8 }} />
+      ) : null}
     </View>
   )
+
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+        {content}
+      </Pressable>
+    )
+  }
+
+  return content
 }
 
 function KV({ k, v, last }) {
@@ -1253,4 +1380,15 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   modalBtnSubmitTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.white },
+  payFullBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.brand,
+    marginTop: 14,
+  },
+  payFullBtnTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.white },
 })

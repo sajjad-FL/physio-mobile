@@ -19,7 +19,15 @@
       "bundleIdentifier": "com.physiokhom.app",
       "jsEngine": "hermes",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": [
+          "phonepe",
+          "tez",
+          "paytmmp",
+          "bhim",
+          "credpay",
+          "whatsapp"
+        ]
       }
     },
     "android": {
