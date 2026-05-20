@@ -14,6 +14,7 @@ import SignupOtpStep from '../components/signup/organisms/SignupOtpStep'
 import SignupProfileStep from '../components/signup/organisms/SignupProfileStep'
 import SignupFooterLink from '../components/signup/atoms/SignupFooterLink'
 import { openWebLoginInBrowser } from '../utils/webApp'
+import { useReferralPublicSettings } from '../api/queries'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 
@@ -48,7 +49,7 @@ function stepIndex(step) {
   return 3
 }
 
-export default function RegisterScreen({ navigation }) {
+export default function RegisterScreen({ navigation, route }) {
   const [busy, setBusy] = useState(true)
   const [step, setStep] = useState(STEPS.PHONE)
   const [phone, setPhone] = useState('')
@@ -59,6 +60,14 @@ export default function RegisterScreen({ navigation }) {
   const [sendingOtp, setSendingOtp] = useState(false)
   const [loading, setLoading] = useState(false)
   const [fieldErrors, setFieldErrors] = useState({})
+  const [referralCode, setReferralCode] = useState(() =>
+    String(route?.params?.ref || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, ''),
+  )
+  const { data: referralPublic } = useReferralPublicSettings()
+  const friendSignupBonus = referralPublic?.referralSignupBonusAmount ?? 0
 
   const openLink = useCallback(async (url) => {
     try {
@@ -147,6 +156,7 @@ export default function RegisterScreen({ navigation }) {
         phone: pv.normalized,
         password,
         otp: otp.replace(/\D/g, ''),
+        ...(referralCode ? { referralCode } : {}),
       }
       const res = await api.post('/auth/register', body)
       const role = res.data?.role ?? 'user'
@@ -168,7 +178,16 @@ export default function RegisterScreen({ navigation }) {
         navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Home' }] }))
         return
       }
-      Toast.show({ type: 'success', text1: 'Account created' })
+      const credited = Number(res.data?.referralSignupBonusCredited)
+      if (credited > 0) {
+        Toast.show({
+          type: 'success',
+          text1: 'Account created',
+          text2: `₹${credited} welcome credit added to your wallet`,
+        })
+      } else {
+        Toast.show({ type: 'success', text1: 'Account created' })
+      }
       await setSession(res.data.token, role, profileComplete)
       if (role === 'user' && !profileComplete) {
         navigation.dispatch(CommonActions.reset(userTabsResetState(false)))
@@ -262,6 +281,16 @@ export default function RegisterScreen({ navigation }) {
           password={password}
           onChangePassword={setPassword}
           passwordError={fieldErrors.password}
+          referralCode={referralCode}
+          onChangeReferralCode={(v) =>
+            setReferralCode(
+              String(v || '')
+                .trim()
+                .toUpperCase()
+                .replace(/[^A-Z0-9]/g, ''),
+            )
+          }
+          referralSignupBonus={friendSignupBonus}
           onSubmit={handleCreateAccount}
           loading={loading}
         />

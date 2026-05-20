@@ -3,6 +3,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, Text
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
+import { useReferralMyCode } from '../api/queries'
 import { formatBookingDateAndSlot } from '../utils/date'
 import { bookingStatusBadge, paymentBadge } from '../utils/dashboardUtils'
 import {
@@ -48,6 +49,9 @@ export default function UserBookingDetailScreen({ route }) {
   const [payWebviewOpen, setPayWebviewOpen] = useState(false)
   const [payBusy, setPayBusy] = useState(false)
   const [payErr, setPayErr] = useState('')
+  const [useWalletCredit, setUseWalletCredit] = useState(false)
+  const { data: referralData, refetch: refetchWallet } = useReferralMyCode()
+  const walletBalance = Number(referralData?.walletBalance) || 0
   const webviewRef = useRef(null)
 
   const load = useCallback(async () => {
@@ -156,7 +160,11 @@ export default function UserBookingDetailScreen({ route }) {
     setPayBusy(true)
     setPayErr('')
     try {
-      const res = await api.post('/payment/installments/create', { bookingId: b._id, amount: amt })
+      const res = await api.post('/payment/installments/create', {
+        bookingId: b._id,
+        amount: amt,
+        ...(useWalletCredit && walletBalance > 0 ? { useWalletCredit: true } : {}),
+      })
       const orderData = res.data
       setPayOrderData(orderData)
       setPayModalOpen(false)
@@ -194,6 +202,7 @@ export default function UserBookingDetailScreen({ route }) {
         Toast.show({ type: 'success', text1: 'Payment successful!' })
         setPayOrderData(null)
         load()
+        refetchWallet()
       } catch (e) {
         Toast.show({ type: 'error', text1: e.response?.data?.message || 'Verification failed' })
       }
@@ -658,6 +667,21 @@ export default function UserBookingDetailScreen({ route }) {
               </Pressable>
             </View>
             <View style={styles.modalDivider} />
+            {walletBalance > 0 ? (
+              <Pressable
+                style={styles.walletToggle}
+                onPress={() => setUseWalletCredit((v) => !v)}
+              >
+                <Ionicons
+                  name={useWalletCredit ? 'checkbox' : 'square-outline'}
+                  size={22}
+                  color={useWalletCredit ? colors.brand : colors.slate400}
+                />
+                <Text style={styles.walletToggleTxt}>
+                  Apply up to ₹{Math.min(walletBalance, Number(b?.paymentSummary?.outstanding || 0)).toFixed(0)} wallet credit
+                </Text>
+              </Pressable>
+            ) : null}
             <Text style={styles.inputLabel}>Amount (₹)</Text>
             <TextInput
               value={payAmount}
@@ -1072,6 +1096,16 @@ const styles = StyleSheet.create({
   payInstallmentTxt: { fontFamily: font.bold, fontSize: type.sm, color: colors.white },
   payAmtHint: { marginTop: 5, fontFamily: font.regular, fontSize: type.xs, color: colors.textTertiary },
   payErrTxt: { marginTop: 8, fontFamily: font.semiBold, fontSize: type.xs, color: colors.danger },
+  walletToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: colors.brandSoft,
+  },
+  walletToggleTxt: { flex: 1, fontFamily: font.medium, fontSize: type.sm, color: colors.textPrimary },
 
   // Razorpay WebView
   webviewModal: { flex: 1, backgroundColor: colors.brand },

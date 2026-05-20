@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
 import { validateIndianMobile } from '../utils/phoneIndia'
 import { validateLoginPassword, validateOtp } from '../utils/validation'
 import Input from '../components/ui/Input'
+import KeyboardAwareScrollView from '../components/ui/KeyboardAwareScrollView'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 
@@ -93,13 +94,12 @@ export default function ForgotPasswordScreen({ navigation }) {
   const ctaLabels = { phone: 'Send code', otp: 'Verify code', password: 'Save password' }
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        style={styles.bg}
-      >
+    <KeyboardAwareScrollView
+      style={styles.bg}
+      contentContainerStyle={styles.scroll}
+      iosHeaderOffset={0}
+      extraBottomPadding={44}
+    >
         {/* ── Back row ──────────────────────────────── */}
         <Pressable onPress={handleBack} style={styles.backRow} hitSlop={12}>
           <Ionicons name="arrow-back" size={18} color={colors.brand} />
@@ -207,8 +207,7 @@ export default function ForgotPasswordScreen({ navigation }) {
           <Text style={styles.footerTxt}>Remember your password? </Text>
           <Text style={styles.footerLink}>Sign in</Text>
         </Pressable>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
   )
 }
 

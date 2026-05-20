@@ -1,6 +1,6 @@
 import { memo } from 'react'
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from 'react-native'
+import { useKeyboardAwareScroll } from '../../hooks/useKeyboardAwareScroll'
 import { colors } from '../../theme/colors'
 
 /**
@@ -13,18 +13,30 @@ import { colors } from '../../theme/colors'
  *   bg         – background colour override
  *   contentStyle – extra style for the ScrollView contentContainer
  *   style      – extra style for the root View
+ *   iosHeaderOffset – iOS KeyboardAvoidingView offset when a fixed header sits above scroll
  */
-function Screen({ children, scroll = true, padded = true, bg, contentStyle, style }) {
-  const insets = useSafeAreaInsets()
+function Screen({
+  children,
+  scroll = true,
+  padded = true,
+  bg,
+  contentStyle,
+  style,
+  iosHeaderOffset,
+}) {
+  const { padBottom, scrollViewProps, keyboardAvoidingViewProps } = useKeyboardAwareScroll({
+    extraBottomPadding: 24,
+    minBottomInset: 16,
+    iosHeaderOffset,
+  })
   const rootStyle = [styles.root, bg ? { backgroundColor: bg } : null, style]
 
   const inner = scroll ? (
     <ScrollView
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
+      {...scrollViewProps}
       contentContainerStyle={[
         padded && styles.padded,
-        { paddingBottom: Math.max(insets.bottom, 16) + 24 },
+        { paddingBottom: padBottom },
         contentStyle,
       ]}
     >
@@ -35,7 +47,7 @@ function Screen({ children, scroll = true, padded = true, bg, contentStyle, styl
   )
 
   return (
-    <KeyboardAvoidingView style={rootStyle} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView {...keyboardAvoidingViewProps} style={rootStyle}>
       {inner}
     </KeyboardAvoidingView>
   )

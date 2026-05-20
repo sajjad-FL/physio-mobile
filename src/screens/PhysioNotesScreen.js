@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import KeyboardAwareScrollView from '../components/ui/KeyboardAwareScrollView'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
@@ -98,11 +99,11 @@ export default function PhysioNotesScreen() {
   }
 
   return (
-    <ScrollView
+    <KeyboardAwareScrollView
       contentContainerStyle={styles.scroll}
       style={styles.root}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
+      iosHeaderOffset={0}
+      extraBottomPadding={44}
     >
       {bookings.map((bk) => {
         const isExpanded = expandedId === bk._id
@@ -185,7 +186,7 @@ export default function PhysioNotesScreen() {
           </View>
         )
       })}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   )
 }
 

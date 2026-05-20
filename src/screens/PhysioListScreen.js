@@ -19,6 +19,7 @@ import Toast from 'react-native-toast-message'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context'
 import { api } from '../api/client'
+import { useReferralMyCode } from '../api/queries'
 import { useAuth } from '../context/AuthContext'
 import { ISSUE_OPTIONS, ISSUE_OTHER_VALUE } from '../constants/issues'
 import { formatBookingDateAndSlot, formatBookingTimeSlot } from '../utils/date'
@@ -293,6 +294,9 @@ export default function PhysioListScreen({ navigation }) {
 
   // Submit
   const [submitting, setSubmitting] = useState(false)
+  const [useWalletCredit, setUseWalletCredit] = useState(false)
+  const { data: referralData } = useReferralMyCode(Boolean(token))
+  const walletBalance = Number(referralData?.walletBalance) || 0
   const onlineCheckoutSessionIdRef = useRef('')
   const [onlinePayWebviewOpen, setOnlinePayWebviewOpen] = useState(false)
   const [onlineCheckoutPayData, setOnlineCheckoutPayData] = useState(null)
@@ -563,6 +567,7 @@ export default function PhysioListScreen({ navigation }) {
       const startRes = await api.post('/bookings/online-checkout/start', {
         ...body,
         physioId: selectedPhysioId,
+        ...(useWalletCredit && walletBalance > 0 ? { useWalletCredit: true } : {}),
       })
       const {
         checkoutSessionId,
@@ -1093,6 +1098,20 @@ export default function PhysioListScreen({ navigation }) {
           )}
         </StepCard>
       </ScrollView>
+
+      {walletBalance > 0 && serviceType === 'online' ? (
+        <Pressable
+          style={styles.walletRow}
+          onPress={() => setUseWalletCredit((v) => !v)}
+        >
+          <Ionicons
+            name={useWalletCredit ? 'checkbox' : 'square-outline'}
+            size={22}
+            color={useWalletCredit ? colors.brand : colors.slate400}
+          />
+          <Text style={styles.walletRowTxt}>Use ₹{walletBalance.toFixed(0)} wallet credit</Text>
+        </Pressable>
+      ) : null}
 
       {/* ── Sticky summary bar ────────────────────────────────────────────── */}
       <BookingSummaryBar
@@ -1716,6 +1735,20 @@ const styles = StyleSheet.create({
   onlineHintTxt: { fontFamily: font.medium, fontSize: type.sm, color: colors.warning },
 
   // Booking summary bar
+  walletRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: colors.brandSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  walletRowTxt: { fontFamily: font.medium, fontSize: type.sm, color: colors.textPrimary, flex: 1 },
+
   summaryBar: {
     backgroundColor: colors.white,
     borderTopWidth: StyleSheet.hairlineWidth,

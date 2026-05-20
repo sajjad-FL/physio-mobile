@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -26,6 +25,7 @@ import { authFormCard } from '../theme/authFormCard'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { useAuth } from '../context/AuthContext'
+import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll'
 
 function digitsOnly(text, maxLen) {
   const d = String(text || '').replace(/\D/g, '')
@@ -44,6 +44,7 @@ export default function LoginScreen({ navigation }) {
   const [phoneFocused, setPhoneFocused] = useState(false)
   const [passFocused, setPassFocused] = useState(false)
   const { authEpoch } = useAuth()
+  const { padBottom, scrollViewProps, keyboardAvoidingViewProps } = useKeyboardAwareScroll()
 
   useEffect(() => {
     if (getTokenSync()) {
@@ -116,7 +117,7 @@ export default function LoginScreen({ navigation }) {
   const base = siteOrigin()
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView {...keyboardAvoidingViewProps}>
       <View style={styles.bg}>
 
         {/* ── Header ─────────────────────────────── */}
@@ -144,9 +145,8 @@ export default function LoginScreen({ navigation }) {
         </View>
 
         <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 20) + 28 }]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+          {...scrollViewProps}
+          contentContainerStyle={[styles.scroll, { paddingBottom: padBottom }]}
         >
 
           {/* ── Hero ───────────────────────────────── */}

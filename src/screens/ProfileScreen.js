@@ -6,9 +6,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Image,
-  KeyboardAvoidingView,
   Modal,
   Platform,
+  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,10 +19,16 @@ import {
 import Toast from 'react-native-toast-message'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { api } from '../api/client'
+import {
+  DEFAULT_REFERRAL_REWARD_AMOUNT,
+  DEFAULT_REFERRAL_SIGNUP_BONUS_AMOUNT,
+  useReferralMyCode,
+} from '../api/queries'
 import MapPickerModal from '../components/booking/MapPickerModal'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { assetUrl } from '../utils/assetUrl'
+import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll'
 import { validateProfileLiveField } from '../utils/profileLiveValidation'
 
 const GENDERS = [
@@ -56,6 +62,10 @@ function parseYmd(s) {
 
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets()
+  const { padBottom, scrollViewProps, keyboardAvoidingViewProps } = useKeyboardAwareScroll({
+    iosHeaderOffset: 0,
+    extraBottomPadding: 28,
+  })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -83,6 +93,10 @@ export default function ProfileScreen({ navigation }) {
   const [fieldErrors, setFieldErrors] = useState({})
 
   const isPhysio = role === 'physio'
+  const { data: referralInfo } = useReferralMyCode({ enabled: !isPhysio })
+  const referralEarnAmount = referralInfo?.referralRewardAmount || DEFAULT_REFERRAL_REWARD_AMOUNT
+  const friendSignupBonus =
+    referralInfo?.referralSignupBonusAmount ?? DEFAULT_REFERRAL_SIGNUP_BONUS_AMOUNT
 
   const displayAvatarUri = previewLocal || assetUrl(avatarUrl)
 
@@ -385,11 +399,10 @@ export default function ProfileScreen({ navigation }) {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView {...keyboardAvoidingViewProps}>
       <ScrollView
-        contentContainerStyle={[styles.pad, { paddingBottom: 28 + insets.bottom }]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+        {...scrollViewProps}
+        contentContainerStyle={[styles.pad, { paddingBottom: padBottom }]}
       >
         {/* ── Hero band ─────────────────────────────── */}
         <View style={[styles.heroBand, { paddingTop: insets.top + 14 }]}>
@@ -428,6 +441,26 @@ export default function ProfileScreen({ navigation }) {
           </Pressable>
           <Text style={styles.avatarHint}>Tap photo to change · JPEG/PNG max 2MB</Text>
         </View>
+
+        {!isPhysio ? (
+          <Pressable
+            style={styles.referCard}
+            onPress={() => navigation.getParent()?.navigate('ReferEarn')}
+          >
+            <View style={styles.referCardIcon}>
+              <Ionicons name="gift-outline" size={20} color={colors.brand} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.referCardTitle}>Refer &amp; Earn</Text>
+              <Text style={styles.referCardSub}>
+                {friendSignupBonus > 0
+                  ? `Friends get ₹${friendSignupBonus} on signup · you earn ₹${referralEarnAmount}`
+                  : `Share your code and earn ₹${referralEarnAmount} per friend`}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.slate400} />
+          </Pressable>
+        ) : null}
 
         {/* ── Contact section ───────────────────────── */}
         <View style={styles.sectionCard}>
@@ -840,6 +873,30 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
   },
+
+  referCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 10,
+    marginTop: -8,
+    padding: 16,
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...CARD_SHADOW,
+  },
+  referCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  referCardTitle: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.textPrimary },
+  referCardSub: { fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary, marginTop: 2 },
 
   // ── Section cards ──────────────────────────────
   sectionCard: {

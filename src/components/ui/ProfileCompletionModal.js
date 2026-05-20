@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +20,7 @@ import { r } from '../../theme/radius'
 import { font, type, leading } from '../../theme/typography'
 import { validateProfileLiveField } from '../../utils/profileLiveValidation'
 import DropdownField from './DropdownField'
+import { useKeyboardAwareScroll } from '../../hooks/useKeyboardAwareScroll'
 
 const GENDER_OPTIONS = [
   { value: 'male', label: 'Male' },
@@ -35,6 +35,11 @@ const GENDER_OPTIONS = [
  */
 export default function ProfileCompletionModal({ visible, onDismiss, profile, missingFields, refresh }) {
   const insets = useSafeAreaInsets()
+  const { padBottom, scrollViewProps, keyboardAvoidingViewProps } = useKeyboardAwareScroll({
+    iosHeaderOffset: 0,
+    extraBottomPadding: 16,
+    minBottomInset: 12,
+  })
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [dob, setDob] = useState('')
@@ -129,11 +134,7 @@ export default function ProfileCompletionModal({ visible, onDismiss, profile, mi
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onDismiss}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
-      >
+      <KeyboardAvoidingView {...keyboardAvoidingViewProps}>
         <View style={[styles.root, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} accessibilityLabel="Close backdrop" />
           <View style={styles.card}>
@@ -176,11 +177,10 @@ export default function ProfileCompletionModal({ visible, onDismiss, profile, mi
               </Pressable>
             ) : (
               <ScrollView
-                keyboardShouldPersistTaps="handled"
+                {...scrollViewProps}
                 nestedScrollEnabled
-                showsVerticalScrollIndicator={false}
                 style={styles.scroll}
-                contentContainerStyle={styles.scrollContent}
+                contentContainerStyle={[styles.scrollContent, { paddingBottom: padBottom }]}
               >
                 {fieldVisible('name') ? (
                   <View style={styles.field}>

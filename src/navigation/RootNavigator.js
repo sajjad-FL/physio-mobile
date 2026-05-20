@@ -16,6 +16,7 @@ import PhysioOnboardingScreen from '../screens/PhysioOnboardingScreen'
 import PhysioVerificationRedirectScreen from '../screens/PhysioVerificationRedirectScreen'
 import RegisterPhysioScreen from '../screens/RegisterPhysioScreen'
 import PhysioListScreen from '../screens/PhysioListScreen'
+import ReferEarnScreen from '../screens/ReferEarnScreen'
 import UserTabNavigator from './UserTabNavigator'
 import PhysioTabNavigator from './PhysioTabNavigator'
 import { defaultNativeStackScreenOptions } from './navLayout'
@@ -60,6 +61,7 @@ export default function RootNavigator() {
       <Stack.Screen name="PhysioTabs" component={PhysioTabNavigator} options={{ headerShown: false }} />
       <Stack.Screen name="ProfileGlobal" component={ProfileScreen} options={{ title: 'Profile' }} />
       <Stack.Screen name="PhysioList" component={PhysioListScreen} options={{ title: 'Book' }} />
+      <Stack.Screen name="ReferEarn" component={ReferEarnScreen} options={{ title: 'Refer & Earn' }} />
       <Stack.Screen name="MapView" component={PlaceholderScreen} options={{ title: 'Map' }} />
       <Stack.Screen name="BookingLegacy" component={PlaceholderScreen} options={{ title: 'Book (legacy)' }} />
       <Stack.Screen name="PhysioAvailability" component={PhysioAvailabilityScreen} options={{ title: 'Availability' }} />

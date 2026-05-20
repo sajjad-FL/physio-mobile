@@ -23,6 +23,7 @@ import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import Input from '../components/ui/Input'
 import { ID_PROOF_TYPE_OPTIONS } from '../constants/idProofTypes'
+import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll'
 import { PHYSIO_DEGREE_OPTIONS } from '../constants/physioQualification'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
@@ -139,6 +140,9 @@ function dobInputFromApi(iso) {
 
 export default function PhysioOnboardingScreen({ navigation }) {
   const insets = useSafeAreaInsets()
+  const { padBottom, scrollViewProps, keyboardAvoidingViewProps } = useKeyboardAwareScroll({
+    extraBottomPadding: 24,
+  })
   const [step, setStep] = useState(1)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -674,13 +678,12 @@ export default function PhysioOnboardingScreen({ navigation }) {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView {...keyboardAvoidingViewProps}>
       <AppHeader title="Onboarding" onBack={() => navigation.goBack()} />
       <View style={styles.mainCol}>
       <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[styles.scrollPad, { paddingBottom: 24 }]}
-        showsVerticalScrollIndicator={false}
+        {...scrollViewProps}
+        contentContainerStyle={[styles.scrollPad, { paddingBottom: padBottom }]}
         style={styles.scrollFlex}
       >
         <Text style={styles.h1}>Physiotherapist onboarding</Text>

@@ -1,69 +1,19 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import {
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { memo } from 'react'
+import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from 'react-native'
 import SignupAppHeader from '../atoms/SignupAppHeader'
 import { colors } from '../../../theme/colors'
-
-const KEYBOARD_SHOW = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
-const KEYBOARD_HIDE = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+import { useKeyboardAwareScroll } from '../../../hooks/useKeyboardAwareScroll'
 
 function SignupScreenLayout({ backLabel = 'Home', onBack, children, footer }) {
-  const insets = useSafeAreaInsets()
-  const scrollRef = useRef(null)
-  const [keyboardHeight, setKeyboardHeight] = useState(0)
-
-  const scrollBottomIntoView = useCallback(() => {
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollToEnd({ animated: true })
-    })
-  }, [])
-
-  useEffect(() => {
-    let timeoutId
-    const showSub = Keyboard.addListener(KEYBOARD_SHOW, (e) => {
-      const h = e?.endCoordinates?.height ?? 0
-      setKeyboardHeight(h)
-      if (timeoutId) clearTimeout(timeoutId)
-      timeoutId = setTimeout(scrollBottomIntoView, Platform.OS === 'ios' ? 120 : 80)
-    })
-    const hideSub = Keyboard.addListener(KEYBOARD_HIDE, () => {
-      setKeyboardHeight(0)
-    })
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId)
-      showSub.remove()
-      hideSub.remove()
-    }
-  }, [scrollBottomIntoView])
-
-  const basePadBottom = Math.max(insets.bottom, 20) + 28
-  const padBottom = basePadBottom + keyboardHeight
-
-  /** Header row is ~36px + safe top + padding — keeps iOS KAV from under-shifting. */
-  const keyboardVerticalOffset = Platform.OS === 'ios' ? Math.max(insets.top, 8) + 6 + 12 + 36 : 0
+  const { padBottom, scrollViewProps, keyboardAvoidingViewProps } = useKeyboardAwareScroll()
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={keyboardVerticalOffset}
-    >
+    <KeyboardAvoidingView {...keyboardAvoidingViewProps}>
       <View style={styles.bg}>
         <SignupAppHeader backLabel={backLabel} onBack={onBack} />
         <ScrollView
-          ref={scrollRef}
+          {...scrollViewProps}
           contentContainerStyle={[styles.scroll, { paddingBottom: padBottom }]}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}
-          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
         >
           {children}
           {footer}
