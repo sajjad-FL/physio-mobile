@@ -96,6 +96,14 @@ export default function UserBookingDetailScreen({ route, navigation }) {
         theme: { color: colors.brand },
       }
 
+      if (!RazorpayCheckout || typeof RazorpayCheckout.open !== 'function') {
+        Toast.show({
+          type: 'error',
+          text1: 'Native SDK not found. Rebuild the app with npx expo run:android or run:ios.',
+        })
+        return
+      }
+
       RazorpayCheckout.open(options)
         .then(async (response) => {
           try {
@@ -118,7 +126,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
         .catch((error) => {
           Toast.show({
             type: 'error',
-            text1: error.description ? `Payment failed: ${error.description}` : 'Payment cancelled',
+            text1: error.description ? `Payment failed: ${error.description}` : `Payment error: ${error.message || JSON.stringify(error)}`,
           })
         })
     } catch (e) {
@@ -182,6 +190,11 @@ export default function UserBookingDetailScreen({ route, navigation }) {
         theme: { color: colors.brand },
       }
 
+      if (!RazorpayCheckout || typeof RazorpayCheckout.open !== 'function') {
+        setPaymentError('Native SDK not found. Rebuild the app with npx expo run:android or run:ios.')
+        return
+      }
+
       RazorpayCheckout.open(options)
         .then(async (response) => {
           try {
@@ -200,7 +213,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
           }
         })
         .catch((error) => {
-          setPaymentError(error.description ? `Payment failed: ${error.description}` : 'Payment cancelled')
+          setPaymentError(error.description ? `Payment failed: ${error.description}` : `Payment error: ${error.message || JSON.stringify(error)}`)
         })
     } catch (e) {
       setPaymentError(e.response?.data?.message || e.message || 'Could not start payment')

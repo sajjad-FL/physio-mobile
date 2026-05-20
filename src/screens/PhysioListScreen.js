@@ -480,6 +480,15 @@ export default function PhysioListScreen({ navigation }) {
         theme: { color: colors.brand },
       }
 
+      if (!RazorpayCheckout || typeof RazorpayCheckout.open !== 'function') {
+        setSubmitting(false)
+        Toast.show({
+          type: 'error',
+          text1: 'Native SDK not found. Rebuild the app with npx expo run:android or run:ios.',
+        })
+        return
+      }
+
       setSubmitting(false)
       RazorpayCheckout.open(options)
         .then(async (response) => {
@@ -508,7 +517,7 @@ export default function PhysioListScreen({ navigation }) {
         .catch((error) => {
           Toast.show({
             type: 'error',
-            text1: error.description ? `Payment failed: ${error.description}` : 'Payment cancelled',
+            text1: error.description ? `Payment failed: ${error.description}` : `Payment error: ${error.message || JSON.stringify(error)}`,
           })
         })
       return
