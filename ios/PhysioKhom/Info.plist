@@ -28,7 +28,7 @@
         <key>CFBundleURLSchemes</key>
         <array>
           <string>physiokhom</string>
-          <string>com.physiokhom.app</string>
+          <string>com.physiokhom.patient</string>
         </array>
       </dict>
       <dict>
