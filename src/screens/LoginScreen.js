@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -44,8 +44,12 @@ export default function LoginScreen({ navigation }) {
   const [fieldErrors, setFieldErrors] = useState({})
   const [phoneFocused, setPhoneFocused] = useState(false)
   const [passFocused, setPassFocused] = useState(false)
+  const phoneRef = useRef(null)
+  const passwordRef = useRef(null)
   const { authEpoch } = useAuth()
-  const { padBottom, scrollViewProps, keyboardAvoidingViewProps } = useKeyboardAwareScroll()
+  const { padBottom, scrollViewProps, keyboardAvoidingViewProps } = useKeyboardAwareScroll({
+    scrollToEndOnShow: false,
+  })
 
   useEffect(() => {
     if (getTokenSync()) {
@@ -175,8 +179,10 @@ export default function LoginScreen({ navigation }) {
             ) : null}
 
             {/* Mobile field */}
-            <View>
-              <Text style={styles.fieldLabel}>Mobile number</Text>
+            <View style={styles.fieldBlock}>
+              <Pressable onPress={() => phoneRef.current?.focus()} accessibilityRole="none">
+                <Text style={styles.fieldLabel}>Mobile number</Text>
+              </Pressable>
               <View style={[
                 styles.mobileField,
                 phoneFocused && styles.fieldFocused,
@@ -186,34 +192,42 @@ export default function LoginScreen({ navigation }) {
                   <Text style={styles.phonePrefixTxt}>+91</Text>
                 </View>
                 <TextInput
+                  ref={phoneRef}
+                  nativeID="login-phone"
                   style={styles.textInput}
                   placeholder="Enter mobile number"
                   placeholderTextColor={colors.textTertiary}
                   keyboardType="phone-pad"
                   autoCapitalize="none"
-                  textContentType="telephoneNumber"
-                  autoComplete="tel"
-                  importantForAutofill="yes"
+                  textContentType="username"
+                  autoComplete="username"
+                  returnKeyType="next"
+                  blurOnSubmit={false}
                   autoCorrect={false}
                   maxLength={10}
                   value={phone}
                   onChangeText={(txt) => setPhone(digitsOnly(txt, 10))}
                   onFocus={() => setPhoneFocused(true)}
                   onBlur={() => setPhoneFocused(false)}
+                  onSubmitEditing={() => passwordRef.current?.focus()}
                 />
               </View>
               {fieldErrors.phone ? <Text style={styles.fieldErrTxt}>{fieldErrors.phone}</Text> : null}
             </View>
 
             {/* Password field */}
-            <View style={styles.fieldGap}>
-              <Text style={styles.fieldLabel}>Password</Text>
+            <View style={[styles.fieldBlock, styles.fieldGap]}>
+              <Pressable onPress={() => passwordRef.current?.focus()} accessibilityRole="none">
+                <Text style={styles.fieldLabel}>Password</Text>
+              </Pressable>
               <View style={[
                 styles.passField,
                 passFocused && styles.fieldFocused,
                 Boolean(fieldErrors.password) && styles.fieldError,
               ]}>
                 <TextInput
+                  ref={passwordRef}
+                  nativeID="login-password"
                   style={[styles.textInput, styles.passInput]}
                   placeholder="Enter password"
                   placeholderTextColor={colors.textTertiary}
@@ -221,12 +235,13 @@ export default function LoginScreen({ navigation }) {
                   autoCapitalize="none"
                   textContentType="password"
                   autoComplete="password"
-                  importantForAutofill="yes"
+                  returnKeyType="done"
                   autoCorrect={false}
                   value={password}
                   onChangeText={setPassword}
                   onFocus={() => setPassFocused(true)}
                   onBlur={() => setPassFocused(false)}
+                  onSubmitEditing={handleSubmit}
                 />
                 <Pressable
                   onPress={() => setShowPassword((v) => !v)}
@@ -447,8 +462,9 @@ const styles = StyleSheet.create({
   },
 
   // Form fields
+  fieldBlock: { zIndex: 0 },
   fieldLabel: { marginBottom: 6, fontFamily: font.medium, fontSize: type.base, color: colors.textPrimary },
-  fieldGap: { marginTop: 12 },
+  fieldGap: { marginTop: 16, zIndex: 1 },
   mobileField: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -468,6 +484,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: 'rgba(241, 245, 249, 0.6)',
     paddingRight: 4,
+    overflow: 'hidden',
   },
   fieldFocused: { 
     borderColor: colors.brand, 
