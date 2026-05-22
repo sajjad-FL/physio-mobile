@@ -289,30 +289,17 @@ const HealthHubCard = memo(function HealthHubCard({ token, navigation, openWhats
 
   // Guest Onboarding checklist
   const completedCount = (token ? 1 : 0) + (consultationClaimed ? 1 : 0)
-  const progressPercentage = (completedCount / 3) * 100
 
   return (
     <View style={styles.hubCardGuest}>
-      <View style={styles.hubHeader}>
-        <View style={styles.hubHeaderLeft}>
-          <View style={[styles.hubBadge, { backgroundColor: figmaTokens.primary + '15', borderColor: figmaTokens.primary + '30' }]}>
-            <Ionicons name="ribbon" size={10} color={figmaTokens.primary} />
-            <Text style={[styles.hubBadgeText, { color: figmaTokens.primary }]}>Your Recovery Steps</Text>
-          </View>
-          <Text style={styles.hubTitle}>Personalized Onboarding</Text>
+      <View style={styles.hubHeaderGuest}>
+        <View style={[styles.hubBadge, { backgroundColor: figmaTokens.primary + '15', borderColor: figmaTokens.primary + '30' }]}>
+          <Ionicons name="ribbon" size={10} color={figmaTokens.primary} />
+          <Text style={[styles.hubBadgeText, { color: figmaTokens.primary }]}>Your Recovery Steps</Text>
         </View>
-        <Text style={[styles.hubSessionsLeft, { color: figmaTokens.primary }]}>{completedCount} of 3 completed</Text>
+        <Text style={styles.hubSessionsLeftGuest}>{completedCount} of 3 completed</Text>
       </View>
 
-      {/* Progress Bar */}
-      <View style={styles.hubProgressContainer}>
-        <View style={styles.hubProgressBarBg}>
-          <View style={[styles.hubProgressBarFill, { width: `${progressPercentage}%`, backgroundColor: figmaTokens.primary }]} />
-        </View>
-        <Text style={styles.hubProgressText}>{Math.round(progressPercentage)}% completed</Text>
-      </View>
-
-      {/* Checklist Grid */}
       <View style={styles.checklistContainer}>
         {/* Step 1 */}
         <Pressable 
@@ -2702,7 +2689,7 @@ const styles = StyleSheet.create({
   hubCardGuest: {
     backgroundColor: colors.white,
     borderRadius: 20,
-    padding: 18,
+    padding: 14,
     marginTop: 14,
     shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 8 },
@@ -2717,6 +2704,17 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 12,
+  },
+  hubHeaderGuest: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  hubSessionsLeftGuest: {
+    fontFamily: font.bold,
+    fontSize: type.xs,
+    color: figmaTokens.primary,
   },
   hubHeaderLeft: {
     flex: 1,
@@ -2872,27 +2870,27 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   checklistContainer: {
-    marginTop: 6,
-    gap: 8,
+    gap: 6,
   },
   checkRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 10,
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
     borderWidth: 1,
     borderColor: 'rgba(15,23,42,0.03)',
   },
   checkCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     borderWidth: 1.5,
     borderColor: 'rgba(15,23,42,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: 8,
   },
   checkCircleChecked: {
     borderColor: colors.success,
@@ -2920,12 +2918,12 @@ const styles = StyleSheet.create({
     fontFamily: font.regular,
     fontSize: 9,
     color: colors.textSecondary,
-    marginTop: 1,
+    lineHeight: 12,
   },
   checkActionBadge: {
     backgroundColor: figmaTokens.primary + '10',
     paddingHorizontal: 6,
-    paddingVertical: 3,
+    paddingVertical: 2,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: figmaTokens.primary + '20',
