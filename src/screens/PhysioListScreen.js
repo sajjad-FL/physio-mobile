@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import {
   ActivityIndicator,
+  Animated,
   Image,
   Linking,
   Modal,
@@ -86,6 +87,29 @@ function prettyDate(iso) {
   return `${d} ${months[Number(m) - 1] || m} ${y}`
 }
 
+function getNext14Days() {
+  const days = []
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  
+  for (let i = 0; i < 14; i++) {
+    const d = new Date()
+    d.setDate(d.getDate() + i)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dateNum = String(d.getDate()).padStart(2, '0')
+    const isoString = `${y}-${m}-${dateNum}`
+    days.push({
+      iso: isoString,
+      dayNum: String(d.getDate()),
+      weekday: weekdays[d.getDay()],
+      month: months[d.getMonth()],
+      isToday: i === 0
+    })
+  }
+  return days
+}
+
 function physioInitial(name) {
   return String(name || '').trim().charAt(0).toUpperCase() || 'P'
 }
@@ -107,20 +131,87 @@ function nearbyPhysioFeeLabel(p) {
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
 function StepCard({ step, title, subtitle, locked, done, children }) {
+  const active = !locked && !done
+  const pulseAnim = useRef(new Animated.Value(0.4)).current
+
+  useEffect(() => {
+    if (active) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1200,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 0.4,
+            duration: 1200,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start()
+    } else {
+      pulseAnim.setValue(0.4)
+    }
+  }, [active, pulseAnim])
+
   return (
-    <View style={[styles.stepCard, locked && styles.stepCardLocked]}>
+    <View style={[
+      styles.stepCard,
+      locked && styles.stepCardLocked,
+      done && styles.stepCardDone,
+      active && styles.stepCardActive
+    ]}>
+      {active && (
+        <View style={styles.pulseDotContainer}>
+          <Animated.View style={[
+            styles.pulseOuterDot,
+            {
+              transform: [{
+                scale: pulseAnim.interpolate({
+                  inputRange: [0.4, 1],
+                  outputRange: [1, 1.8],
+                })
+              }],
+              opacity: pulseAnim.interpolate({
+                inputRange: [0.4, 1],
+                outputRange: [0.8, 0],
+              })
+            }
+          ]} />
+          <View style={styles.pulseInnerDot} />
+        </View>
+      )}
       <View style={styles.stepHead}>
-        <View style={[styles.stepBadge, locked && styles.stepBadgeLocked, done && styles.stepBadgeDone]}>
-          {done
-            ? <Ionicons name="checkmark" size={12} color={colors.white} />
-            : locked
-              ? <Ionicons name="lock-closed" size={10} color={colors.slate400} />
-              : <Text style={styles.stepBadgeTxt}>{step}</Text>
-          }
+        <View style={[
+          styles.stepBadge,
+          locked && styles.stepBadgeLocked,
+          done && styles.stepBadgeDone,
+          active && styles.stepBadgeActive
+        ]}>
+          {done ? (
+            <Ionicons name="checkmark" size={12} color={colors.white} />
+          ) : locked ? (
+            <Ionicons name="lock-closed" size={10} color={colors.slate400} />
+          ) : (
+            <Text style={styles.stepBadgeTxt}>{step}</Text>
+          )}
         </View>
         <View style={styles.stepHeadText}>
-          <Text style={[styles.stepTitle, locked && styles.stepTitleLocked]}>{title}</Text>
-          {subtitle ? <Text style={[styles.stepSub, locked && styles.stepSubLocked]}>{subtitle}</Text> : null}
+          <Text style={[
+            styles.stepTitle,
+            locked && styles.stepTitleLocked,
+            done && styles.stepTitleDone,
+            active && styles.stepTitleActive
+          ]}>{title}</Text>
+          {subtitle ? (
+            <Text style={[
+              styles.stepSub,
+              locked && styles.stepSubLocked,
+              done && styles.stepSubDone,
+              active && styles.stepSubActive
+            ]}>{subtitle}</Text>
+          ) : null}
         </View>
       </View>
       <View pointerEvents={locked ? 'none' : 'auto'} style={locked && styles.stepBodyLocked}>
@@ -244,7 +335,7 @@ function BookingSummaryBar({ selectedPhysio, date, timeSlot, serviceType, canSub
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
-export default function PhysioListScreen({ navigation }) {
+export default function PhysioListScreen({ navigation, route }) {
   const { token } = useAuth()
   const insets = useSafeAreaInsets()
 
@@ -268,10 +359,21 @@ export default function PhysioListScreen({ navigation }) {
   const [date, setDate] = useState(todayISO())
   const [slots, setSlots] = useState([])
   const [timeSlot, setTimeSlot] = useState('')
-  const [issue, setIssue] = useState('')
+  const [issue, setIssue] = useState(route?.params?.issue || '')
   const [issueOther, setIssueOther] = useState('')
   const [serviceType, setServiceType] = useState('home')
   const [datePickerOpen, setDatePickerOpen] = useState(false)
+
+  // Focus states
+  const [isNameFocused, setIsNameFocused] = useState(false)
+  const [isOtherFocused, setIsOtherFocused] = useState(false)
+  const [isSearchFocused, setIsSearchFocused] = useState(false)
+
+  useEffect(() => {
+    if (route?.params?.issue) {
+      setIssue(route.params.issue)
+    }
+  }, [route?.params?.issue])
 
   // Online physio
   const [availablePhysios, setAvailablePhysios] = useState([])
@@ -616,6 +718,8 @@ export default function PhysioListScreen({ navigation }) {
   if (!token) {
     return (
       <View style={[styles.unauthRoot, { paddingTop: Math.max(insets.top, 20) + 20 }]}>
+        <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+        <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
         <View style={styles.unauthIconWrap}>
           <Ionicons name="calendar-outline" size={36} color={colors.white} />
         </View>
@@ -638,6 +742,8 @@ export default function PhysioListScreen({ navigation }) {
   // ── Main render ──────────────────────────────────────────────────────────────
   return (
     <View style={styles.flex}>
+      <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+      <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: 120 }]}
         showsVerticalScrollIndicator={false}
@@ -714,9 +820,14 @@ export default function PhysioListScreen({ navigation }) {
               <View style={styles.fieldWrap}>
                 <Text style={styles.fieldLabel}>Your name</Text>
                 <TextInput
-                  style={styles.textInput}
+                  style={[
+                    styles.textInput,
+                    isNameFocused && styles.textInputFocused
+                  ]}
                   value={profileName}
                   onChangeText={setProfileName}
+                  onFocus={() => setIsNameFocused(true)}
+                  onBlur={() => setIsNameFocused(false)}
                   placeholder="Enter your name"
                   placeholderTextColor={colors.textTertiary}
                 />
@@ -729,111 +840,123 @@ export default function PhysioListScreen({ navigation }) {
         <StepCard
           step={2}
           title="When works for you?"
-          subtitle="Pick a date, service type, and an available time slot."
+          subtitle="Pick a service type, date, and an available time slot."
           locked={!locOk}
           done={dateSlotOk}
         >
-          {/* Service type toggle */}
-          <View style={styles.serviceToggle}>
+          {/* Service type cards */}
+          <Text style={styles.fieldLabel}>Service Type</Text>
+          <View style={styles.serviceCardsContainer}>
             {[
-              { value: 'home', label: 'Home visit', icon: 'home-outline' },
-              { value: 'online', label: 'Online', icon: 'videocam-outline' },
-            ].map((opt) => (
-              <Pressable
-                key={opt.value}
-                style={[styles.serviceToggleBtn, serviceType === opt.value && styles.serviceToggleBtnOn]}
-                onPress={() => setServiceType(opt.value)}
-              >
-                <Ionicons
-                  name={opt.icon}
-                  size={13}
-                  color={serviceType === opt.value ? colors.brand : colors.textSecondary}
-                />
-                <Text style={[styles.serviceToggleTxt, serviceType === opt.value && styles.serviceToggleTxtOn]}>
-                  {opt.label}
-                </Text>
-              </Pressable>
-            ))}
+              {
+                value: 'home',
+                title: 'In-Home Visit',
+                desc: 'A certified therapist visits you for hands-on, personalized treatment.',
+                icon: 'home-outline',
+                activeIcon: 'home'
+              },
+              {
+                value: 'online',
+                title: 'Online Video',
+                desc: 'Secure video session with real-time digital posture guidance.',
+                icon: 'videocam-outline',
+                activeIcon: 'videocam'
+              },
+            ].map((opt) => {
+              const isActive = serviceType === opt.value
+              return (
+                <Pressable
+                  key={opt.value}
+                  style={[styles.serviceCard, isActive && styles.serviceCardActive]}
+                  onPress={() => setServiceType(opt.value)}
+                >
+                  <View style={[styles.serviceCardIconWrap, isActive && styles.serviceCardIconWrapActive]}>
+                    <Ionicons
+                      name={isActive ? opt.activeIcon : opt.icon}
+                      size={20}
+                      color={isActive ? colors.white : colors.textSecondary}
+                    />
+                  </View>
+                  <Text style={[styles.serviceCardTitle, isActive && styles.serviceCardTitleActive]}>
+                    {opt.title}
+                  </Text>
+                  <Text style={[styles.serviceCardDesc, isActive && styles.serviceCardDescActive]}>
+                    {opt.desc}
+                  </Text>
+                  {isActive && (
+                    <View style={styles.serviceCardTick}>
+                      <Ionicons name="checkmark-circle" size={16} color={colors.brand} />
+                    </View>
+                  )}
+                </Pressable>
+              )
+            })}
           </View>
 
-          {/* Date picker */}
-          <Text style={styles.fieldLabel}>Date</Text>
-          {Platform.OS === 'web' ? (
-            <View style={styles.webDateWrap}>
-              <input
-                type="date"
-                value={date}
-                min={todayISO()}
-                onChange={(e) => setDate(e.target.value)}
-                style={{ border: 'none', outline: 'none', width: '100%', fontSize: 14, color: '#0f172a', background: 'transparent' }}
-              />
-            </View>
-          ) : (
-            <Pressable style={styles.dateBtn} onPress={() => setDatePickerOpen(true)}>
-              <Ionicons name="calendar-outline" size={15} color={colors.brand} />
-              <Text style={styles.dateBtnTxt}>{date ? prettyDate(date) : 'Select date'}</Text>
-              <Ionicons name="chevron-down" size={13} color={colors.textTertiary} />
-            </Pressable>
-          )}
+          {/* Date Picker Ribbon */}
+          <Text style={styles.fieldLabel}>Select Date</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.dateRibbon}
+            style={styles.dateRibbonScroll}
+          >
+            {getNext14Days().map((item) => {
+              const isSelected = date === item.iso
+              return (
+                <Pressable
+                  key={item.iso}
+                  style={[
+                    styles.dateTile,
+                    isSelected && styles.dateTileSelected,
+                    item.isToday && !isSelected && styles.dateTileToday
+                  ]}
+                  onPress={() => setDate(item.iso)}
+                >
+                  <Text style={[styles.dateTileMonth, isSelected && styles.dateTileMonthSelected]}>
+                    {item.month}
+                  </Text>
+                  <Text style={[styles.dateTileDayNum, isSelected && styles.dateTileDayNumSelected]}>
+                    {item.dayNum}
+                  </Text>
+                  <Text style={[styles.dateTileWeekday, isSelected && styles.dateTileWeekdaySelected]}>
+                    {item.isToday ? 'Today' : item.weekday}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </ScrollView>
 
-          {datePickerOpen && Platform.OS !== 'ios' && Platform.OS !== 'web' ? (
-            <DateTimePicker
-              value={new Date(date)}
-              mode="date"
-              display="default"
-              minimumDate={new Date()}
-              onChange={(ev, picked) => {
-                setDatePickerOpen(false)
-                if (ev.type === 'set' && picked) {
-                  const y = picked.getFullYear()
-                  const m = String(picked.getMonth() + 1).padStart(2, '0')
-                  const d = String(picked.getDate()).padStart(2, '0')
-                  setDate(`${y}-${m}-${d}`)
-                }
-              }}
-            />
-          ) : null}
-          {datePickerOpen && Platform.OS === 'ios' ? (
-            <View style={styles.iosPickerWrap}>
-              <DateTimePicker
-                value={new Date(date)}
-                mode="date"
-                display="spinner"
-                minimumDate={new Date()}
-                onChange={(_, picked) => {
-                  if (picked) {
-                    const y = picked.getFullYear()
-                    const m = String(picked.getMonth() + 1).padStart(2, '0')
-                    const d = String(picked.getDate()).padStart(2, '0')
-                    setDate(`${y}-${m}-${d}`)
-                  }
-                }}
-              />
-              <Pressable style={styles.iosPickerDone} onPress={() => setDatePickerOpen(false)}>
-                <Text style={styles.iosPickerDoneTxt}>Done</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          {/* Time slot */}
+          {/* Time slot chips grid */}
           <View style={styles.slotSection}>
+            <Text style={styles.fieldLabel}>Available Slots</Text>
             {slots.length === 0 ? (
               <View style={styles.noSlotsBox}>
                 <Ionicons name="time-outline" size={16} color={colors.textTertiary} />
                 <Text style={styles.noSlotsTxt}>No slots available for this date</Text>
               </View>
             ) : (
-              <DropdownField
-                label="TIME SLOT"
-                value={timeSlot}
-                placeholder="Select a time"
-                options={slots.map((s) => ({
-                  label: formatBookingTimeSlot(s.timeSlot),
-                  value: s.timeSlot,
-                }))}
-                onSelect={setTimeSlot}
-                variant="inline"
-              />
+              <View style={styles.slotsGrid}>
+                {slots.map((s) => {
+                  const isSelected = timeSlot === s.timeSlot
+                  return (
+                    <Pressable
+                      key={s.timeSlot}
+                      style={[styles.slotChip, isSelected && styles.slotChipSelected]}
+                      onPress={() => setTimeSlot(s.timeSlot)}
+                    >
+                      <Ionicons
+                        name="time-outline"
+                        size={13}
+                        color={isSelected ? colors.white : colors.brand}
+                      />
+                      <Text style={[styles.slotChipTxt, isSelected && styles.slotChipTxtSelected]}>
+                        {formatBookingTimeSlot(s.timeSlot)}
+                      </Text>
+                    </Pressable>
+                  )
+                })}
+              </View>
             )}
           </View>
         </StepCard>
@@ -862,9 +985,15 @@ export default function PhysioListScreen({ navigation }) {
             <View style={[styles.fieldWrap, { marginTop: 12 }]}>
               <Text style={styles.fieldLabel}>Describe your condition</Text>
               <TextInput
-                style={[styles.textInput, styles.textArea]}
+                style={[
+                  styles.textInput,
+                  styles.textArea,
+                  isOtherFocused && styles.textInputFocused
+                ]}
                 value={issueOther}
                 onChangeText={setIssueOther}
+                onFocus={() => setIsOtherFocused(true)}
+                onBlur={() => setIsOtherFocused(false)}
                 placeholder="e.g. shoulder stiffness, sports injury…"
                 placeholderTextColor={colors.textTertiary}
                 multiline
@@ -1020,11 +1149,16 @@ export default function PhysioListScreen({ navigation }) {
 
             {/* Search input */}
             <Text style={styles.fieldLabel}>Address</Text>
-            <View style={styles.locationSearchField}>
+            <View style={[
+              styles.locationSearchField,
+              isSearchFocused && styles.locationSearchFieldFocused
+            ]}>
               <Ionicons name="search-outline" size={14} color={colors.textTertiary} />
               <TextInput
                 value={locationDraft}
                 onChangeText={setLocationDraft}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
                 placeholder="Enter address or locality"
                 style={styles.locationSearchInput}
                 placeholderTextColor={colors.textTertiary}
@@ -1176,10 +1310,32 @@ const CARD_SHADOW = {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.canvas },
+  flex: { flex: 1, backgroundColor: colors.canvas, position: 'relative' },
+
+  // Ambient Header glows
+  ambientHeaderGlow: {
+    position: 'absolute',
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(162, 240, 239, 0.15)',
+    zIndex: 0,
+  },
+  ambientHeaderGlow2: {
+    position: 'absolute',
+    top: -50,
+    left: '20%',
+    width: '60%',
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(13, 107, 107, 0.04)',
+    zIndex: 0,
+  },
 
   // Scroll
-  scroll: { paddingHorizontal: 16, paddingTop: 16 },
+  scroll: { paddingHorizontal: 16, paddingTop: 16, position: 'relative' },
 
   // Unauthenticated
   unauthRoot: {
@@ -1187,6 +1343,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.canvas,
     paddingHorizontal: 32,
+    position: 'relative',
   },
   unauthIconWrap: {
     width: 80,
@@ -1269,6 +1426,41 @@ const styles = StyleSheet.create({
     ...CARD_SHADOW,
   },
   stepCardLocked: { opacity: 0.5 },
+  stepCardActive: {
+    borderColor: colors.brand,
+    borderWidth: 1.5,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  stepCardDone: {
+    borderColor: colors.success + '44',
+    borderWidth: 1,
+  },
+  pulseDotContainer: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pulseOuterDot: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.brand,
+  },
+  pulseInnerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.brand,
+  },
   stepHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 18 },
   stepBadge: {
     width: 28,
@@ -1351,72 +1543,163 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     backgroundColor: colors.white,
   },
+  textInputFocused: {
+    borderColor: colors.brand,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 2,
+    backgroundColor: colors.white,
+  },
   textArea: { height: 80, paddingTop: 12, textAlignVertical: 'top' },
 
-  // Service toggle
-  serviceToggle: {
+  // Service Cards
+  serviceCardsContainer: {
     flexDirection: 'row',
-    backgroundColor: colors.canvas,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    padding: 4,
-    gap: 4,
+    gap: 12,
     marginBottom: 18,
   },
-  serviceToggleBtn: {
+  serviceCard: {
     flex: 1,
-    flexDirection: 'row',
+    backgroundColor: colors.canvas,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 14,
+    alignItems: 'flex-start',
+    position: 'relative',
+  },
+  serviceCardActive: {
+    borderColor: colors.brand,
+    backgroundColor: colors.teal50,
+  },
+  serviceCardIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 9,
-    borderRadius: 9,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
   },
-  serviceToggleBtnOn: {
-    backgroundColor: colors.white,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 1,
+  serviceCardIconActive: {
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.brandSoft,
   },
-  serviceToggleTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.textSecondary },
-  serviceToggleTxtOn: { color: colors.brand },
+  serviceCardTitle: {
+    fontFamily: font.bold,
+    fontSize: type.sm,
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  serviceCardTitleActive: {
+    color: colors.brand,
+  },
+  serviceCardDesc: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+    lineHeight: leading.sm,
+  },
+  serviceCardDescActive: {
+    color: colors.textSecondary,
+  },
+  serviceCardTick: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+  },
 
-  // Date button
-  dateBtn: {
-    height: 44,
+  // Date Picker Ribbon
+  dateRibbonScroll: {
+    marginHorizontal: -18,
+    paddingHorizontal: 18,
+    marginBottom: 18,
+  },
+  dateRibbon: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingRight: 36,
+  },
+  dateTile: {
+    width: 58,
+    height: 74,
+    borderRadius: 14,
+    backgroundColor: colors.canvas,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
+  dateTileSelected: {
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
+  },
+  dateTileToday: {
+    borderColor: colors.brandSoft,
+    backgroundColor: colors.teal50,
+  },
+  dateTileMonth: {
+    fontFamily: font.medium,
+    fontSize: 9,
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  dateTileMonthSelected: {
+    color: 'rgba(255, 255, 255, 0.75)',
+  },
+  dateTileDayNum: {
+    fontFamily: font.bold,
+    fontSize: type.base,
+    color: colors.textPrimary,
+    marginVertical: 2,
+  },
+  dateTileDayNumSelected: {
+    color: colors.white,
+  },
+  dateTileWeekday: {
+    fontFamily: font.medium,
+    fontSize: 9,
+    color: colors.textSecondary,
+  },
+  dateTileWeekdaySelected: {
+    color: 'rgba(255, 255, 255, 0.85)',
+  },
+
+  // Slots grid
+  slotsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  slotChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 10,
+    backgroundColor: colors.canvas,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    backgroundColor: colors.white,
-    marginBottom: 18,
   },
-  dateBtnTxt: { flex: 1, fontFamily: font.semiBold, fontSize: type.base, color: colors.textPrimary },
-  webDateWrap: {
-    height: 44,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.white,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    justifyContent: 'center',
-    marginBottom: 18,
-  },
-  iosPickerWrap: { gap: 10, marginBottom: 18 },
-  iosPickerDone: {
-    height: 40,
-    borderRadius: 10,
+  slotChipSelected: {
     backgroundColor: colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: colors.brand,
   },
-  iosPickerDoneTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.white },
+  slotChipTxt: {
+    fontFamily: font.medium,
+    fontSize: type.xs,
+    color: colors.textPrimary,
+  },
+  slotChipTxtSelected: {
+    color: colors.white,
+  },
 
   // Slots
   slotSection: {},
@@ -1706,6 +1989,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     backgroundColor: colors.canvas,
     marginBottom: 12,
+  },
+  locationSearchFieldFocused: {
+    borderColor: colors.brand,
+    backgroundColor: colors.white,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 2,
   },
   locationSearchInput: {
     flex: 1,

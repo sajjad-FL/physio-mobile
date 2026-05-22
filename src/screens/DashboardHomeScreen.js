@@ -76,6 +76,9 @@ export default function DashboardHomeScreen({ navigation }) {
 
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      {/* Ambient Top Background Halo Glow */}
+      <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+      <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
 
       {/* ── Hero ─────────────────────────────────── */}
       <View style={styles.hero}>
@@ -120,19 +123,72 @@ export default function DashboardHomeScreen({ navigation }) {
 
       {/* ── Next session (hero card) ──────────────── */}
       {nextBooking ? (
-        <Pressable
-          style={({ pressed }) => [styles.nextCard, pressed && styles.nextCardDim]}
-          onPress={() =>
-            navigation.navigate('Bookings', { screen: 'BookingDetail', params: { id: nextBooking._id } })
-          }
-        >
-          <View style={styles.nextContent}>
-            <Text style={styles.nextBadge}>NEXT SESSION</Text>
-            <Text style={styles.nextDate}>{formatBookingDateAndSlot(nextBooking.date, nextBooking.timeSlot)}</Text>
-            <Text style={styles.nextPhysio}>{nextBooking.physioId?.name || 'Physio TBD'}</Text>
-          </View>
-          <Ionicons name="arrow-forward-circle-outline" size={34} color="rgba(255,255,255,0.35)" />
-        </Pressable>
+        <View style={styles.nextCardContainer}>
+          <Pressable
+            style={({ pressed }) => [styles.nextCard, pressed && styles.nextCardDim]}
+            onPress={() =>
+              navigation.navigate('Bookings', { screen: 'BookingDetail', params: { id: nextBooking._id } })
+            }
+          >
+            {/* Ambient inner glow bubbles */}
+            <View style={styles.cardGlowBubble1} />
+            <View style={styles.cardGlowBubble2} />
+
+            <View style={styles.nextHeaderRow}>
+              <View style={styles.nextContent}>
+                <View style={styles.nextBadgeContainer}>
+                  <Ionicons name="sparkles" size={10} color="#fff" style={{ marginRight: 4 }} />
+                  <Text style={styles.nextBadge}>UPCOMING SESSION</Text>
+                </View>
+                <Text style={styles.nextDate}>{formatBookingDateAndSlot(nextBooking.date, nextBooking.timeSlot)}</Text>
+                <View style={styles.nextPhysioRow}>
+                  <Ionicons name="person-circle-outline" size={16} color="rgba(255,255,255,0.8)" style={{ marginRight: 6 }} />
+                  <Text style={styles.nextPhysio}>{nextBooking.physioId?.name || 'Physio TBD'}</Text>
+                </View>
+              </View>
+              <Ionicons name="arrow-forward-circle-outline" size={32} color="#fff" />
+            </View>
+
+            {/* Active Recovery Progress Track */}
+            <View style={styles.progressSection}>
+              <View style={styles.progressTextRow}>
+                <Text style={styles.progressLabel}>Active recovery plan progress</Text>
+                <Text style={styles.progressPercent}>
+                  {nextBooking.sessionStatus === 'scheduled' ? '40%' : '75%'}
+                </Text>
+              </View>
+              <View style={styles.progressBarBg}>
+                <View style={[
+                  styles.progressBarFill, 
+                  { width: nextBooking.sessionStatus === 'scheduled' ? '40%' : '75%' }
+                ]} />
+              </View>
+            </View>
+
+            {/* Quick-action buttons */}
+            <View style={styles.nextActionsRow}>
+              <Pressable
+                style={({ pressed }) => [styles.nextQuickActionBtn, pressed && styles.quickActionPressed]}
+                onPress={() =>
+                  navigation.navigate('Bookings', { screen: 'BookingDetail', params: { id: nextBooking._id, initialTab: 'tracker' } })
+                }
+              >
+                <Ionicons name="map-outline" size={14} color="#0d9488" style={{ marginRight: 6 }} />
+                <Text style={styles.nextQuickActionText}>Track Visit</Text>
+              </Pressable>
+              
+              <Pressable
+                style={({ pressed }) => [styles.nextQuickActionBtn, pressed && styles.quickActionPressed]}
+                onPress={() =>
+                  navigation.navigate('Bookings', { screen: 'BookingDetail', params: { id: nextBooking._id, initialTab: 'rehab' } })
+                }
+              >
+                <Ionicons name="fitness-outline" size={14} color="#0d9488" style={{ marginRight: 6 }} />
+                <Text style={styles.nextQuickActionText}>Daily Rehab</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </View>
       ) : (
         <Pressable
           style={({ pressed }) => [styles.bookCta, pressed && styles.dimmed]}
@@ -236,9 +292,31 @@ const ActivityRow = memo(function ActivityRow({ item, onPress, isLast }) {
 })
 
 const styles = StyleSheet.create({
-  scroll: { paddingBottom: 32 },
+  scroll: { paddingBottom: 32, position: 'relative' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.canvas },
   dimmed: { opacity: 0.75 },
+
+  // Ambient Header glows
+  ambientHeaderGlow: {
+    position: 'absolute',
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(162, 240, 239, 0.18)',
+    zIndex: 0,
+  },
+  ambientHeaderGlow2: {
+    position: 'absolute',
+    top: -50,
+    left: '20%',
+    width: '60%',
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(13, 107, 107, 0.05)',
+    zIndex: 0,
+  },
 
   // ── Hero
   hero: {
@@ -248,6 +326,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 18,
+    zIndex: 1,
   },
   heroText: { flex: 1 },
   greeting: {
@@ -286,6 +365,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.teal50,
     borderWidth: 1,
     borderColor: colors.brandSoft,
+    zIndex: 1,
   },
   bannerIconWrap: {
     width: 30,
@@ -318,48 +398,147 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warningBg,
     borderWidth: 1,
     borderColor: colors.warningBorder,
+    zIndex: 1,
   },
   warningTxt: { flex: 1, fontFamily: font.medium, fontSize: type.sm, color: colors.amber800 },
 
   // ── Next session hero card
+  nextCardContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 20,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    elevation: 6,
+    zIndex: 2,
+  },
   nextCard: {
+    borderRadius: 20,
+    backgroundColor: '#0d9488',
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  nextCardDim: { opacity: 0.92 },
+  cardGlowBubble1: {
+    position: 'absolute',
+    top: -50,
+    right: -50,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  cardGlowBubble2: {
+    position: 'absolute',
+    bottom: -60,
+    left: -20,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  nextHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 20,
-    backgroundColor: colors.brand,
-    paddingVertical: 22,
-    paddingHorizontal: 22,
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.38,
-    shadowRadius: 16,
-    elevation: 8,
+    marginBottom: 16,
+    zIndex: 2,
   },
-  nextCardDim: { opacity: 0.88 },
-  nextContent: { flex: 1 },
+  nextBadgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
   nextBadge: {
     fontFamily: font.bold,
-    fontSize: type.xs,
-    letterSpacing: 1,
-    color: 'rgba(255,255,255,0.6)',
+    fontSize: 9,
+    letterSpacing: 0.8,
+    color: '#fff',
     textTransform: 'uppercase',
-    marginBottom: 8,
   },
   nextDate: {
     fontFamily: font.bold,
-    fontSize: type['2xl'],
+    fontSize: type.xl,
     color: '#fff',
     letterSpacing: -0.3,
-    lineHeight: 28,
+    lineHeight: 22,
+  },
+  nextPhysioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
   },
   nextPhysio: {
-    marginTop: 5,
     fontFamily: font.medium,
-    fontSize: type.sm,
-    color: 'rgba(255,255,255,0.72)',
+    fontSize: type.xs,
+    color: 'rgba(255,255,255,0.85)',
+  },
+  progressSection: {
+    marginBottom: 16,
+    zIndex: 2,
+  },
+  progressTextRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  progressLabel: {
+    fontFamily: font.medium,
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.75)',
+  },
+  progressPercent: {
+    fontFamily: font.bold,
+    fontSize: 10,
+    color: '#fff',
+  },
+  progressBarBg: {
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 3,
+  },
+  nextActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    zIndex: 3,
+  },
+  nextQuickActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  quickActionPressed: {
+    opacity: 0.9,
+  },
+  nextQuickActionText: {
+    fontFamily: font.bold,
+    fontSize: type.xs,
+    color: '#0d9488',
   },
 
   // ── Book CTA (no upcoming session)
@@ -374,6 +553,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.teal50,
     borderWidth: 1,
     borderColor: colors.brandSoft,
+    zIndex: 1,
   },
   bookCtaIconWrap: {
     width: 42,
@@ -394,19 +574,20 @@ const styles = StyleSheet.create({
     gap: 10,
     marginHorizontal: 16,
     marginBottom: 24,
+    zIndex: 1,
   },
   statCard: {
     flex: 1,
     borderRadius: 16,
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.1)',
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
   statHead: {
     flexDirection: 'row',

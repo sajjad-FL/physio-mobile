@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import RazorpayCheckout from 'react-native-razorpay'
@@ -311,8 +311,83 @@ export default function UserBookingDetailScreen({ route, navigation }) {
     },
     [actionBusy, b?._id, load, reviewComment, reviewRating],
   )
+  // Live Transit state
+  const [transitPhase, setTransitPhase] = useState('In Transit')
 
+  // Rehab Exercises state
+  const getExercisesForIssue = (issueName) => {
+    const issueLower = String(issueName || '').toLowerCase()
+    if (issueLower.includes('back')) {
+      return [
+        { id: 'stretch', name: 'Lumbar Extension Stretch', target: '3 Sets x 10 Reps', hold: 10, desc: 'Place hands on hips, gently lean backward to extension. Avoid sudden moves.', tip: 'Keep breathing normally, do not hold breath.' },
+        { id: 'cobra', name: 'Cobra Pose / Bhujangasana', target: '3 Sets x 5 Reps', hold: 15, desc: 'Lie on your stomach, palms under shoulders. Press down to raise your upper chest off ground.', tip: 'Relax shoulders down and away from ears.' },
+        { id: 'bridge', name: 'Glute Bridge Holds', target: '3 Sets x 12 Reps', hold: 5, desc: 'Lie on back with knees bent. Squeeze glutes and lift hips to create a straight line.', tip: 'Do not arch lower back excessively.' }
+      ]
+    } else if (issueLower.includes('knee')) {
+      return [
+        { id: 'raise', name: 'Straight Leg Raises', target: '3 Sets x 10 Reps', hold: 5, desc: 'Lie on back, bend one knee. Tighten quad of straight leg and lift to 45 degrees.', tip: 'Ensure the lifting knee stays fully straight.' },
+        { id: 'quad', name: 'Isometric Quad Sets', target: '3 Sets x 15 Reps', hold: 10, desc: 'Place a small towel under knee. Press back of knee down to squeeze thigh muscle.', tip: 'Focus on feeling the contraction in your quadriceps.' }
+      ]
+    } else if (issueLower.includes('stroke') || issueLower.includes('paralysis') || issueLower.includes('neuro')) {
+      return [
+        { id: 'grasp', name: 'Grip & Ball Squeeze', target: '3 Sets x 15 Reps', hold: 5, desc: 'Hold a therapy ball or rolled towel. Squeeze tightly and release slowly.', tip: 'Try to coordinate smooth movement.' },
+        { id: 'ankle', name: 'Seated Ankle Pumps', target: '3 Sets x 20 Reps', hold: 2, desc: 'Point toes down, then pull toes up toward your shins. Rest and repeat.', tip: 'Helps improve blood circulation and ankle mobility.' }
+      ]
+    } else if (issueLower.includes('neck') || issueLower.includes('cervical')) {
+      return [
+        { id: 'retract', name: 'Cervical Retraction (Chin Tucks)', target: '3 Sets x 10 Reps', hold: 5, desc: 'Sit upright. Draw your chin straight backward (like making a double chin).', tip: 'Keep eyes looking straight ahead, don\'t tilt head.' },
+        { id: 'trap', name: 'Upper Trapezius Stretch', target: '3 Sets x 6 Reps', hold: 15, desc: 'Tilt your ear toward your shoulder. Use hand for a gentle extra stretch.', tip: 'Keep the opposite shoulder relaxed and low.' }
+      ]
+    } else {
+      return [
+        { id: 'deep_breath', name: 'Diaphragmatic Breathing', target: '3 Sets x 10 Reps', hold: 5, desc: 'Place one hand on stomach. Inhale deep through nose, exhale through pursed lips.', tip: 'Your stomach should rise and fall, not your chest.' },
+        { id: 'mobility', name: 'Gentle Joint Mobilization', target: '3 Sets x 10 Reps', hold: 5, desc: 'Perform gentle, slow pain-free range of motion for the affected joint.', tip: 'Stop immediately if pain increases.' }
+      ]
+    }
+  }
 
+  const exercises = useMemo(() => getExercisesForIssue(b?.issue), [b?.issue])
+  const [completedExercises, setCompletedExercises] = useState({})
+  const [selectedExercise, setSelectedExercise] = useState(null)
+  
+  const completedCount = useMemo(() => Object.values(completedExercises).filter(Boolean).length, [completedExercises])
+  const totalExercises = exercises.length
+  const completionPercentage = totalExercises > 0 ? (completedCount / totalExercises) * 100 : 0
+
+  // Stopwatch state & logic
+  const [timerSeconds, setTimerSeconds] = useState(30)
+  const [timerRunning, setTimerRunning] = useState(false)
+  const timerIntervalRef = useRef(null)
+
+  useEffect(() => {
+    if (timerRunning) {
+      timerIntervalRef.current = setInterval(() => {
+        setTimerSeconds((prev) => {
+          if (prev <= 1) {
+            clearInterval(timerIntervalRef.current)
+            setTimerRunning(false)
+            return 30
+          }
+          return prev - 1
+        })
+      }, 1000)
+    } else {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current)
+      }
+    }
+    return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current)
+      }
+    }
+  }, [timerRunning])
+
+  const toggleTimer = () => setTimerRunning(!timerRunning)
+  const resetTimer = () => {
+    setTimerRunning(false)
+    setTimerSeconds(30)
+  }
 
   if (loading) {
     return (
@@ -393,6 +468,100 @@ export default function UserBookingDetailScreen({ route, navigation }) {
         </View>
       </View>
 
+      {/* ── Therapist Live Transit Tracker ────────────────── */}
+      {b.serviceType === 'home' && b.status !== 'completed' && (
+        <View style={styles.transitCard}>
+          <View style={styles.transitHeader}>
+            <View style={styles.transitIconRing}>
+              <View style={styles.transitIconPulse} />
+              <Ionicons name="navigate" size={16} color="#ffffff" />
+            </View>
+            <View style={styles.transitHeaderText}>
+              <Text style={styles.transitTitle}>Therapist Live Transit Tracker</Text>
+              <Text style={styles.transitEta}>
+                {transitPhase === 'Dispatched' && `${physioName} is preparing for visit`}
+                {transitPhase === 'In Transit' && `${physioName} is arriving in 14 mins`}
+                {transitPhase === 'Arrived' && `${physioName} has arrived at your location`}
+                {transitPhase === 'Treating' && `Session in progress with ${physioName}`}
+              </Text>
+            </View>
+          </View>
+
+          {/* Interactive Simulation Switcher for demo purposes */}
+          <View style={styles.demoControlsContainer}>
+            <Text style={styles.demoLabel}>Demo Simulator:</Text>
+            <View style={styles.demoControls}>
+              {['Dispatched', 'In Transit', 'Arrived', 'Treating'].map((ph) => (
+                <TouchableOpacity
+                  key={ph}
+                  style={[styles.demoBtn, transitPhase === ph && styles.demoBtnActive]}
+                  onPress={() => setTransitPhase(ph)}
+                >
+                  <Text style={[styles.demoBtnTxt, transitPhase === ph && styles.demoBtnTxtActive]}>
+                    {ph}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Stepper progress */}
+          <View style={styles.transitStepper}>
+            {[
+              { id: 'Dispatched', label: 'Dispatched', icon: 'car-outline' },
+              { id: 'In Transit', label: 'In Transit', icon: 'navigate-outline' },
+              { id: 'Arrived', label: 'Arrived', icon: 'pin-outline' },
+              { id: 'Treating', label: 'Treating', icon: 'medical-outline' },
+            ].map((step, idx) => {
+              const phasesList = ['Dispatched', 'In Transit', 'Arrived', 'Treating'];
+              const currentIdx = phasesList.indexOf(transitPhase);
+              const stepIdx = phasesList.indexOf(step.id);
+              
+              const isCompleted = stepIdx < currentIdx;
+              const isActive = stepIdx === currentIdx;
+              const isPending = stepIdx > currentIdx;
+
+              return (
+                <View key={step.id} style={styles.stepperItem}>
+                  <View style={[
+                    styles.stepperDot,
+                    isCompleted && styles.stepperDotCompleted,
+                    isActive && styles.stepperDotActive,
+                    isPending && styles.stepperDotPending
+                  ]}>
+                    <Ionicons name={step.icon} size={12} color={isActive || isCompleted ? '#ffffff' : '#64748b'} />
+                  </View>
+                  <Text style={[
+                    styles.stepperLabel,
+                    isActive && styles.stepperLabelActive,
+                    isCompleted && styles.stepperLabelCompleted
+                  ]}>
+                    {step.label}
+                  </Text>
+                  {idx < 3 && (
+                    <View style={[
+                      styles.stepperLine,
+                      stepIdx < currentIdx && styles.stepperLineCompleted
+                    ]} />
+                  )}
+                </View>
+              )
+            })}
+          </View>
+
+          {/* Security PIN verification block */}
+          <View style={styles.pinContainer}>
+            <View style={styles.pinTextSection}>
+              <Text style={styles.pinLabel}>Safety Verification PIN</Text>
+              <Text style={styles.pinDescription}>Verify this code with {physioName} upon arrival.</Text>
+            </View>
+            <View style={styles.pinValueCard}>
+              <Text style={styles.pinValue}>8492</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* ── Plan approval banner ───────────────────── */}
       {b.serviceType === 'home' && b.planStatus === 'proposed' ? (
         <View style={styles.banner}>
@@ -457,55 +626,359 @@ export default function UserBookingDetailScreen({ route, navigation }) {
         </View>
       ) : null}
 
-      {/* ── Session timeline ──────────────────────── */}
+      {/* ── Active Recovery Roadmap & Milestone Tracker ──────────────────────── */}
       <View style={styles.sectionCard}>
-        <SectionTitle icon="calendar-outline" title="Session timeline" />
-        {rows.map((r, idx) => {
-          const done = r.status === 'completed'
-          const reviewed = reviewedSessionIds.has(String(r.sessionId || 'booking'))
+        <SectionTitle icon="fitness-outline" title="Active Recovery Roadmap" />
+        
+        {/* Overall Completion Progress */}
+        {(() => {
+          const totalCompleted = rows.filter(r => r.status === 'completed').length
+          const progressPercent = rows.length > 0 ? (totalCompleted / rows.length) * 100 : 0
           return (
-            <View key={r.key}>
-              {idx > 0 ? <View style={styles.rowDivider} /> : null}
-              <View style={styles.timelineRow}>
-                <View style={[styles.sessionBadge, done ? styles.sessionBadgeDone : styles.sessionBadgePending]}>
-                  <Text style={[styles.sessionNum, done ? styles.sessionNumDone : styles.sessionNumPending]}>
-                    {r.n}
-                  </Text>
-                </View>
-                <View style={styles.timelineBody}>
-                  <Text style={styles.timelineDate}>{formatBookingDateAndSlot(r.date, r.time)}</Text>
-                  <View style={styles.timelineStatusRow}>
-                    <View style={[styles.sessionStatusDot, done ? styles.dotDone : styles.dotPending]} />
-                    <Text style={[styles.sessionStatusTxt, done ? styles.sessionStatusTxtDone : null]}>
-                      {done ? 'Completed' : 'Scheduled'}
-                    </Text>
-                  </View>
-                </View>
-                {done && !reviewed ? (
-                  <Pressable
-                    style={styles.rateBtn}
-                    onPress={() => {
-                      setSessionReviewTarget(r)
-                      setReviewOpen(false)
-                    }}
-                  >
-                    <Ionicons name="star-outline" size={12} color={colors.brand} />
-                    <Text style={styles.rateBtnTxt}>Rate</Text>
-                  </Pressable>
-                ) : (
-                  <View style={[styles.rateBtn, styles.rateBtnMuted]}>
-                    <Ionicons
-                      name={reviewed ? 'star' : 'lock-closed-outline'}
-                      size={12}
-                      color={reviewed ? colors.warning : colors.slate300}
-                    />
-                    <Text style={styles.rateBtnMutedTxt}>{reviewed ? 'Reviewed' : 'Locked'}</Text>
-                  </View>
-                )}
+            <View style={styles.progressContainer}>
+              <View style={styles.progressHeader}>
+                <Text style={styles.progressLabel}>Rehab Completion</Text>
+                <Text style={styles.progressVal}>
+                  {totalCompleted} of {rows.length} Sessions ({Math.round(progressPercent)}%)
+                </Text>
+              </View>
+              <View style={styles.progressBarBg}>
+                <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
               </View>
             </View>
           )
-        })}
+        })()}
+
+        {/* Phase Timeline Cards */}
+        {(() => {
+          const total = rows.length
+          let phase1Max = Math.max(1, Math.round(total * 0.3))
+          let phase2Max = Math.max(phase1Max + 1, Math.round(total * 0.7))
+
+          if (total <= 3) {
+            phase1Max = 1
+            phase2Max = 2
+          }
+
+          const groupedSessions = {
+            1: [],
+            2: [],
+            3: [],
+          }
+
+          rows.forEach((r) => {
+            if (r.n <= phase1Max) {
+              groupedSessions[1].push(r)
+            } else if (r.n <= phase2Max) {
+              groupedSessions[2].push(r)
+            } else {
+              groupedSessions[3].push(r)
+            }
+          })
+
+          const phases = [
+            {
+              id: 1,
+              title: 'Phase 1: Pain Relief & Mobilization',
+              description: 'Reduce acute pain, restore basic range of motion, and decrease joint inflammation.',
+              target: 'Milestone: >50% pain reduction & basic mobility',
+              icon: 'water-outline',
+            },
+            {
+              id: 2,
+              title: 'Phase 2: Strengthening & Activation',
+              description: 'Rebuild muscle support, correct movement patterns, and activate stabilizer muscles.',
+              target: 'Milestone: Joint load tolerance & stability',
+              icon: 'flash-outline',
+            },
+            {
+              id: 3,
+              title: 'Phase 3: Functional Restoration & Discharge',
+              description: 'Advanced coordination, high-load training, and transition to self-guided Home Exercises.',
+              target: 'Milestone: 100% active recovery & discharge',
+              icon: 'shield-checkmark-outline',
+            },
+          ]
+
+          // Determine active phase
+          let activePhaseId = 1
+          const activeSession = rows.find(r => r.status !== 'completed')
+          if (activeSession) {
+            if (activeSession.n <= phase1Max) {
+              activePhaseId = 1
+            } else if (activeSession.n <= phase2Max) {
+              activePhaseId = 2
+            } else {
+              activePhaseId = 3
+            }
+          } else {
+            activePhaseId = 4 // All sessions are completed
+          }
+
+          return (
+            <View style={styles.roadmapContainer}>
+              {phases.map((phase, idx) => {
+                const phaseSessions = groupedSessions[phase.id]
+                const isLast = idx === phases.length - 1
+                
+                // Determine phase status
+                let status = 'LOCKED'
+                if (phase.id < activePhaseId) {
+                  status = 'ACCOMPLISHED'
+                } else if (phase.id === activePhaseId) {
+                  status = 'IN_PROGRESS'
+                }
+
+                // Node styling helper values
+                let statusColor = colors.slate300
+                let statusIcon = 'lock-closed-outline'
+                if (status === 'ACCOMPLISHED') {
+                  statusColor = colors.success
+                  statusIcon = 'checkmark-circle'
+                } else if (status === 'IN_PROGRESS') {
+                  statusColor = colors.brand
+                  statusIcon = 'pulse-outline'
+                }
+
+                return (
+                  <View style={styles.phaseContainer} key={phase.id}>
+                    {/* Left Column (Timeline path and marker) */}
+                    <View style={styles.phaseLeftColumn}>
+                      <View style={[
+                        styles.phaseIndicatorNode,
+                        status === 'ACCOMPLISHED' && styles.phaseIndicatorNodeAccomplished,
+                        status === 'IN_PROGRESS' && styles.phaseIndicatorNodeInProgress,
+                        status === 'LOCKED' && styles.phaseIndicatorNodeLocked
+                      ]}>
+                        <Ionicons name={statusIcon} size={13} color={statusColor} />
+                      </View>
+                      {!isLast ? (
+                        <View style={[
+                          styles.phaseConnectorLine,
+                          status === 'ACCOMPLISHED' && styles.phaseConnectorLineAccomplished,
+                          status === 'IN_PROGRESS' && styles.phaseConnectorLineInProgress,
+                          status === 'LOCKED' && styles.phaseConnectorLineLocked
+                        ]} />
+                      ) : null}
+                    </View>
+
+                    {/* Right Column (Phase details card) */}
+                    <View style={[
+                      styles.phaseCard,
+                      status === 'ACCOMPLISHED' && styles.phaseCardAccomplished,
+                      status === 'IN_PROGRESS' && styles.phaseCardInProgress,
+                      status === 'LOCKED' && styles.phaseCardLocked
+                    ]}>
+                      {/* Phase Header */}
+                      <View style={styles.phaseCardHeader}>
+                        <View style={styles.phaseTitleRow}>
+                          <Ionicons name={phase.icon} size={14} color={statusColor} style={{ marginRight: 5 }} />
+                          <Text style={[
+                            styles.phaseTitle,
+                            status === 'LOCKED' && styles.phaseTitleLocked
+                          ]}>
+                            {phase.title}
+                          </Text>
+                        </View>
+                        <View style={[
+                          styles.phaseStatusBadge,
+                          status === 'ACCOMPLISHED' && styles.phaseStatusBadgeAccomplished,
+                          status === 'IN_PROGRESS' && styles.phaseStatusBadgeInProgress,
+                          status === 'LOCKED' && styles.phaseStatusBadgeLocked
+                        ]}>
+                          <Text style={[
+                            styles.phaseStatusBadgeTxt,
+                            status === 'ACCOMPLISHED' && styles.phaseStatusBadgeTxtAccomplished,
+                            status === 'IN_PROGRESS' && styles.phaseStatusBadgeTxtInProgress,
+                            status === 'LOCKED' && styles.phaseStatusBadgeTxtLocked
+                          ]}>
+                            {status === 'ACCOMPLISHED' ? 'Completed' : status === 'IN_PROGRESS' ? 'Active' : 'Locked'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Phase Description */}
+                      <Text style={[
+                        styles.phaseDescription,
+                        status === 'LOCKED' && styles.phaseDescriptionLocked
+                      ]}>
+                        {phase.description}
+                      </Text>
+
+                      {/* Milestone Badge */}
+                      <View style={[
+                        styles.phaseMilestoneBox,
+                        status === 'ACCOMPLISHED' && styles.phaseMilestoneBoxAccomplished,
+                        status === 'IN_PROGRESS' && styles.phaseMilestoneBoxInProgress,
+                        status === 'LOCKED' && styles.phaseMilestoneBoxLocked
+                      ]}>
+                        <Ionicons 
+                          name={status === 'ACCOMPLISHED' ? "ribbon" : "flag-outline"} 
+                          size={12} 
+                          color={status === 'ACCOMPLISHED' ? colors.success : status === 'IN_PROGRESS' ? colors.brand : colors.slate500} 
+                        />
+                        <Text style={[
+                          styles.phaseMilestoneTxt,
+                          status === 'ACCOMPLISHED' && styles.phaseMilestoneTxtAccomplished,
+                          status === 'IN_PROGRESS' && styles.phaseMilestoneTxtInProgress,
+                          status === 'LOCKED' && styles.phaseMilestoneTxtLocked
+                        ]}>
+                          {phase.target}
+                        </Text>
+                      </View>
+
+                      {/* Phase Sessions */}
+                      {phaseSessions.length > 0 ? (
+                        <View style={styles.nestedSessionsList}>
+                          {phaseSessions.map((r, sIdx) => {
+                            const done = r.status === 'completed'
+                            const reviewed = reviewedSessionIds.has(String(r.sessionId || 'booking'))
+                            return (
+                              <View 
+                                key={r.key} 
+                                style={[
+                                  styles.nestedSessionRow,
+                                  done && styles.nestedSessionRowDone,
+                                  sIdx === phaseSessions.length - 1 && { borderBottomWidth: 0, paddingBottom: 0 }
+                                ]}
+                              >
+                                <View style={[
+                                  styles.nestedSessionIndicator,
+                                  done ? styles.nestedSessionIndicatorDone : styles.nestedSessionIndicatorPending
+                                ]}>
+                                  {done ? (
+                                    <Ionicons name="checkmark" size={10} color={colors.white} />
+                                  ) : (
+                                    <Text style={styles.nestedSessionNumText}>{r.n}</Text>
+                                  )}
+                                </View>
+                                
+                                <View style={styles.nestedSessionDetails}>
+                                  <Text style={[
+                                    styles.nestedSessionTitle,
+                                    done && styles.nestedSessionTitleDone
+                                  ]}>
+                                    Session #{r.n}
+                                  </Text>
+                                  <Text style={styles.nestedSessionTime}>
+                                    {formatBookingDateAndSlot(r.date, r.time)}
+                                  </Text>
+                                </View>
+
+                                {/* Action button */}
+                                {done && !reviewed ? (
+                                  <Pressable
+                                    style={styles.nestedRateBtn}
+                                    onPress={() => {
+                                      setSessionReviewTarget(r)
+                                      setReviewOpen(false)
+                                    }}
+                                  >
+                                    <Ionicons name="star-outline" size={11} color={colors.brand} />
+                                    <Text style={styles.nestedRateBtnTxt}>Rate</Text>
+                                  </Pressable>
+                                ) : (
+                                  <View style={[styles.nestedRateBtn, styles.nestedRateBtnMuted]}>
+                                    <Ionicons
+                                      name={reviewed ? 'star' : 'lock-closed-outline'}
+                                      size={10}
+                                      color={reviewed ? colors.warning : colors.slate300}
+                                    />
+                                    <Text style={styles.nestedRateBtnMutedTxt}>
+                                      {reviewed ? 'Reviewed' : 'Locked'}
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                            )
+                          })}
+                        </View>
+                      ) : (
+                        <View style={styles.lockedPromoBox}>
+                          <Ionicons name="lock-closed-outline" size={12} color={colors.slate400} />
+                          <Text style={styles.lockedPromoTxt}>
+                            {total === 1 
+                              ? "Upgrade to a multi-session plan to unlock milestone tracking." 
+                              : "This phase will activate as you complete earlier sessions."
+                            }
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )
+              })}
+            </View>
+          )
+        })()}
+      </View>
+
+      {/* ── Daily Rehab Companion Card ────────────────── */}
+      <View style={styles.sectionCard}>
+        <View style={styles.rehabHeaderRow}>
+          <SectionTitle icon="fitness-outline" title="Daily Rehabilitation Companion" />
+          <View style={styles.rehabProgressBadge}>
+            <Text style={styles.rehabProgressBadgeTxt}>
+              {completedCount}/{totalExercises} Done
+            </Text>
+          </View>
+        </View>
+        
+        <Text style={styles.rehabSub}>
+          Complete your daily home exercise plan prescribed for your recovery roadmap.
+        </Text>
+
+        <View style={styles.rehabProgressContainer}>
+          <View style={styles.rehabProgressBarBg}>
+            <View style={[styles.rehabProgressBarFill, { width: `${completionPercentage}%` }]} />
+          </View>
+          <Text style={styles.rehabPercentTxt}>{Math.round(completionPercentage)}% Completed Today</Text>
+        </View>
+
+        <View style={styles.exerciseList}>
+          {exercises.map((ex) => {
+            const isCompleted = !!completedExercises[ex.id];
+            return (
+              <View key={ex.id} style={[styles.exerciseRow, isCompleted && styles.exerciseRowCompleted]}>
+                <TouchableOpacity
+                  style={styles.exerciseCheckbox}
+                  onPress={() => {
+                    setCompletedExercises(prev => ({
+                      ...prev,
+                      [ex.id]: !prev[ex.id]
+                    }))
+                  }}
+                >
+                  <View style={[styles.checkboxBox, isCompleted && styles.checkboxBoxChecked]}>
+                    {isCompleted && (
+                      <Ionicons name="checkmark" size={12} color="#ffffff" />
+                    )}
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.exerciseDetailsBtn}
+                  onPress={() => {
+                    setSelectedExercise(ex)
+                    setTimerSeconds(30)
+                    setTimerRunning(false)
+                  }}
+                >
+                  <View style={styles.exerciseTitleCol}>
+                    <Text style={[styles.exerciseName, isCompleted && styles.exerciseNameCompleted]}>
+                      {ex.name}
+                    </Text>
+                    <Text style={styles.exerciseTarget}>{ex.target} • Hold for {ex.hold}s</Text>
+                  </View>
+                  <View style={styles.exArrowWrap}>
+                    <Text style={styles.exStartBtnTxt}>Guide</Text>
+                    <Ionicons name="chevron-forward" size={14} color={colors.brand} />
+                  </View>
+                </TouchableOpacity>
+              </View>
+            )
+          })}
+        </View>
       </View>
 
       {/* ── Plan details ─────────────────────────── */}
@@ -792,6 +1265,114 @@ export default function UserBookingDetailScreen({ route, navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* ── Exercise Detail Modal with Stopwatch ──────────────────── */}
+      <Modal
+        transparent
+        visible={!!selectedExercise}
+        animationType="slide"
+        onRequestClose={() => setSelectedExercise(null)}
+      >
+        <View style={styles.modalRoot}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSelectedExercise(null)} />
+          <View style={[styles.modalCard, { maxHeight: '80%' }]}>
+            {selectedExercise ? (
+              <>
+                <View style={styles.modalHeader}>
+                  <View style={[styles.modalIconWrap, { backgroundColor: colors.teal50 }]}>
+                    <Ionicons name="fitness-outline" size={18} color={colors.brand} />
+                  </View>
+                  <View style={styles.modalHeaderText}>
+                    <Text style={styles.modalTitle}>{selectedExercise.name}</Text>
+                    <Text style={styles.modalSub}>{selectedExercise.target}</Text>
+                  </View>
+                  <Pressable onPress={() => setSelectedExercise(null)} hitSlop={12} style={styles.modalClose}>
+                    <Ionicons name="close" size={18} color={colors.slate400} />
+                  </Pressable>
+                </View>
+                
+                <ScrollView contentContainerStyle={styles.exerciseModalScroll}>
+                  <View style={styles.guideCard}>
+                    <Text style={styles.guideHeading}>Instructions</Text>
+                    <Text style={styles.guideText}>{selectedExercise.desc}</Text>
+                    
+                    <View style={styles.tipBox}>
+                      <Ionicons name="bulb-outline" size={14} color="#f59e0b" style={{ marginRight: 6 }} />
+                      <Text style={styles.tipText}>
+                        <Text style={{ fontWeight: '700' }}>Pro Tip: </Text>
+                        {selectedExercise.tip}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Stopwatch section */}
+                  <View style={styles.stopwatchCard}>
+                    <Text style={styles.stopwatchTitle}>Hold / Rest Timer</Text>
+                    
+                    <View style={styles.stopwatchDigitsBox}>
+                      <Text style={styles.stopwatchDigits}>
+                        00:{timerSeconds < 10 ? `0${timerSeconds}` : timerSeconds}
+                      </Text>
+                      <Text style={styles.stopwatchUnit}>sec</Text>
+                    </View>
+
+                    <View style={styles.stopwatchControls}>
+                      <TouchableOpacity
+                        style={[styles.stopwatchBtn, styles.stopwatchBtnReset]}
+                        onPress={resetTimer}
+                      >
+                        <Text style={styles.stopwatchBtnResetText}>Reset</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.stopwatchBtn,
+                          timerRunning ? styles.stopwatchBtnPause : styles.stopwatchBtnStart
+                        ]}
+                        onPress={toggleTimer}
+                      >
+                        <Ionicons
+                          name={timerRunning ? "pause-outline" : "play-outline"}
+                          size={16}
+                          color="#ffffff"
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text style={styles.stopwatchBtnStartText}>
+                          {timerRunning ? 'Pause' : 'Start'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  
+                  <TouchableOpacity
+                    style={[
+                      styles.exerciseCompleteModalBtn,
+                      completedExercises[selectedExercise.id] && styles.exerciseCompleteModalBtnDone
+                    ]}
+                    onPress={() => {
+                      setCompletedExercises(prev => ({
+                        ...prev,
+                        [selectedExercise.id]: !prev[selectedExercise.id]
+                      }))
+                      setSelectedExercise(null)
+                    }}
+                  >
+                    <Ionicons
+                      name={completedExercises[selectedExercise.id] ? "checkmark-done-circle" : "checkmark-circle-outline"}
+                      size={18}
+                      color="#ffffff"
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={styles.exerciseCompleteModalBtnTxt}>
+                      {completedExercises[selectedExercise.id] ? 'Completed!' : 'Mark Exercise Completed'}
+                    </Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   )
 }
@@ -1010,44 +1591,308 @@ const styles = StyleSheet.create({
   infoValue: { marginTop: 2, fontFamily: font.semiBold, fontSize: type.sm, color: colors.textPrimary },
   infoSub: { marginTop: 1, fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
 
-  // Timeline
-  timelineRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  sessionBadge: {
+  // Recovery Roadmap styles
+  progressContainer: {
+    backgroundColor: colors.slate50,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    marginBottom: 16,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  progressLabel: {
+    fontFamily: font.semiBold,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+  },
+  progressVal: {
+    fontFamily: font.bold,
+    fontSize: type.xs,
+    color: colors.brand,
+  },
+  progressBarBg: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.slate200,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: colors.brand,
+    borderRadius: 3,
+  },
+  roadmapContainer: {
+    marginTop: 4,
+  },
+  phaseContainer: {
+    flexDirection: 'row',
+    position: 'relative',
+    marginBottom: 16,
+  },
+  phaseLeftColumn: {
     width: 32,
-    height: 32,
-    borderRadius: 10,
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  phaseIndicatorNode: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1.5,
+    backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
+    zIndex: 2,
+    marginTop: 4,
   },
-  sessionBadgeDone: { backgroundColor: colors.teal50 },
-  sessionBadgePending: { backgroundColor: colors.slate100 },
-  sessionNum: { fontFamily: font.bold, fontSize: type.sm },
-  sessionNumDone: { color: colors.brand },
-  sessionNumPending: { color: colors.slate500 },
-  timelineBody: { flex: 1 },
-  timelineDate: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.textPrimary },
-  timelineStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-  sessionStatusDot: { width: 6, height: 6, borderRadius: 3 },
-  dotDone: { backgroundColor: colors.success },
-  dotPending: { backgroundColor: colors.slate300 },
-  sessionStatusTxt: { fontFamily: font.regular, fontSize: type.xs, color: colors.textTertiary },
-  sessionStatusTxtDone: { color: colors.success },
-  rateBtn: {
+  phaseIndicatorNodeAccomplished: {
+    borderColor: colors.success,
+    backgroundColor: colors.emerald50,
+  },
+  phaseIndicatorNodeInProgress: {
+    borderColor: colors.brand,
+    backgroundColor: colors.brandSoft,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  phaseIndicatorNodeLocked: {
+    borderColor: colors.slate300,
+    backgroundColor: colors.slate50,
+  },
+  phaseConnectorLine: {
+    position: 'absolute',
+    top: 30,
+    bottom: -22,
+    width: 1.5,
+    left: 15,
+    zIndex: 1,
+  },
+  phaseConnectorLineAccomplished: {
+    backgroundColor: colors.success,
+  },
+  phaseConnectorLineInProgress: {
+    backgroundColor: colors.brand,
+  },
+  phaseConnectorLineLocked: {
+    backgroundColor: colors.slate200,
+  },
+  phaseCard: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    backgroundColor: colors.white,
+  },
+  phaseCardAccomplished: {
+    borderColor: colors.borderSubtle,
+    backgroundColor: '#fafbfc',
+    opacity: 0.9,
+  },
+  phaseCardInProgress: {
+    borderColor: colors.brand,
+    backgroundColor: colors.white,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  phaseCardLocked: {
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.slate50,
+    opacity: 0.75,
+  },
+  phaseCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  phaseTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+  },
+  phaseTitle: {
+    fontFamily: font.bold,
+    fontSize: type.sm,
+    color: colors.textPrimary,
+  },
+  phaseTitleLocked: {
+    color: colors.textSecondary,
+  },
+  phaseStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  phaseStatusBadgeAccomplished: {
+    backgroundColor: colors.emerald50,
+  },
+  phaseStatusBadgeInProgress: {
+    backgroundColor: colors.brandSoft,
+  },
+  phaseStatusBadgeLocked: {
+    backgroundColor: colors.slate100,
+  },
+  phaseStatusBadgeTxt: {
+    fontFamily: font.semiBold,
+    fontSize: 9,
+  },
+  phaseStatusBadgeTxtAccomplished: {
+    color: colors.success,
+  },
+  phaseStatusBadgeTxtInProgress: {
+    color: colors.brand,
+  },
+  phaseStatusBadgeTxtLocked: {
+    color: colors.slate500,
+  },
+  phaseDescription: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+    lineHeight: leading.xs,
+    marginBottom: 10,
+  },
+  phaseDescriptionLocked: {
+    color: colors.textTertiary,
+  },
+  phaseMilestoneBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
+    marginBottom: 12,
+  },
+  phaseMilestoneBoxAccomplished: {
+    backgroundColor: colors.emerald50,
+  },
+  phaseMilestoneBoxInProgress: {
+    backgroundColor: colors.brandSoft,
+  },
+  phaseMilestoneBoxLocked: {
+    backgroundColor: colors.slate100,
+  },
+  phaseMilestoneTxt: {
+    fontFamily: font.medium,
+    fontSize: 10,
+  },
+  phaseMilestoneTxtAccomplished: {
+    color: colors.success,
+  },
+  phaseMilestoneTxtInProgress: {
+    color: colors.brand,
+  },
+  phaseMilestoneTxtLocked: {
+    color: colors.slate500,
+  },
+  nestedSessionsList: {
+    borderTopWidth: 1,
+    borderColor: colors.borderSubtle,
+    paddingTop: 8,
+  },
+  nestedSessionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+  },
+  nestedSessionRowDone: {
+    opacity: 0.9,
+  },
+  nestedSessionIndicator: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  nestedSessionIndicatorDone: {
+    backgroundColor: colors.success,
+  },
+  nestedSessionIndicatorPending: {
+    backgroundColor: colors.slate200,
+  },
+  nestedSessionNumText: {
+    fontFamily: font.bold,
+    fontSize: 9,
+    color: colors.textSecondary,
+  },
+  nestedSessionDetails: {
+    flex: 1,
+  },
+  nestedSessionTitle: {
+    fontFamily: font.semiBold,
+    fontSize: type.xs,
+    color: colors.textPrimary,
+  },
+  nestedSessionTitleDone: {
+    color: colors.textSecondary,
+    textDecorationLine: 'line-through',
+  },
+  nestedSessionTime: {
+    fontFamily: font.regular,
+    fontSize: 9,
+    color: colors.textTertiary,
+    marginTop: 1,
+  },
+  nestedRateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: colors.brandSoft,
     backgroundColor: colors.teal50,
-    flexShrink: 0,
   },
-  rateBtnTxt: { fontFamily: font.semiBold, fontSize: 10, color: colors.brand },
-  rateBtnMuted: { borderColor: colors.borderSubtle, backgroundColor: colors.slate50 },
-  rateBtnMutedTxt: { fontFamily: font.regular, fontSize: 10, color: colors.textTertiary },
+  nestedRateBtnTxt: {
+    fontFamily: font.semiBold,
+    fontSize: 9,
+    color: colors.brand,
+  },
+  nestedRateBtnMuted: {
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.slate50,
+  },
+  nestedRateBtnMutedTxt: {
+    fontFamily: font.regular,
+    fontSize: 9,
+    color: colors.textTertiary,
+  },
+  lockedPromoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 10,
+    backgroundColor: colors.slate100,
+    borderRadius: 8,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: colors.slate300,
+  },
+  lockedPromoTxt: {
+    flex: 1,
+    fontFamily: font.medium,
+    fontSize: 9,
+    color: colors.textSecondary,
+  },
 
   // KV rows
   kvRow: {
@@ -1306,4 +2151,426 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   payFullBtnTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.white },
+
+  // Transit tracker styles
+  transitCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  transitHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  transitIconRing: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  transitIconPulse: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    borderRadius: 16,
+    backgroundColor: colors.brand,
+    opacity: 0.3,
+    transform: [{ scale: 1.3 }],
+  },
+  transitHeaderText: {
+    flex: 1,
+  },
+  transitTitle: {
+    fontFamily: font.bold,
+    fontSize: 13,
+    color: '#ffffff',
+  },
+  transitEta: {
+    fontFamily: font.medium,
+    fontSize: 10.5,
+    color: '#cbd5e1',
+    marginTop: 2,
+  },
+  demoControlsContainer: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 14,
+  },
+  demoLabel: {
+    fontFamily: font.bold,
+    fontSize: 9,
+    color: '#94a3b8',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  demoControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  demoBtn: {
+    flex: 1,
+    paddingVertical: 4,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+  },
+  demoBtnActive: {
+    backgroundColor: colors.brand,
+  },
+  demoBtnTxt: {
+    fontFamily: font.bold,
+    fontSize: 8.5,
+    color: '#94a3b8',
+  },
+  demoBtnTxtActive: {
+    color: '#ffffff',
+  },
+  transitStepper: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 14,
+    paddingHorizontal: 8,
+  },
+  stepperItem: {
+    alignItems: 'center',
+    flex: 1,
+    position: 'relative',
+  },
+  stepperDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  stepperDotActive: {
+    backgroundColor: colors.brand,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  stepperDotCompleted: {
+    backgroundColor: '#10b981',
+  },
+  stepperDotPending: {
+    backgroundColor: '#1e293b',
+  },
+  stepperLabel: {
+    fontFamily: font.bold,
+    fontSize: 9.5,
+    color: '#64748b',
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  stepperLabelActive: {
+    color: colors.brand,
+  },
+  stepperLabelCompleted: {
+    color: '#10b981',
+  },
+  stepperLine: {
+    position: 'absolute',
+    left: '50%',
+    right: '-50%',
+    top: 11,
+    height: 2,
+    backgroundColor: '#334155',
+    zIndex: 1,
+  },
+  stepperLineCompleted: {
+    backgroundColor: '#10b981',
+  },
+  pinContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  pinTextSection: {
+    flex: 1,
+  },
+  pinLabel: {
+    fontFamily: font.bold,
+    fontSize: 10,
+    color: '#ffffff',
+    letterSpacing: 0.5,
+  },
+  pinDescription: {
+    fontFamily: font.regular,
+    fontSize: 8.5,
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  pinValueCard: {
+    backgroundColor: colors.brand,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  pinValue: {
+    fontFamily: font.bold,
+    fontSize: 14,
+    color: '#ffffff',
+    letterSpacing: 1.5,
+  },
+
+  // Daily Rehab Styles
+  rehabHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  rehabProgressBadge: {
+    backgroundColor: colors.teal50,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  rehabProgressBadgeTxt: {
+    fontFamily: font.bold,
+    fontSize: 10,
+    color: colors.brand,
+  },
+  rehabSub: {
+    fontFamily: font.regular,
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginBottom: 10,
+  },
+  rehabProgressContainer: {
+    marginBottom: 12,
+  },
+  rehabProgressBarBg: {
+    height: 6,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  rehabProgressBarFill: {
+    height: '100%',
+    backgroundColor: '#10b981',
+    borderRadius: 3,
+  },
+  rehabPercentTxt: {
+    fontFamily: font.medium,
+    fontSize: 9,
+    color: '#10b981',
+    marginTop: 4,
+  },
+  exerciseList: {
+    gap: 8,
+  },
+  exerciseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    padding: 10,
+  },
+  exerciseRowCompleted: {
+    backgroundColor: 'rgba(16, 185, 129, 0.03)',
+    borderColor: 'rgba(16, 185, 129, 0.15)',
+  },
+  exerciseCheckbox: {
+    paddingRight: 10,
+  },
+  checkboxBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+  checkboxBoxChecked: {
+    borderColor: '#10b981',
+    backgroundColor: '#10b981',
+  },
+  exerciseDetailsBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  exerciseTitleCol: {
+    flex: 1,
+  },
+  exerciseName: {
+    fontFamily: font.bold,
+    fontSize: 12,
+    color: '#1e293b',
+  },
+  exerciseNameCompleted: {
+    color: '#64748b',
+    textDecorationLine: 'line-through',
+  },
+  exerciseTarget: {
+    fontFamily: font.medium,
+    fontSize: 9.5,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  exArrowWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  exStartBtnTxt: {
+    fontFamily: font.bold,
+    fontSize: 10,
+    color: colors.brand,
+  },
+
+  // Exercise modal styles
+  exerciseModalScroll: {
+    paddingVertical: 12,
+    gap: 14,
+  },
+  guideCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  guideHeading: {
+    fontFamily: font.bold,
+    fontSize: 12,
+    color: '#1e293b',
+    marginBottom: 6,
+  },
+  guideText: {
+    fontFamily: font.regular,
+    fontSize: 11.5,
+    color: '#475569',
+    lineHeight: 16,
+  },
+  tipBox: {
+    flexDirection: 'row',
+    backgroundColor: '#fffbeb',
+    borderRadius: 8,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#fef3c7',
+    marginTop: 10,
+  },
+  tipText: {
+    flex: 1,
+    fontFamily: font.regular,
+    fontSize: 10.5,
+    color: '#b45309',
+    lineHeight: 14,
+  },
+  stopwatchCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+    padding: 14,
+    alignItems: 'center',
+  },
+  stopwatchTitle: {
+    fontFamily: font.bold,
+    fontSize: 10.5,
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  stopwatchDigitsBox: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginVertical: 10,
+  },
+  stopwatchDigits: {
+    fontFamily: font.bold,
+    fontSize: 36,
+    color: '#38bdf8',
+  },
+  stopwatchUnit: {
+    fontFamily: font.bold,
+    fontSize: 12,
+    color: '#94a3b8',
+    marginLeft: 4,
+  },
+  stopwatchControls: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  stopwatchBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  stopwatchBtnReset: {
+    backgroundColor: '#334155',
+  },
+  stopwatchBtnResetText: {
+    fontFamily: font.bold,
+    fontSize: 12,
+    color: '#ffffff',
+  },
+  stopwatchBtnStart: {
+    backgroundColor: '#10b981',
+  },
+  stopwatchBtnPause: {
+    backgroundColor: '#ef4444',
+  },
+  stopwatchBtnStartText: {
+    fontFamily: font.bold,
+    fontSize: 12,
+    color: '#ffffff',
+  },
+  exerciseCompleteModalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.brand,
+    paddingVertical: 12,
+    borderRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    marginTop: 6,
+  },
+  exerciseCompleteModalBtnDone: {
+    backgroundColor: '#10b981',
+  },
+  exerciseCompleteModalBtnTxt: {
+    fontFamily: font.bold,
+    fontSize: 13,
+    color: '#ffffff',
+  },
 })

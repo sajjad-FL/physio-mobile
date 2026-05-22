@@ -31,35 +31,40 @@ export default function DashboardDisputesScreen() {
   }
 
   return (
-    <FlatList
-      data={rows}
-      keyExtractor={(item) => String(item._id)}
-      onRefresh={refetch}
-      refreshing={false}
-      style={styles.root}
-      contentContainerStyle={rows.length === 0 ? styles.emptyPad : styles.listPad}
-      ListEmptyComponent={
-        <View style={styles.emptyBox}>
-          <View style={styles.emptyIconWrap}>
-            <Ionicons name="checkmark-circle-outline" size={32} color={colors.slate300} />
+    <View style={styles.root}>
+      {/* Ambient Top Background Halo Glow */}
+      <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+      <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
+
+      <FlatList
+        data={rows}
+        keyExtractor={(item) => String(item._id)}
+        onRefresh={refetch}
+        refreshing={false}
+        contentContainerStyle={rows.length === 0 ? styles.emptyPad : styles.listPad}
+        ListEmptyComponent={
+          <View style={styles.emptyBox}>
+            <View style={styles.emptyIconWrap}>
+              <Ionicons name="checkmark-circle-outline" size={32} color={colors.slate300} />
+            </View>
+            <Text style={styles.emptyTitle}>No disputes</Text>
+            <Text style={styles.emptySub}>Any disputes you raise will appear here.</Text>
           </View>
-          <Text style={styles.emptyTitle}>No disputes</Text>
-          <Text style={styles.emptySub}>Any disputes you raise will appear here.</Text>
-        </View>
-      }
-      ListFooterComponent={
-        rows.length > 0 ? (
-          <PaginationBar
-            compact
-            page={page}
-            totalPages={totalPages}
-            onPrev={() => setPage((p) => Math.max(1, p - 1))}
-            onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
-          />
-        ) : null
-      }
-      renderItem={({ item }) => <DisputeCard item={item} />}
-    />
+        }
+        ListFooterComponent={
+          rows.length > 0 ? (
+            <PaginationBar
+              compact
+              page={page}
+              totalPages={totalPages}
+              onPrev={() => setPage((p) => Math.max(1, p - 1))}
+              onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+            />
+          ) : null
+        }
+        renderItem={({ item }) => <DisputeCard item={item} />}
+      />
+    </View>
   )
 }
 
@@ -127,18 +132,19 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     borderRadius: 14,
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    shadowRadius: 10,
+    elevation: 2,
+    zIndex: 1,
   },
   cardAccent: { width: 4, alignSelf: 'stretch' },
-  cardBody: { flex: 1, padding: 14, gap: 8 },
+  cardBody: { flex: 1, padding: 14, gap: 8, zIndex: 2 },
   cardTop: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -173,5 +179,27 @@ const styles = StyleSheet.create({
     fontSize: type.xs,
     color: colors.emerald700,
     lineHeight: leading.xs,
+  },
+
+  // Ambient Header glows
+  ambientHeaderGlow: {
+    position: 'absolute',
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(162, 240, 239, 0.15)',
+    zIndex: 0,
+  },
+  ambientHeaderGlow2: {
+    position: 'absolute',
+    top: -50,
+    left: '20%',
+    width: '60%',
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(13, 107, 107, 0.04)',
+    zIndex: 0,
   },
 })

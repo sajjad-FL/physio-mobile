@@ -37,11 +37,12 @@ function SignupAppHeader({ onBack, backLabel = 'Home' }) {
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
+    zIndex: 10,
   },
   headerRow: {
     flexDirection: 'row',

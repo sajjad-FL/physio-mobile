@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../../theme/colors'
 import { font, type } from '../../theme/typography'
+import { figmaTokens, figmaShadowSm } from '../../theme/figmaTokens'
 
 export const StitchHeader = memo(function StitchHeader({ token, onSignIn, onDashboard }) {
   const insets = useSafeAreaInsets()
@@ -37,8 +38,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     paddingHorizontal: 16,
     paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(15, 23, 42, 0.05)',
+    ...figmaShadowSm,
+    zIndex: 10,
   },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 36 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -46,17 +49,17 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 7,
-    backgroundColor: colors.brand,
+    backgroundColor: figmaTokens.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.brand,
+    shadowColor: figmaTokens.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
   },
   brandPhysio: { fontFamily: font.bold, fontSize: type.lg, color: colors.textPrimary, letterSpacing: -0.3 },
-  brandKhom: { fontFamily: font.bold, fontSize: type.lg, color: colors.brand, letterSpacing: -0.3 },
+  brandKhom: { fontFamily: font.bold, fontSize: type.lg, color: figmaTokens.primary, letterSpacing: -0.3 },
   dashBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -64,8 +67,8 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 10,
-    backgroundColor: colors.brand,
-    shadowColor: colors.brand,
+    backgroundColor: figmaTokens.primary,
+    shadowColor: figmaTokens.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 5,
@@ -77,8 +80,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.brandSoft,
-    backgroundColor: colors.teal50,
+    borderColor: 'rgba(13, 107, 107, 0.15)',
+    backgroundColor: figmaTokens.mintSoft,
   },
-  signInTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand },
+  signInTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: figmaTokens.primary },
 })

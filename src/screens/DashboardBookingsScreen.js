@@ -31,6 +31,10 @@ export default function DashboardBookingsScreen({ navigation }) {
 
   return (
     <View style={styles.root}>
+      {/* Ambient Top Background Halo Glow */}
+      <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+      <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
+
       {/* Filter bar */}
       <View style={styles.filterBar}>
         <View style={styles.countWrap}>
@@ -127,7 +131,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    zIndex: 2,
   },
   countWrap: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
   countNum: { fontFamily: font.bold, fontSize: type.base, color: colors.textPrimary },
@@ -143,8 +148,8 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.white,
+    borderColor: 'rgba(13, 148, 136, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
     position: 'relative',
   },
   filterBtnActive: { borderColor: colors.brand, backgroundColor: colors.teal50 },
@@ -175,21 +180,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.white,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    borderColor: 'rgba(13, 148, 136, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    shadowRadius: 10,
+    elevation: 2,
+    zIndex: 1,
   },
-  cardPressed: { backgroundColor: colors.slate50 },
+  cardPressed: { backgroundColor: 'rgba(13, 148, 136, 0.06)' },
   cardLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
   cardIconWrap: {
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: colors.slate50,
+    backgroundColor: 'rgba(13, 148, 136, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -199,4 +205,26 @@ const styles = StyleSheet.create({
   cardPhysio: { marginTop: 2, fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
   cardAmt: { marginTop: 3, fontFamily: font.semiBold, fontSize: type.xs, color: colors.brand },
   cardRight: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
+
+  // Ambient Header glows
+  ambientHeaderGlow: {
+    position: 'absolute',
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(162, 240, 239, 0.15)',
+    zIndex: 0,
+  },
+  ambientHeaderGlow2: {
+    position: 'absolute',
+    top: -50,
+    left: '20%',
+    width: '60%',
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(13, 107, 107, 0.04)',
+    zIndex: 0,
+  },
 })

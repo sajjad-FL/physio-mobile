@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -119,6 +120,9 @@ export default function LoginScreen({ navigation }) {
   return (
     <KeyboardAvoidingView {...keyboardAvoidingViewProps}>
       <View style={styles.bg}>
+        {/* Ambient Top Background Halo Glow */}
+        <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+        <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
 
         {/* ── Header ─────────────────────────────── */}
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 8) + 6 }]}>
@@ -187,6 +191,10 @@ export default function LoginScreen({ navigation }) {
                   placeholderTextColor={colors.textTertiary}
                   keyboardType="phone-pad"
                   autoCapitalize="none"
+                  textContentType="telephoneNumber"
+                  autoComplete="tel"
+                  importantForAutofill="yes"
+                  autoCorrect={false}
                   maxLength={10}
                   value={phone}
                   onChangeText={(txt) => setPhone(digitsOnly(txt, 10))}
@@ -211,6 +219,10 @@ export default function LoginScreen({ navigation }) {
                   placeholderTextColor={colors.textTertiary}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  textContentType="password"
+                  autoComplete="password"
+                  importantForAutofill="yes"
+                  autoCorrect={false}
                   value={password}
                   onChangeText={setPassword}
                   onFocus={() => setPassFocused(true)}
@@ -311,16 +323,39 @@ export default function LoginScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  bg: { flex: 1, backgroundColor: colors.canvas },
+  bg: { flex: 1, backgroundColor: colors.canvas, position: 'relative' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.canvas },
+
+  // Ambient Header glows
+  ambientHeaderGlow: {
+    position: 'absolute',
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(162, 240, 239, 0.15)',
+    zIndex: 0,
+  },
+  ambientHeaderGlow2: {
+    position: 'absolute',
+    top: -50,
+    left: '20%',
+    width: '60%',
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(13, 107, 107, 0.04)',
+    zIndex: 0,
+  },
 
   // Header
   header: {
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
+    zIndex: 10,
   },
   headerRow: {
     flexDirection: 'row',
@@ -346,7 +381,7 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingTop: 24 },
 
   // Hero section
-  heroSection: { alignItems: 'center', gap: 10, marginBottom: 24 },
+  heroSection: { alignItems: 'center', gap: 10, marginBottom: 24, zIndex: 2 },
   heroIconWrap: {
     width: 68,
     height: 68,
@@ -377,7 +412,18 @@ const styles = StyleSheet.create({
 
   // Form card
   formCard: {
-    ...authFormCard,
+    backgroundColor: 'rgba(255, 255, 255, 0.45)',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.1)',
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: Platform.OS === 'android' ? 0 : 4,
+    zIndex: 2,
+    marginBottom: 20,
   },
 
   // Alert banner
@@ -406,24 +452,31 @@ const styles = StyleSheet.create({
   mobileField: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 44,
+    height: 46,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: 10,
-    backgroundColor: colors.canvas,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
     overflow: 'hidden',
   },
   passField: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 44,
+    height: 46,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: 10,
-    backgroundColor: colors.canvas,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
     paddingRight: 4,
   },
-  fieldFocused: { borderColor: colors.borderFocus, backgroundColor: colors.white },
+  fieldFocused: { 
+    borderColor: colors.brand, 
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
   fieldError: { borderColor: colors.danger },
   phonePrefix: {
     paddingLeft: 14,
@@ -431,19 +484,19 @@ const styles = StyleSheet.create({
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: colors.borderSubtle,
     justifyContent: 'center',
-    height: 44,
+    height: 46,
   },
   phonePrefixTxt: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textSecondary },
   textInput: {
     flex: 1,
-    height: 44,
+    height: 46,
     paddingHorizontal: 12,
     fontFamily: font.regular,
     fontSize: type.base,
     color: colors.textPrimary,
   },
   passInput: { paddingRight: 0 },
-  eyeBtn: { paddingHorizontal: 10, height: 44, alignItems: 'center', justifyContent: 'center' },
+  eyeBtn: { paddingHorizontal: 10, height: 46, alignItems: 'center', justifyContent: 'center' },
   fieldErrTxt: { marginTop: 5, fontFamily: font.regular, fontSize: type.sm, color: colors.danger },
 
   spacer10: { height: 10 },

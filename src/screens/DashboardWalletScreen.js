@@ -46,8 +46,16 @@ export default function DashboardWalletScreen({ navigation }) {
       contentContainerStyle={styles.scroll}
       showsVerticalScrollIndicator={false}
     >
+      {/* Ambient Top Background Halo Glow */}
+      <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+      <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
+
       {/* Hero spend card */}
-      <View style={styles.heroCard}>
+      <View style={styles.heroCardContainer}>
+        <View style={styles.heroCard}>
+          {/* Ambient inner glow bubbles */}
+          <View style={styles.cardGlowBubble1} />
+          <View style={styles.cardGlowBubble2} />
         <View style={styles.heroTop}>
           <View>
             <Text style={styles.heroLabel}>TOTAL CARE SPEND</Text>
@@ -78,6 +86,7 @@ export default function DashboardWalletScreen({ navigation }) {
           <Ionicons name="add-circle-outline" size={16} color={colors.brand} />
           <Text style={styles.bookBtnTxt}>Book a session</Text>
         </Pressable>
+      </View>
       </View>
 
       {/* Transaction list */}
@@ -137,20 +146,66 @@ const WalletRow = memo(function WalletRow({ booking, amount, isLast, onPress }) 
 })
 
 const styles = StyleSheet.create({
-  scroll: { paddingBottom: 36 },
+  scroll: { paddingBottom: 36, position: 'relative' },
+
+  // Ambient Header glows
+  ambientHeaderGlow: {
+    position: 'absolute',
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(162, 240, 239, 0.15)',
+    zIndex: 0,
+  },
+  ambientHeaderGlow2: {
+    position: 'absolute',
+    top: -50,
+    left: '20%',
+    width: '60%',
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(13, 107, 107, 0.04)',
+    zIndex: 0,
+  },
 
   // Hero card
-  heroCard: {
+  heroCardContainer: {
     margin: 16,
+    borderRadius: 20,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+    zIndex: 2,
+  },
+  heroCard: {
     borderRadius: 20,
     backgroundColor: colors.brand,
     padding: 22,
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 8,
     gap: 18,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  cardGlowBubble1: {
+    position: 'absolute',
+    top: -55,
+    right: -55,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  cardGlowBubble2: {
+    position: 'absolute',
+    bottom: -65,
+    left: -25,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   heroTop: {
     flexDirection: 'row',
@@ -225,17 +280,23 @@ const styles = StyleSheet.create({
   sectionTitle: { fontFamily: font.bold, fontSize: type.base, color: colors.textPrimary },
   sectionCount: { fontFamily: font.regular, fontSize: type.sm, color: colors.textSecondary },
 
-  emptyWrap: { margin: 16 },
+  emptyWrap: { margin: 16, zIndex: 1 },
 
   // Transaction list
   txList: {
     marginHorizontal: 16,
     borderRadius: 16,
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
     overflow: 'hidden',
     marginBottom: 16,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 2,
+    zIndex: 1,
   },
   txRow: {
     flexDirection: 'row',
