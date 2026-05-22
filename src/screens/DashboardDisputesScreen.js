@@ -5,6 +5,7 @@ import { formatBookingDateAndSlot } from '../utils/date'
 import Chip from '../components/ui/Chip'
 import PaginationBar from '../components/ui/PaginationBar'
 import { colors } from '../theme/colors'
+import { surfaceCard } from '../theme/surfaceCard'
 import { font, type, leading } from '../theme/typography'
 import { disputeStatusBadge } from '../utils/dashboardUtils'
 import { useMyDisputes } from '../api/queries'
@@ -130,18 +131,8 @@ const styles = StyleSheet.create({
 
   // Dispute card
   card: {
+    ...surfaceCard,
     flexDirection: 'row',
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    borderWidth: 1,
-    borderColor: 'rgba(13, 148, 136, 0.08)',
-    overflow: 'hidden',
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-    zIndex: 1,
   },
   cardAccent: { width: 4, alignSelf: 'stretch' },
   cardBody: { flex: 1, padding: 14, gap: 8, zIndex: 2 },

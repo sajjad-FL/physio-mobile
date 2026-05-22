@@ -6,6 +6,7 @@ import EmptyState from '../components/ui/EmptyState'
 import LoadingScreen from '../components/ui/LoadingScreen'
 import Chip from '../components/ui/Chip'
 import { colors } from '../theme/colors'
+import { surfaceListShell } from '../theme/surfaceCard'
 import { font, type } from '../theme/typography'
 import { formatInr } from '../utils/currency'
 import { paymentBadge } from '../utils/dashboardUtils'
@@ -284,18 +285,9 @@ const styles = StyleSheet.create({
 
   // Transaction list
   txList: {
+    ...surfaceListShell,
     marginHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    borderWidth: 1,
-    borderColor: 'rgba(13, 148, 136, 0.08)',
-    overflow: 'hidden',
     marginBottom: 16,
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 2,
     zIndex: 1,
   },
   txRow: {

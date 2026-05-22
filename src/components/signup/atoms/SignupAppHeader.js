@@ -37,7 +37,7 @@ function SignupAppHeader({ onBack, backLabel = 'Home' }) {
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    backgroundColor: colors.white,
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,

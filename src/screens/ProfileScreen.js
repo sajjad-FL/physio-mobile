@@ -26,6 +26,7 @@ import {
 } from '../api/queries'
 import MapPickerModal from '../components/booking/MapPickerModal'
 import { colors } from '../theme/colors'
+import { surfaceSectionCard } from '../theme/surfaceCard'
 import { font, type, leading } from '../theme/typography'
 import { assetUrl } from '../utils/assetUrl'
 import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll'
@@ -811,9 +812,9 @@ const styles = StyleSheet.create({
 
   // ── Hero band ──────────────────────────────────
   heroBand: {
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    backgroundColor: colors.white,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(13, 148, 136, 0.1)',
+    borderBottomColor: colors.borderSubtle,
     paddingHorizontal: 16,
     paddingBottom: 20,
     marginHorizontal: -16,
@@ -906,15 +907,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginTop: -8,
     padding: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(13, 148, 136, 0.1)',
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    ...surfaceSectionCard,
     zIndex: 2,
   },
   referCardIcon: {
@@ -930,17 +923,9 @@ const styles = StyleSheet.create({
 
   // ── Section cards ──────────────────────────────
   sectionCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(13, 148, 136, 0.1)',
+    ...surfaceSectionCard,
     padding: 16,
     marginBottom: 10,
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
     zIndex: 2,
   },
   sectionHeader: {
@@ -1079,7 +1064,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(13, 148, 136, 0.15)',
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    backgroundColor: colors.white,
   },
   genderChipOn: { borderColor: colors.brand, backgroundColor: 'rgba(13, 148, 136, 0.12)' },
   genderChipTxt: { fontFamily: font.semiBold, fontSize: type.xs, color: colors.textSecondary },
@@ -1120,13 +1105,14 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: 'rgba(13, 148, 136, 0.1)',
+    borderColor: colors.borderSubtle,
     padding: 20,
-    shadowColor: colors.brand,
+    overflow: 'hidden',
+    shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.12,
     shadowRadius: 24,
     elevation: 12,
   },

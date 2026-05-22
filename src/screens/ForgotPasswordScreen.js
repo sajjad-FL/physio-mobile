@@ -8,6 +8,7 @@ import { validateLoginPassword, validateOtp } from '../utils/validation'
 import Input from '../components/ui/Input'
 import KeyboardAwareScrollView from '../components/ui/KeyboardAwareScrollView'
 import { colors } from '../theme/colors'
+import { authFormCard } from '../theme/authFormCard'
 import { font, type, leading } from '../theme/typography'
 
 const STEPS = [
@@ -265,7 +266,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: 'rgba(13, 148, 136, 0.15)',
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -291,9 +292,9 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: 'rgba(13, 148, 136, 0.15)',
+    borderColor: colors.borderSubtle,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
@@ -330,16 +331,7 @@ const styles = StyleSheet.create({
 
   // Form card
   formCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.45)',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(13, 148, 136, 0.1)',
-    padding: 20,
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    elevation: Platform.OS === 'android' ? 0 : 4,
+    ...authFormCard,
     zIndex: 2,
     marginBottom: 20,
   },

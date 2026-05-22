@@ -7,6 +7,7 @@ import { bookingStatusBadge } from '../utils/dashboardUtils'
 import Chip from '../components/ui/Chip'
 import { formatInr } from '../utils/currency'
 import { colors } from '../theme/colors'
+import { surfaceCard } from '../theme/surfaceCard'
 import { font, type, leading } from '../theme/typography'
 
 const BOOKING_PARAMS = { page: 1, limit: 100 }
@@ -578,16 +579,10 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
+    ...surfaceCard,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    borderWidth: 1,
-    borderColor: 'rgba(13, 148, 136, 0.1)',
     padding: 16,
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    zIndex: 1,
   },
   statHead: {
     flexDirection: 'row',

@@ -16,6 +16,7 @@ import {
   useReferralStats,
 } from '../api/queries'
 import { colors } from '../theme/colors'
+import { surfaceCardShadow, surfaceSectionCard } from '../theme/surfaceCard'
 import { font, type, leading } from '../theme/typography'
 
 const REGISTER_BASE = 'https://app.physiokhom.com/register'
@@ -177,16 +178,9 @@ const styles = StyleSheet.create({
   },
   card: {
     marginTop: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    borderRadius: 16,
+    ...surfaceSectionCard,
     padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(13, 148, 136, 0.1)',
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
+    zIndex: 1,
   },
   label: {
     fontFamily: font.semiBold,
@@ -243,14 +237,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(13, 148, 136, 0.2)',
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.white,
     alignItems: 'center',
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 4,
-    elevation: 1,
+    ...surfaceCardShadow,
   },
   btnOutlineTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand },
   btnPrimary: {

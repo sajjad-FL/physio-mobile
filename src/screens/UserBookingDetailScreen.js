@@ -59,6 +59,25 @@ export default function UserBookingDetailScreen({ route, navigation }) {
   const [paymentError, setPaymentError] = useState('')
   const [paymentLoading, setPaymentLoading] = useState(false)
 
+  const load = useCallback(async () => {
+    if (!id) return
+    setLoading(true)
+    try {
+      const [bookingRes, reviewsRes] = await Promise.all([
+        api.get(`/bookings/${id}`),
+        api.get(`/reviews/booking/${id}`).catch(() => ({ data: { data: [] } })),
+      ])
+      setB(bookingRes.data)
+      setReviews(Array.isArray(reviewsRes.data?.data) ? reviewsRes.data.data : [])
+    } catch (e) {
+      Toast.show({ type: 'error', text1: e.response?.data?.message || 'Failed to load' })
+      setB(null)
+      setReviews([])
+    } finally {
+      setLoading(false)
+    }
+  }, [id])
+
   const payLegacy = useCallback(async () => {
     if (!b?._id || paymentLoading) return
     setPaymentLoading(true)
@@ -230,25 +249,6 @@ export default function UserBookingDetailScreen({ route, navigation }) {
     setPaymentError('')
     setInstallmentOpen(true)
   }, [b])
-
-  const load = useCallback(async () => {
-    if (!id) return
-    setLoading(true)
-    try {
-      const [bookingRes, reviewsRes] = await Promise.all([
-        api.get(`/bookings/${id}`),
-        api.get(`/reviews/booking/${id}`).catch(() => ({ data: { data: [] } })),
-      ])
-      setB(bookingRes.data)
-      setReviews(Array.isArray(reviewsRes.data?.data) ? reviewsRes.data.data : [])
-    } catch (e) {
-      Toast.show({ type: 'error', text1: e.response?.data?.message || 'Failed to load' })
-      setB(null)
-      setReviews([])
-    } finally {
-      setLoading(false)
-    }
-  }, [id])
 
   useEffect(() => { load() }, [load])
 

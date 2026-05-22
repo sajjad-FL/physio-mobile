@@ -8,6 +8,7 @@ import Chip from '../components/ui/Chip'
 import EmptyState from '../components/ui/EmptyState'
 import LoadingScreen from '../components/ui/LoadingScreen'
 import { colors } from '../theme/colors'
+import { surfaceCard } from '../theme/surfaceCard'
 import { font, type } from '../theme/typography'
 import { matchesPatientBookingFilter, patientFilterSummary, todayYmd } from '../utils/patientBookingFilters'
 import { formatInr } from '../utils/currency'
@@ -131,7 +132,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    backgroundColor: colors.white,
     zIndex: 2,
   },
   countWrap: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
@@ -149,7 +150,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(13, 148, 136, 0.1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    backgroundColor: colors.white,
     position: 'relative',
   },
   filterBtnActive: { borderColor: colors.brand, backgroundColor: colors.teal50 },
@@ -173,29 +174,20 @@ const styles = StyleSheet.create({
 
   // Booking card
   card: {
+    ...surfaceCard,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingVertical: 14,
     paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(13, 148, 136, 0.08)',
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-    zIndex: 1,
   },
-  cardPressed: { backgroundColor: 'rgba(13, 148, 136, 0.06)' },
+  cardPressed: { backgroundColor: colors.slate50 },
   cardLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
   cardIconWrap: {
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: 'rgba(13, 148, 136, 0.08)',
+    backgroundColor: colors.slate50,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,

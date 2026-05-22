@@ -11,10 +11,11 @@ export const authFormCardShadow = {
 }
 
 export const authFormCard = {
-  backgroundColor: 'rgba(255, 255, 255, 0.45)',
+  backgroundColor: colors.white,
   borderRadius: 20,
   padding: 20,
   borderWidth: 1,
-  borderColor: 'rgba(13, 148, 136, 0.1)',
+  borderColor: colors.borderSubtle,
+  overflow: 'hidden',
   ...authFormCardShadow,
 }

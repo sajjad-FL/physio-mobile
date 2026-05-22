@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    backgroundColor: colors.white,
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -455,16 +455,7 @@ const styles = StyleSheet.create({
 
   // Form card
   formCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.45)',
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(13, 148, 136, 0.1)',
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    elevation: Platform.OS === 'android' ? 0 : 4,
+    ...authFormCard,
     zIndex: 2,
     marginBottom: 20,
   },
