@@ -30,6 +30,33 @@ export function useKeyboardAwareScroll({
     })
   }, [])
 
+  const scrollIntoView = useCallback((targetRef, { offset = 24, delay, fallbackToEnd = true } = {}) => {
+    const scroll = scrollRef.current
+    const target = targetRef?.current
+    if (!scroll || !target) return
+
+    const run = () => {
+      const scrollToY = (y) => scroll.scrollTo({ y: Math.max(0, y), animated: true })
+      const fallback = () => {
+        if (fallbackToEnd) scroll.scrollToEnd({ animated: true })
+      }
+
+      if (typeof target.measureLayout === 'function') {
+        target.measureLayout(
+          scroll,
+          (_x, y) => scrollToY(y - offset),
+          fallback,
+        )
+        return
+      }
+
+      fallback()
+    }
+
+    const ms = delay ?? (Platform.OS === 'ios' ? 120 : 80)
+    setTimeout(run, ms)
+  }, [])
+
   useEffect(() => {
     let timeoutId
     const onShow = (e) => {
@@ -67,7 +94,7 @@ export function useKeyboardAwareScroll({
 
   const keyboardAvoidingViewProps = {
     style: { flex: 1 },
-    behavior: Platform.OS === 'ios' ? 'padding' : undefined,
+    behavior: 'padding',
     keyboardVerticalOffset,
   }
 
@@ -78,5 +105,7 @@ export function useKeyboardAwareScroll({
     keyboardVerticalOffset,
     scrollViewProps,
     keyboardAvoidingViewProps,
+    scrollIntoView,
+    scrollBottomIntoView,
   }
 }

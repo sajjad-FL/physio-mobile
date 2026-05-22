@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -46,10 +47,23 @@ export default function LoginScreen({ navigation }) {
   const [passFocused, setPassFocused] = useState(false)
   const phoneRef = useRef(null)
   const passwordRef = useRef(null)
+  const passwordBlockRef = useRef(null)
   const { authEpoch } = useAuth()
-  const { padBottom, scrollViewProps, keyboardAvoidingViewProps } = useKeyboardAwareScroll({
+  const { padBottom, scrollViewProps, keyboardAvoidingViewProps, scrollIntoView } = useKeyboardAwareScroll({
     scrollToEndOnShow: false,
+    extraBottomPadding: 40,
   })
+
+  const revealPasswordField = useCallback(() => {
+    scrollIntoView(passwordBlockRef, { offset: 96 })
+  }, [scrollIntoView])
+
+  useEffect(() => {
+    if (!passFocused) return undefined
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+    const sub = Keyboard.addListener(showEvent, revealPasswordField)
+    return () => sub.remove()
+  }, [passFocused, revealPasswordField])
 
   useEffect(() => {
     if (getTokenSync()) {
@@ -154,6 +168,7 @@ export default function LoginScreen({ navigation }) {
 
         <ScrollView
           {...scrollViewProps}
+          style={styles.scrollView}
           contentContainerStyle={[styles.scroll, { paddingBottom: padBottom }]}
         >
 
@@ -209,15 +224,24 @@ export default function LoginScreen({ navigation }) {
                   onChangeText={(txt) => setPhone(digitsOnly(txt, 10))}
                   onFocus={() => setPhoneFocused(true)}
                   onBlur={() => setPhoneFocused(false)}
-                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  onSubmitEditing={() => {
+                    passwordRef.current?.focus()
+                    revealPasswordField()
+                  }}
                 />
               </View>
               {fieldErrors.phone ? <Text style={styles.fieldErrTxt}>{fieldErrors.phone}</Text> : null}
             </View>
 
             {/* Password field */}
-            <View style={[styles.fieldBlock, styles.fieldGap]}>
-              <Pressable onPress={() => passwordRef.current?.focus()} accessibilityRole="none">
+            <View ref={passwordBlockRef} style={[styles.fieldBlock, styles.fieldGap]}>
+              <Pressable
+                onPress={() => {
+                  passwordRef.current?.focus()
+                  revealPasswordField()
+                }}
+                accessibilityRole="none"
+              >
                 <Text style={styles.fieldLabel}>Password</Text>
               </Pressable>
               <View style={[
@@ -239,7 +263,10 @@ export default function LoginScreen({ navigation }) {
                   autoCorrect={false}
                   value={password}
                   onChangeText={setPassword}
-                  onFocus={() => setPassFocused(true)}
+                  onFocus={() => {
+                    setPassFocused(true)
+                    revealPasswordField()
+                  }}
                   onBlur={() => setPassFocused(false)}
                   onSubmitEditing={handleSubmit}
                 />
@@ -393,7 +420,8 @@ const styles = StyleSheet.create({
   brandKhom: { fontFamily: font.bold, fontSize: type.lg, color: colors.brand, letterSpacing: -0.3 },
   headerSpacer: { minWidth: 80 },
 
-  scroll: { paddingHorizontal: 16, paddingTop: 24 },
+  scrollView: { flex: 1 },
+  scroll: { paddingHorizontal: 16, paddingTop: 24, flexGrow: 1 },
 
   // Hero section
   heroSection: { alignItems: 'center', gap: 10, marginBottom: 24, zIndex: 2 },
