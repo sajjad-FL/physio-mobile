@@ -1,3 +1,14 @@
+if (!URL.canParse) {
+  URL.canParse = function (url, base) {
+    try {
+      new URL(url, base)
+      return true
+    } catch {
+      return false
+    }
+  }
+}
+
 if (!Array.prototype.toReversed) {
   Array.prototype.toReversed = function () {
     return [...this].reverse()

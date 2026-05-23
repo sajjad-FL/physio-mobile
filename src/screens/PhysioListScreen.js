@@ -292,7 +292,20 @@ function PhysioPickerCard({ physio: p, selected, onSelect }) {
   )
 }
 
-function BookingSummaryBar({ selectedPhysio, date, timeSlot, serviceType, canSubmit, loading, onConfirm }) {
+function BookingSummaryBar({
+  selectedPhysio,
+  date,
+  timeSlot,
+  serviceType,
+  canSubmit,
+  loading,
+  onConfirm,
+  currentStep,
+  onContinue,
+  step1Ok,
+  step2Ok,
+  step3Ok
+}) {
   const insets = useSafeAreaInsets()
   const teamAssigns = serviceType === 'home' || !selectedPhysio
   const physioLine = serviceType === 'online' && !selectedPhysio
@@ -301,32 +314,66 @@ function BookingSummaryBar({ selectedPhysio, date, timeSlot, serviceType, canSub
       ? selectedPhysio.name
       : 'Picked by our team'
 
+  const isStepValid = useMemo(() => {
+    if (currentStep === 1) return step1Ok
+    if (currentStep === 2) return step2Ok
+    if (currentStep === 3) return step3Ok
+    return canSubmit
+  }, [currentStep, step1Ok, step2Ok, step3Ok, canSubmit])
+
+  const stepText = useMemo(() => {
+    if (currentStep === 1) return 'Set visit location & name'
+    if (currentStep === 2) return 'Select service & schedule'
+    if (currentStep === 3) return 'Describe your concern'
+    return 'Review and confirm session'
+  }, [currentStep])
+
+  const stepSubtext = useMemo(() => {
+    if (currentStep === 1) return step1Ok ? 'Location ready' : 'Fill location and name'
+    if (currentStep === 2) return step2Ok ? 'Schedule selected' : 'Pick date and slot'
+    if (currentStep === 3) return step3Ok ? 'Condition described' : 'Select concern dropdown'
+    return 'Confirm session details'
+  }, [currentStep, step1Ok, step2Ok, step3Ok])
+
   return (
     <View style={[styles.summaryBar, { paddingBottom: Math.max(insets.bottom, 12) + 2 }]}>
       <View style={styles.summaryBarInner}>
-        <View style={styles.summaryInfo}>
-          <Text style={styles.summaryBarLabel}>BOOKING SUMMARY</Text>
-          <Text style={styles.summaryBarPhysio} numberOfLines={1}>{physioLine}</Text>
-          {date && timeSlot ? (
-            <Text style={styles.summaryBarDate}>{formatBookingDateAndSlot(date, timeSlot)}</Text>
-          ) : (
-            <Text style={styles.summaryBarDate}>No date selected</Text>
-          )}
-        </View>
+        {currentStep < 4 ? (
+          <View style={styles.summaryInfo}>
+            <Text style={styles.summaryBarLabel}>STEP {currentStep} OF 4</Text>
+            <Text style={styles.summaryBarPhysio} numberOfLines={1}>{stepText}</Text>
+            <Text style={styles.summaryBarDate}>{stepSubtext}</Text>
+          </View>
+        ) : (
+          <View style={styles.summaryInfo}>
+            <Text style={styles.summaryBarLabel}>BOOKING SUMMARY</Text>
+            <Text style={styles.summaryBarPhysio} numberOfLines={1}>{physioLine}</Text>
+            {date && timeSlot ? (
+              <Text style={styles.summaryBarDate}>{formatBookingDateAndSlot(date, timeSlot)}</Text>
+            ) : (
+              <Text style={styles.summaryBarDate}>No date selected</Text>
+            )}
+          </View>
+        )}
+
         <Pressable
-          style={[styles.summaryConfirmBtn, (!canSubmit || loading) && styles.summaryConfirmBtnDisabled]}
-          onPress={onConfirm}
-          disabled={!canSubmit || loading}
+          style={[styles.summaryConfirmBtn, (!isStepValid || loading) && styles.summaryConfirmBtnDisabled]}
+          onPress={currentStep < 4 ? onContinue : onConfirm}
+          disabled={!isStepValid || loading}
         >
-          {loading
-            ? <ActivityIndicator color={colors.white} size="small" />
-            : (
-              <>
-                <Text style={styles.summaryConfirmTxt}>Confirm</Text>
-                <Ionicons name="arrow-forward" size={14} color={colors.white} />
-              </>
-            )
-          }
+          {loading ? (
+            <ActivityIndicator color={colors.white} size="small" />
+          ) : currentStep < 4 ? (
+            <>
+              <Text style={styles.summaryConfirmTxt}>Continue</Text>
+              <Ionicons name="arrow-forward" size={14} color={colors.white} />
+            </>
+          ) : (
+            <>
+              <Text style={styles.summaryConfirmTxt}>Confirm</Text>
+              <Ionicons name="arrow-forward" size={14} color={colors.white} />
+            </>
+          )}
         </Pressable>
       </View>
     </View>
@@ -387,6 +434,13 @@ export default function PhysioListScreen({ navigation, route }) {
   const { data: referralData } = useReferralMyCode(Boolean(token))
   const walletBalance = Number(referralData?.walletBalance) || 0
 
+  // Wizard state & transitions
+  const [currentStep, setCurrentStep] = useState(1)
+  const prevStepRef = useRef(1)
+  const autoRouteInitialized = useRef(false)
+  const slideAnim = useRef(new Animated.Value(0)).current
+  const fadeAnim = useRef(new Animated.Value(1)).current
+  const progressAnim = useRef(new Animated.Value(0.25)).current
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const resolvedIssue = useMemo(() => {
@@ -398,6 +452,15 @@ export default function PhysioListScreen({ navigation, route }) {
   const locOk = Boolean(location.trim() && Number.isFinite(addressLat) && Number.isFinite(addressLng))
   const dateSlotOk = Boolean(locOk && date && timeSlot)
   const issueOk = Boolean(resolvedIssue && (issue !== ISSUE_OTHER_VALUE || issueOther.trim().length >= 2))
+
+  const step1Ok = useMemo(() => Boolean(locOk && profileName.trim()), [locOk, profileName])
+  const step2Ok = useMemo(() => Boolean(dateSlotOk), [dateSlotOk])
+  const step3Ok = useMemo(() => Boolean(issueOk), [issueOk])
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  })
   const selectedPhysio = useMemo(
     () => availablePhysios.find((p) => String(p._id) === String(selectedPhysioId)) || null,
     [availablePhysios, selectedPhysioId],
@@ -443,6 +506,59 @@ export default function PhysioListScreen({ navigation, route }) {
   )
 
   // ── Effects ──────────────────────────────────────────────────────────────────
+  // 1. Wizard slide & fade transitions
+  useEffect(() => {
+    const isForward = currentStep > prevStepRef.current
+    prevStepRef.current = currentStep
+
+    slideAnim.setValue(isForward ? 40 : -40)
+    fadeAnim.setValue(0.2)
+
+    Animated.parallel([
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 60,
+        friction: 9,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      })
+    ]).start()
+  }, [currentStep])
+
+  // 2. Wizard progress bar line animation
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: currentStep / 4,
+      duration: 350,
+      useNativeDriver: false,
+    }).start()
+  }, [currentStep])
+
+  // 3. Smart step auto-routing initialization
+  useEffect(() => {
+    if (profileLoading) return
+    if (autoRouteInitialized.current) return
+    autoRouteInitialized.current = true
+
+    const step1Valid = Boolean(location.trim() && Number.isFinite(addressLat) && Number.isFinite(addressLng) && profileName.trim())
+    const step2Valid = Boolean(step1Valid && date && timeSlot)
+    const step3Valid = Boolean(resolvedIssue && (issue !== ISSUE_OTHER_VALUE || issueOther.trim().length >= 2))
+
+    if (!step1Valid) {
+      setCurrentStep(1)
+    } else if (!step2Valid) {
+      setCurrentStep(2)
+    } else if (!step3Valid) {
+      setCurrentStep(3)
+    } else {
+      setCurrentStep(4)
+    }
+  }, [profileLoading])
+
   useEffect(() => {
     if (!token) return
     let cancelled = false
@@ -708,6 +824,9 @@ export default function PhysioListScreen({ navigation, route }) {
       }
     }
     setLocationModalOpen(false)
+    if (profileName.trim()) {
+      setCurrentStep(2)
+    }
   }
 
   function openMyBookings() {
@@ -761,6 +880,64 @@ export default function PhysioListScreen({ navigation, route }) {
           </Pressable>
         </View>
 
+        {/* ── Animated Progress Bar Header ─────────── */}
+        <View style={styles.wizardHeader}>
+          <View style={styles.wizardProgressBackground}>
+            <Animated.View style={[styles.wizardProgressBar, { width: progressWidth }]} />
+          </View>
+          <View style={styles.wizardStepsRow}>
+            {[
+              { num: 1, label: 'Location', isOk: step1Ok },
+              { num: 2, label: 'Schedule', isOk: step2Ok },
+              { num: 3, label: 'Condition', isOk: step3Ok },
+              { num: 4, label: 'Confirm', isOk: canSubmit },
+            ].map((step) => {
+              const isActive = currentStep === step.num
+              const isDone = step.isOk
+              const isClickable = step.num === 1 || (step.num === 2 && step1Ok) || (step.num === 3 && step2Ok) || (step.num === 4 && step3Ok)
+              
+              return (
+                <Pressable
+                  key={step.num}
+                  style={styles.wizardStepItem}
+                  onPress={() => {
+                    if (isClickable) {
+                      setCurrentStep(step.num)
+                    }
+                  }}
+                  disabled={!isClickable}
+                >
+                  <View style={[
+                    styles.wizardStepDot,
+                    isActive && styles.wizardStepDotActive,
+                    isDone && !isActive && styles.wizardStepDotDone,
+                    !isClickable && styles.wizardStepDotLocked
+                  ]}>
+                    {isDone && !isActive ? (
+                      <Ionicons name="checkmark" size={10} color={colors.white} />
+                    ) : !isClickable ? (
+                      <Ionicons name="lock-closed" size={8} color={colors.slate400} />
+                    ) : (
+                      <Text style={[
+                        styles.wizardStepDotText,
+                        isActive && styles.wizardStepDotTextActive,
+                        isDone && styles.wizardStepDotTextDone
+                      ]}>{step.num}</Text>
+                    )}
+                  </View>
+                  <Text style={[
+                    styles.wizardStepLabel,
+                    isActive && styles.wizardStepLabelActive,
+                    isDone && styles.wizardStepLabelDone
+                  ]}>
+                    {step.label}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+        </View>
+
         {/* ── Profile name warning ──────────────────── */}
         {!profileLoading && !profileName ? (
           <View style={styles.warnBanner}>
@@ -769,337 +946,353 @@ export default function PhysioListScreen({ navigation, route }) {
           </View>
         ) : null}
 
-        {/* ══ Step 1: Location ══════════════════════════════════════════════════ */}
-        <StepCard
-          step={1}
-          title="Where are you?"
-          subtitle="We use your saved address — change anytime for this booking only."
-          locked={false}
-          done={locOk}
-        >
-          {profileLoading ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator color={colors.brand} size="small" />
-              <Text style={styles.loadingTxt}>Loading your profile…</Text>
-            </View>
-          ) : (
-            <View style={styles.locationContent}>
-              {/* Location display card */}
-              <View style={styles.locationCard}>
-                <View style={styles.locationCardLeft}>
-                  <View style={styles.locationIconWrap}>
-                    <Ionicons name="location-outline" size={16} color={colors.brand} />
-                  </View>
-                  <View style={styles.locationCardText}>
-                    <Text style={styles.locationAddressTxt} numberOfLines={2}>
-                      {location || 'Set your visit location'}
-                    </Text>
-                    {Number.isFinite(addressLat) && Number.isFinite(addressLng) ? (
-                      <Text style={styles.locationCoordsTxt}>
-                        {Number(addressLat).toFixed(4)}, {Number(addressLng).toFixed(4)} · GPS confirmed
-                      </Text>
-                    ) : (
-                      <Text style={styles.locationCoordsWarn}>No GPS coordinates — tap Change</Text>
-                    )}
-                  </View>
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+          {currentStep === 1 && (
+            <StepCard
+              step={1}
+              title="Where are you?"
+              subtitle="We use your saved address — change anytime for this booking only."
+              locked={false}
+              done={locOk}
+            >
+              {profileLoading ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color={colors.brand} size="small" />
+                  <Text style={styles.loadingTxt}>Loading your profile…</Text>
                 </View>
-                <Pressable
-                  style={styles.changeLocBtn}
-                  onPress={() => {
-                    setLocationDraft(location || '')
-                    setUseDefaultLocation(false)
-                    setMapPin({ lat: Number.isFinite(addressLat) ? addressLat : 26.14, lng: Number.isFinite(addressLng) ? addressLng : 91.74 })
-                    setLocationModalOpen(true)
-                  }}
-                >
-                  <Text style={styles.changeLocTxt}>Change</Text>
-                </Pressable>
-              </View>
+              ) : (
+                <View style={styles.locationContent}>
+                  {/* Location display card */}
+                  <View style={styles.locationCard}>
+                    <View style={styles.locationCardLeft}>
+                      <View style={styles.locationIconWrap}>
+                        <Ionicons name="location-outline" size={16} color={colors.brand} />
+                      </View>
+                      <View style={styles.locationCardText}>
+                        <Text style={styles.locationAddressTxt} numberOfLines={2}>
+                          {location || 'Set your visit location'}
+                        </Text>
+                        {Number.isFinite(addressLat) && Number.isFinite(addressLng) ? (
+                          <Text style={styles.locationCoordsTxt}>
+                            {Number(addressLat).toFixed(4)}, {Number(addressLng).toFixed(4)} · GPS confirmed
+                          </Text>
+                        ) : (
+                          <Text style={styles.locationCoordsWarn}>No GPS coordinates — tap Change</Text>
+                        )}
+                      </View>
+                    </View>
+                    <Pressable
+                      style={styles.changeLocBtn}
+                      onPress={() => {
+                        setLocationDraft(location || '')
+                        setUseDefaultLocation(false)
+                        setMapPin({ lat: Number.isFinite(addressLat) ? addressLat : 26.14, lng: Number.isFinite(addressLng) ? addressLng : 91.74 })
+                        setLocationModalOpen(true)
+                      }}
+                    >
+                      <Text style={styles.changeLocTxt}>Change</Text>
+                    </Pressable>
+                  </View>
 
-              {/* Name field */}
-              <View style={styles.fieldWrap}>
-                <Text style={styles.fieldLabel}>Your name</Text>
-                <TextInput
-                  style={[
-                    styles.textInput,
-                    isNameFocused && styles.textInputFocused
-                  ]}
-                  value={profileName}
-                  onChangeText={setProfileName}
-                  onFocus={() => setIsNameFocused(true)}
-                  onBlur={() => setIsNameFocused(false)}
-                  placeholder="Enter your name"
-                  placeholderTextColor={colors.textTertiary}
-                />
-              </View>
-            </View>
-          )}
-        </StepCard>
-
-        {/* ══ Step 2: When ══════════════════════════════════════════════════════ */}
-        <StepCard
-          step={2}
-          title="When works for you?"
-          subtitle="Pick a service type, date, and an available time slot."
-          locked={!locOk}
-          done={dateSlotOk}
-        >
-          {/* Service type cards */}
-          <Text style={styles.fieldLabel}>Service Type</Text>
-          <View style={styles.serviceCardsContainer}>
-            {[
-              {
-                value: 'home',
-                title: 'In-Home Visit',
-                desc: 'A certified therapist visits you for hands-on, personalized treatment.',
-                icon: 'home-outline',
-                activeIcon: 'home'
-              },
-              {
-                value: 'online',
-                title: 'Online Video',
-                desc: 'Secure video session with real-time digital posture guidance.',
-                icon: 'videocam-outline',
-                activeIcon: 'videocam'
-              },
-            ].map((opt) => {
-              const isActive = serviceType === opt.value
-              return (
-                <Pressable
-                  key={opt.value}
-                  style={[styles.serviceCard, isActive && styles.serviceCardActive]}
-                  onPress={() => setServiceType(opt.value)}
-                >
-                  <View style={[styles.serviceCardIconWrap, isActive && styles.serviceCardIconWrapActive]}>
-                    <Ionicons
-                      name={isActive ? opt.activeIcon : opt.icon}
-                      size={20}
-                      color={isActive ? colors.white : colors.textSecondary}
+                  {/* Name field */}
+                  <View style={styles.fieldWrap}>
+                    <Text style={styles.fieldLabel}>Your name</Text>
+                    <TextInput
+                      style={[
+                        styles.textInput,
+                        isNameFocused && styles.textInputFocused
+                      ]}
+                      value={profileName}
+                      onChangeText={setProfileName}
+                      onFocus={() => setIsNameFocused(true)}
+                      onBlur={() => setIsNameFocused(false)}
+                      placeholder="Enter your name"
+                      placeholderTextColor={colors.textTertiary}
                     />
                   </View>
-                  <Text style={[styles.serviceCardTitle, isActive && styles.serviceCardTitleActive]}>
-                    {opt.title}
-                  </Text>
-                  <Text style={[styles.serviceCardDesc, isActive && styles.serviceCardDescActive]}>
-                    {opt.desc}
-                  </Text>
-                  {isActive && (
-                    <View style={styles.serviceCardTick}>
-                      <Ionicons name="checkmark-circle" size={16} color={colors.brand} />
-                    </View>
-                  )}
-                </Pressable>
-              )
-            })}
-          </View>
+                </View>
+              )}
+            </StepCard>
+          )}
 
-          {/* Date Picker Ribbon */}
-          <Text style={styles.fieldLabel}>Select Date</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.dateRibbon}
-            style={styles.dateRibbonScroll}
-          >
-            {getNext14Days().map((item) => {
-              const isSelected = date === item.iso
-              return (
-                <Pressable
-                  key={item.iso}
-                  style={[
-                    styles.dateTile,
-                    isSelected && styles.dateTileSelected,
-                    item.isToday && !isSelected && styles.dateTileToday
-                  ]}
-                  onPress={() => setDate(item.iso)}
-                >
-                  <Text style={[styles.dateTileMonth, isSelected && styles.dateTileMonthSelected]}>
-                    {item.month}
-                  </Text>
-                  <Text style={[styles.dateTileDayNum, isSelected && styles.dateTileDayNumSelected]}>
-                    {item.dayNum}
-                  </Text>
-                  <Text style={[styles.dateTileWeekday, isSelected && styles.dateTileWeekdaySelected]}>
-                    {item.isToday ? 'Today' : item.weekday}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </ScrollView>
-
-          {/* Time slot chips grid */}
-          <View style={styles.slotSection}>
-            <Text style={styles.fieldLabel}>Available Slots</Text>
-            {slots.length === 0 ? (
-              <View style={styles.noSlotsBox}>
-                <Ionicons name="time-outline" size={16} color={colors.textTertiary} />
-                <Text style={styles.noSlotsTxt}>No slots available for this date</Text>
-              </View>
-            ) : (
-              <View style={styles.slotsGrid}>
-                {slots.map((s) => {
-                  const isSelected = timeSlot === s.timeSlot
+          {currentStep === 2 && (
+            <StepCard
+              step={2}
+              title="When works for you?"
+              subtitle="Pick a service type, date, and an available time slot."
+              locked={!locOk}
+              done={dateSlotOk}
+            >
+              {/* Service type cards */}
+              <Text style={styles.fieldLabel}>Service Type</Text>
+              <View style={styles.serviceCardsContainer}>
+                {[
+                  {
+                    value: 'home',
+                    title: 'In-Home Visit',
+                    desc: 'A certified therapist visits you for hands-on, personalized treatment.',
+                    icon: 'home-outline',
+                    activeIcon: 'home'
+                  },
+                  {
+                    value: 'online',
+                    title: 'Online Video',
+                    desc: 'Secure video session with real-time digital posture guidance.',
+                    icon: 'videocam-outline',
+                    activeIcon: 'videocam'
+                  },
+                ].map((opt) => {
+                  const isActive = serviceType === opt.value
                   return (
                     <Pressable
-                      key={s.timeSlot}
-                      style={[styles.slotChip, isSelected && styles.slotChipSelected]}
-                      onPress={() => setTimeSlot(s.timeSlot)}
+                      key={opt.value}
+                      style={[styles.serviceCard, isActive && styles.serviceCardActive]}
+                      onPress={() => setServiceType(opt.value)}
                     >
-                      <Ionicons
-                        name="time-outline"
-                        size={13}
-                        color={isSelected ? colors.white : colors.brand}
-                      />
-                      <Text style={[styles.slotChipTxt, isSelected && styles.slotChipTxtSelected]}>
-                        {formatBookingTimeSlot(s.timeSlot)}
+                      <View style={[styles.serviceCardIconWrap, isActive && styles.serviceCardIconWrapActive]}>
+                        <Ionicons
+                          name={isActive ? opt.activeIcon : opt.icon}
+                          size={20}
+                          color={isActive ? colors.white : colors.textSecondary}
+                        />
+                      </View>
+                      <Text style={[styles.serviceCardTitle, isActive && styles.serviceCardTitleActive]}>
+                        {opt.title}
                       </Text>
+                      <Text style={[styles.serviceCardDesc, isActive && styles.serviceCardDescActive]}>
+                        {opt.desc}
+                      </Text>
+                      {isActive && (
+                        <View style={styles.serviceCardTick}>
+                          <Ionicons name="checkmark-circle" size={16} color={colors.brand} />
+                        </View>
+                      )}
                     </Pressable>
                   )
                 })}
               </View>
-            )}
-          </View>
-        </StepCard>
 
-        {/* ══ Step 3: Issue ═════════════════════════════════════════════════════ */}
-        <StepCard
-          step={3}
-          title="What do you need help with?"
-          subtitle="Select your concern so we can match the right specialist."
-          locked={!dateSlotOk}
-          done={issueOk}
-        >
-          <DropdownField
-            label="ISSUE"
-            value={issue}
-            placeholder="Select your concern"
-            options={ISSUE_DROPDOWN_OPTIONS}
-            onSelect={(v) => {
-              setIssue(v)
-              if (v !== ISSUE_OTHER_VALUE) setIssueOther('')
-            }}
-            variant="inline"
-          />
-
-          {issue === ISSUE_OTHER_VALUE ? (
-            <View style={[styles.fieldWrap, { marginTop: 12 }]}>
-              <Text style={styles.fieldLabel}>Describe your condition</Text>
-              <TextInput
-                style={[
-                  styles.textInput,
-                  styles.textArea,
-                  isOtherFocused && styles.textInputFocused
-                ]}
-                value={issueOther}
-                onChangeText={setIssueOther}
-                onFocus={() => setIsOtherFocused(true)}
-                onBlur={() => setIsOtherFocused(false)}
-                placeholder="e.g. shoulder stiffness, sports injury…"
-                placeholderTextColor={colors.textTertiary}
-                multiline
-              />
-              {issueOther.length === 1 ? (
-                <Text style={styles.fieldHint}>Enter at least 2 characters.</Text>
-              ) : null}
-            </View>
-          ) : null}
-        </StepCard>
-
-        {/* ══ Step 4: Physio / Matching ══════════════════════════════════════════ */}
-        <StepCard
-          step={4}
-          title={serviceType === 'online' ? 'Choose your physiotherapist' : 'How matching works'}
-          subtitle={
-            serviceType === 'online'
-              ? 'Pick a registered physiotherapist for your online consultation.'
-              : 'You don\'t need to choose — our team picks the best match for your slot.'
-          }
-          locked={!issueOk}
-          done={false}
-        >
-          {serviceType === 'online' ? (
-            <View>
-              {/* Physio selector button */}
-              <Pressable
-                style={[styles.physioSelectorBtn, selectedPhysio && styles.physioSelectorBtnSelected]}
-                onPress={() => setPhysioPickerOpen(true)}
+              {/* Date Picker Ribbon */}
+              <Text style={styles.fieldLabel}>Select Date</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.dateRibbon}
+                style={styles.dateRibbonScroll}
               >
-                {selectedPhysio ? (
-                  <View style={styles.physioSelectorContent}>
-                    <View
+                {getNext14Days().map((item) => {
+                  const isSelected = date === item.iso
+                  return (
+                    <Pressable
+                      key={item.iso}
                       style={[
-                        styles.physioSelectorAvatar,
-                        selectedPhysioAvatarUri && styles.physioSelectorAvatarPhoto,
+                        styles.dateTile,
+                        isSelected && styles.dateTileSelected,
+                        item.isToday && !isSelected && styles.dateTileToday
                       ]}
+                      onPress={() => setDate(item.iso)}
                     >
-                      {selectedPhysioAvatarUri ? (
-                        <Image
-                          source={{ uri: selectedPhysioAvatarUri }}
-                          style={styles.physioSelectorAvatarImage}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <Text style={styles.physioSelectorAvatarTxt}>{physioInitial(selectedPhysio.name)}</Text>
-                      )}
-                    </View>
-                    <View style={styles.physioSelectorBody}>
-                      <Text style={styles.physioSelectorName}>{selectedPhysio.name}</Text>
-                      {selectedPhysio.specialization ? (
-                        <Text style={styles.physioSelectorSpec} numberOfLines={1}>{selectedPhysio.specialization}</Text>
-                      ) : null}
-                      {selectedPhysioFeeLabel ? (
-                        <Text style={styles.physioSelectorFee} numberOfLines={1}>
-                          {selectedPhysioFeeLabel} / session
-                        </Text>
-                      ) : null}
-                    </View>
-                    <View style={styles.physioSelectorChangePill}>
-                      <Text style={styles.physioSelectorChangeTxt}>Change</Text>
-                    </View>
+                      <Text style={[styles.dateTileMonth, isSelected && styles.dateTileMonthSelected]}>
+                        {item.month}
+                      </Text>
+                      <Text style={[styles.dateTileDayNum, isSelected && styles.dateTileDayNumSelected]}>
+                        {item.dayNum}
+                      </Text>
+                      <Text style={[styles.dateTileWeekday, isSelected && styles.dateTileWeekdaySelected]}>
+                        {item.isToday ? 'Today' : item.weekday}
+                      </Text>
+                    </Pressable>
+                  )
+                })}
+              </ScrollView>
+
+              {/* Time slot chips grid */}
+              <View style={styles.slotSection}>
+                <Text style={styles.fieldLabel}>Available Slots</Text>
+                {slots.length === 0 ? (
+                  <View style={styles.noSlotsBox}>
+                    <Ionicons name="time-outline" size={16} color={colors.textTertiary} />
+                    <Text style={styles.noSlotsTxt}>No slots available for this date</Text>
                   </View>
                 ) : (
-                  <View style={styles.physioSelectorEmpty}>
-                    <View style={styles.physioSelectorEmptyIcon}>
-                      <Ionicons name="person-add-outline" size={20} color={colors.brand} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.physioSelectorEmptyTitle}>Select physiotherapist</Text>
-                      <Text style={styles.physioSelectorEmptySub}>Open list and choose who you want to consult with.</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={14} color={colors.brand} />
+                  <View style={styles.slotsGrid}>
+                    {slots.map((s) => {
+                      const isSelected = timeSlot === s.timeSlot
+                      return (
+                        <Pressable
+                          key={s.timeSlot}
+                          style={[styles.slotChip, isSelected && styles.slotChipSelected]}
+                          onPress={() => {
+                            setTimeSlot(s.timeSlot)
+                            setTimeout(() => {
+                              setCurrentStep(3)
+                            }, 220)
+                          }}
+                        >
+                          <Ionicons
+                            name="time-outline"
+                            size={13}
+                            color={isSelected ? colors.white : colors.brand}
+                          />
+                          <Text style={[styles.slotChipTxt, isSelected && styles.slotChipTxtSelected]}>
+                            {formatBookingTimeSlot(s.timeSlot)}
+                          </Text>
+                        </Pressable>
+                      )
+                    })}
                   </View>
                 )}
-              </Pressable>
-              {!selectedPhysio ? (
-                <View style={styles.onlineHintRow}>
-                  <Ionicons name="alert-circle-outline" size={12} color={colors.warning} />
-                  <Text style={styles.onlineHintTxt}>Please select a physiotherapist to continue.</Text>
+              </View>
+            </StepCard>
+          )}
+
+          {currentStep === 3 && (
+            <StepCard
+              step={3}
+              title="What do you need help with?"
+              subtitle="Select your concern so we can match the right specialist."
+              locked={!dateSlotOk}
+              done={issueOk}
+            >
+              <DropdownField
+                label="ISSUE"
+                value={issue}
+                placeholder="Select your concern"
+                options={ISSUE_DROPDOWN_OPTIONS}
+                onSelect={(v) => {
+                  setIssue(v)
+                  if (v !== ISSUE_OTHER_VALUE) {
+                    setIssueOther('')
+                    setTimeout(() => {
+                      setCurrentStep(4)
+                    }, 220)
+                  }
+                }}
+                variant="inline"
+              />
+
+              {issue === ISSUE_OTHER_VALUE ? (
+                <View style={[styles.fieldWrap, { marginTop: 12 }]}>
+                  <Text style={styles.fieldLabel}>Describe your condition</Text>
+                  <TextInput
+                    style={[
+                      styles.textInput,
+                      styles.textArea,
+                      isOtherFocused && styles.textInputFocused
+                    ]}
+                    value={issueOther}
+                    onChangeText={setIssueOther}
+                    onFocus={() => setIsOtherFocused(true)}
+                    onBlur={() => setIsOtherFocused(false)}
+                    placeholder="e.g. shoulder stiffness, sports injury…"
+                    placeholderTextColor={colors.textTertiary}
+                    multiline
+                  />
+                  {issueOther.length === 1 ? (
+                    <Text style={styles.fieldHint}>Enter at least 2 characters.</Text>
+                  ) : null}
                 </View>
               ) : null}
-            </View>
-          ) : (
-            <View style={styles.howItWorksCard}>
-              <View style={styles.howItWorksRow}>
-                <View style={[styles.howItWorksIcon, { backgroundColor: colors.teal50 }]}>
-                  <Ionicons name="checkmark-circle-outline" size={16} color={colors.brand} />
-                </View>
-                <Text style={styles.howItWorksTxt}>Confirm your booking below.</Text>
-              </View>
-              <View style={styles.howItWorksRow}>
-                <View style={[styles.howItWorksIcon, { backgroundColor: colors.blue50 }]}>
-                  <Ionicons name="people-outline" size={16} color={colors.blue600} />
-                </View>
-                <Text style={styles.howItWorksTxt}>Our admin team picks a verified physiotherapist for your slot.</Text>
-              </View>
-              <View style={[styles.howItWorksRow, { marginBottom: 0 }]}>
-                <View style={[styles.howItWorksIcon, { backgroundColor: colors.violet50 }]}>
-                  <Ionicons name="notifications-outline" size={16} color={colors.violet800} />
-                </View>
-                <Text style={styles.howItWorksTxt}>You'll see their name and contact once matched.</Text>
-              </View>
-            </View>
+            </StepCard>
           )}
-        </StepCard>
+
+          {currentStep === 4 && (
+            <StepCard
+              step={4}
+              title={serviceType === 'online' ? 'Choose your physiotherapist' : 'How matching works'}
+              subtitle={
+                serviceType === 'online'
+                  ? 'Pick a registered physiotherapist for your online consultation.'
+                  : 'You don\'t need to choose — our team picks the best match for your slot.'
+              }
+              locked={!issueOk}
+              done={false}
+            >
+              {serviceType === 'online' ? (
+                <View>
+                  {/* Physio selector button */}
+                  <Pressable
+                    style={[styles.physioSelectorBtn, selectedPhysio && styles.physioSelectorBtnSelected]}
+                    onPress={() => setPhysioPickerOpen(true)}
+                  >
+                    {selectedPhysio ? (
+                      <View style={styles.physioSelectorContent}>
+                        <View
+                          style={[
+                            styles.physioSelectorAvatar,
+                            selectedPhysioAvatarUri && styles.physioSelectorAvatarPhoto,
+                          ]}
+                        >
+                          {selectedPhysioAvatarUri ? (
+                            <Image
+                              source={{ uri: selectedPhysioAvatarUri }}
+                              style={styles.physioSelectorAvatarImage}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <Text style={styles.physioSelectorAvatarTxt}>{physioInitial(selectedPhysio.name)}</Text>
+                          )}
+                        </View>
+                        <View style={styles.physioSelectorBody}>
+                          <Text style={styles.physioSelectorName}>{selectedPhysio.name}</Text>
+                          {selectedPhysio.specialization ? (
+                            <Text style={styles.physioSelectorSpec} numberOfLines={1}>{selectedPhysio.specialization}</Text>
+                          ) : null}
+                          {selectedPhysioFeeLabel ? (
+                            <Text style={styles.physioSelectorFee} numberOfLines={1}>
+                              {selectedPhysioFeeLabel} / session
+                            </Text>
+                          ) : null}
+                        </View>
+                        <View style={styles.physioSelectorChangePill}>
+                          <Text style={styles.physioSelectorChangeTxt}>Change</Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={styles.physioSelectorEmpty}>
+                        <View style={styles.physioSelectorEmptyIcon}>
+                          <Ionicons name="person-add-outline" size={20} color={colors.brand} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.physioSelectorEmptyTitle}>Select physiotherapist</Text>
+                          <Text style={styles.physioSelectorEmptySub}>Open list and choose who you want to consult with.</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={14} color={colors.brand} />
+                      </View>
+                    )}
+                  </Pressable>
+                  {!selectedPhysio ? (
+                    <View style={styles.onlineHintRow}>
+                      <Ionicons name="alert-circle-outline" size={12} color={colors.warning} />
+                      <Text style={styles.onlineHintTxt}>Please select a physiotherapist to continue.</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : (
+                <View style={styles.howItWorksCard}>
+                  <View style={styles.howItWorksRow}>
+                    <View style={[styles.howItWorksIcon, { backgroundColor: colors.teal50 }]}>
+                      <Ionicons name="checkmark-circle-outline" size={16} color={colors.brand} />
+                    </View>
+                    <Text style={styles.howItWorksTxt}>Confirm your booking below.</Text>
+                  </View>
+                  <View style={styles.howItWorksRow}>
+                    <View style={[styles.howItWorksIcon, { backgroundColor: colors.blue50 }]}>
+                      <Ionicons name="people-outline" size={16} color={colors.blue600} />
+                    </View>
+                    <Text style={styles.howItWorksTxt}>Our admin team picks a verified physiotherapist for your slot.</Text>
+                  </View>
+                  <View style={[styles.howItWorksRow, { marginBottom: 0 }]}>
+                    <View style={[styles.howItWorksIcon, { backgroundColor: colors.violet50 }]}>
+                      <Ionicons name="notifications-outline" size={16} color={colors.violet800} />
+                    </View>
+                    <Text style={styles.howItWorksTxt}>You'll see their name and contact once matched.</Text>
+                  </View>
+                </View>
+              )}
+            </StepCard>
+          )}
+        </Animated.View>
       </ScrollView>
 
       {walletBalance > 0 && serviceType === 'online' ? (
@@ -1125,6 +1318,11 @@ export default function PhysioListScreen({ navigation, route }) {
         canSubmit={canSubmit}
         loading={submitting}
         onConfirm={submitBooking}
+        currentStep={currentStep}
+        onContinue={() => setCurrentStep((c) => c + 1)}
+        step1Ok={step1Ok}
+        step2Ok={step2Ok}
+        step3Ok={step3Ok}
       />
 
       {/* ── Location modal ────────────────────────────────────────────────── */}
@@ -2197,4 +2395,85 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   physioSelectDotOn: { backgroundColor: colors.brand, borderColor: colors.brand },
+
+  // Wizard Header & Progress Bar
+  wizardHeader: {
+    marginBottom: 20,
+    position: 'relative',
+    paddingHorizontal: 4,
+  },
+  wizardProgressBackground: {
+    position: 'absolute',
+    top: 15,
+    left: 24,
+    right: 24,
+    height: 3,
+    backgroundColor: colors.slate100,
+    zIndex: 0,
+  },
+  wizardProgressBar: {
+    height: '100%',
+    backgroundColor: colors.brand,
+  },
+  wizardStepsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  wizardStepItem: {
+    alignItems: 'center',
+    width: 64,
+  },
+  wizardStepDot: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: colors.slate200,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    marginBottom: 6,
+  },
+  wizardStepDotActive: {
+    borderColor: colors.brand,
+    backgroundColor: colors.brand,
+  },
+  wizardStepDotDone: {
+    borderColor: colors.brand,
+    backgroundColor: colors.brand,
+  },
+  wizardStepDotLocked: {
+    borderColor: colors.slate100,
+    backgroundColor: '#f8fafc',
+  },
+  wizardStepDotText: {
+    fontFamily: font.bold,
+    fontSize: 10,
+    color: colors.slate400,
+  },
+  wizardStepDotTextActive: {
+    color: '#ffffff',
+  },
+  wizardStepDotTextDone: {
+    color: '#ffffff',
+  },
+  wizardStepLabel: {
+    fontFamily: font.semiBold,
+    fontSize: 9,
+    color: colors.slate400,
+  },
+  wizardStepLabelActive: {
+    color: colors.brand,
+    fontFamily: font.bold,
+  },
+  wizardStepLabelDone: {
+    color: colors.slate600,
+  },
 })

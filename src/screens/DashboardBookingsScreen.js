@@ -8,6 +8,7 @@ import Chip from '../components/ui/Chip'
 import EmptyState from '../components/ui/EmptyState'
 import LoadingScreen from '../components/ui/LoadingScreen'
 import { colors } from '../theme/colors'
+import { figmaTokens } from '../theme/figmaTokens'
 import { surfaceCard } from '../theme/surfaceCard'
 import { font, type } from '../theme/typography'
 import { matchesPatientBookingFilter, patientFilterSummary, todayYmd } from '../utils/patientBookingFilters'
@@ -48,7 +49,7 @@ export default function DashboardBookingsScreen({ navigation }) {
           style={({ pressed }) => [styles.filterBtn, filtersActive && styles.filterBtnActive, pressed && styles.filterBtnPressed]}
           onPress={() => setFilterOpen(true)}
         >
-          <Ionicons name="options-outline" size={15} color={filtersActive ? colors.brand : colors.slate500} />
+          <Ionicons name="options-outline" size={15} color={filtersActive ? figmaTokens.primary : colors.slate500} />
           <Text style={[styles.filterBtnTxt, filtersActive && styles.filterBtnTxtActive]}>Filter</Text>
           {filtersActive && <View style={styles.filterDot} />}
         </Pressable>
@@ -96,25 +97,34 @@ export default function DashboardBookingsScreen({ navigation }) {
 const BookingCard = memo(function BookingCard({ item, onPress }) {
   const st = bookingStatusBadge(item.status, item.sessionStatus, item.paymentStatus)
   const amt = Number(item.totalAmount) || 0
+  const indicatorColor = 
+    item.status === 'cancelled' ? colors.red500 :
+    item.sessionStatus === 'completed' ? colors.success :
+    item.sessionStatus === 'scheduled' ? colors.warning :
+    figmaTokens.primary
+
   return (
     <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]} onPress={onPress}>
-      <View style={styles.cardLeft}>
-        <View style={styles.cardIconWrap}>
-          <Ionicons name="calendar-outline" size={15} color={colors.slate400} />
+      <View style={[styles.cardIndicator, { backgroundColor: indicatorColor }]} />
+      <View style={styles.cardInner}>
+        <View style={styles.cardLeft}>
+          <View style={styles.cardIconWrap}>
+            <Ionicons name="calendar-outline" size={15} color={figmaTokens.primary} />
+          </View>
+          <View style={styles.cardBody}>
+            <Text style={styles.cardDate} numberOfLines={1}>
+              {formatBookingDateAndSlot(item.date, item.timeSlot)}
+            </Text>
+            <Text style={styles.cardPhysio} numberOfLines={1}>
+              {item.physioId?.name || 'Physio TBD'}
+            </Text>
+            {amt > 0 && <Text style={styles.cardAmt}>{formatInr(amt)}</Text>}
+          </View>
         </View>
-        <View style={styles.cardBody}>
-          <Text style={styles.cardDate} numberOfLines={1}>
-            {formatBookingDateAndSlot(item.date, item.timeSlot)}
-          </Text>
-          <Text style={styles.cardPhysio} numberOfLines={1}>
-            {item.physioId?.name || 'Physio TBD'}
-          </Text>
-          {amt > 0 && <Text style={styles.cardAmt}>{formatInr(amt)}</Text>}
+        <View style={styles.cardRight}>
+          <Chip label={st.label} bg={st.bg} fg={st.fg} border={st.border} />
+          <Ionicons name="chevron-forward" size={14} color={colors.slate300} />
         </View>
-      </View>
-      <View style={styles.cardRight}>
-        <Chip label={st.label} bg={st.bg} fg={st.fg} border={st.border} />
-        <Ionicons name="chevron-forward" size={14} color={colors.slate300} />
       </View>
     </Pressable>
   )
@@ -129,10 +139,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.white,
+    borderBottomColor: 'rgba(15, 23, 42, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     zIndex: 2,
   },
   countWrap: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
@@ -147,16 +157,21 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(13, 148, 136, 0.1)',
+    borderColor: 'rgba(13, 107, 107, 0.12)',
     backgroundColor: colors.white,
     position: 'relative',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  filterBtnActive: { borderColor: colors.brand, backgroundColor: colors.teal50 },
+  filterBtnActive: { borderColor: figmaTokens.primary, backgroundColor: figmaTokens.mintSoft },
   filterBtnPressed: { opacity: 0.75 },
-  filterBtnTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.slate500 },
-  filterBtnTxtActive: { color: colors.brand },
+  filterBtnTxt: { fontFamily: font.bold, fontSize: type.sm, color: colors.slate500 },
+  filterBtnTxtActive: { color: figmaTokens.primary },
   filterDot: {
     position: 'absolute',
     top: -3,
@@ -164,7 +179,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.brand,
+    backgroundColor: figmaTokens.primary,
     borderWidth: 1.5,
     borderColor: colors.white,
   },
@@ -174,28 +189,43 @@ const styles = StyleSheet.create({
 
   // Booking card
   card: {
-    ...surfaceCard,
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.06)',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 2,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  cardPressed: { backgroundColor: colors.slate50, opacity: 0.85 },
+  cardIndicator: { width: 4 },
+  cardInner: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingVertical: 14,
     paddingHorizontal: 14,
   },
-  cardPressed: { backgroundColor: colors.slate50 },
   cardLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
   cardIconWrap: {
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: colors.slate50,
+    backgroundColor: figmaTokens.mintSoft,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   cardBody: { flex: 1, minWidth: 0 },
-  cardDate: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.textPrimary },
+  cardDate: { fontFamily: font.bold, fontSize: type.sm, color: colors.textPrimary },
   cardPhysio: { marginTop: 2, fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
-  cardAmt: { marginTop: 3, fontFamily: font.semiBold, fontSize: type.xs, color: colors.brand },
+  cardAmt: { marginTop: 3, fontFamily: font.bold, fontSize: type.xs, color: figmaTokens.primary },
   cardRight: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
 
   // Ambient Header glows

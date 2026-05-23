@@ -5,6 +5,7 @@ import { formatBookingDateAndSlot } from '../utils/date'
 import Chip from '../components/ui/Chip'
 import PaginationBar from '../components/ui/PaginationBar'
 import { colors } from '../theme/colors'
+import { figmaTokens } from '../theme/figmaTokens'
 import { surfaceCard } from '../theme/surfaceCard'
 import { font, type, leading } from '../theme/typography'
 import { disputeStatusBadge } from '../utils/dashboardUtils'
@@ -26,7 +27,7 @@ export default function DashboardDisputesScreen() {
   if (isLoading && !rows.length) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.brand} />
+        <ActivityIndicator size="large" color={figmaTokens.primary} />
       </View>
     )
   }
@@ -88,7 +89,7 @@ const DisputeCard = memo(function DisputeCard({ item }) {
 
         {bookingDate ? (
           <View style={styles.metaRow}>
-            <Ionicons name="calendar-outline" size={12} color={colors.slate400} />
+            <Ionicons name="calendar-outline" size={12} color={figmaTokens.primary} />
             <Text style={styles.metaTxt}>{bookingDate}</Text>
           </View>
         ) : null}
@@ -116,7 +117,21 @@ const styles = StyleSheet.create({
   emptyPad: { flexGrow: 1, padding: 24, justifyContent: 'center' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.canvas },
 
-  emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 40 },
+  emptyBox: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 40,
+    paddingHorizontal: 16,
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.06)',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 2,
+  },
   emptyIconWrap: {
     width: 64,
     height: 64,
@@ -126,28 +141,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 4,
   },
-  emptyTitle: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textSecondary },
+  emptyTitle: { fontFamily: font.bold, fontSize: type.base, color: colors.textSecondary },
   emptySub: { fontFamily: font.regular, fontSize: type.sm, color: colors.textTertiary, textAlign: 'center' },
 
   // Dispute card
   card: {
-    ...surfaceCard,
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.06)',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 2,
     flexDirection: 'row',
+    overflow: 'hidden',
   },
   cardAccent: { width: 4, alignSelf: 'stretch' },
-  cardBody: { flex: 1, padding: 14, gap: 8, zIndex: 2 },
+  cardBody: { flex: 1, padding: 16, gap: 8, zIndex: 2 },
   cardTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
   },
-  bookingRef: { fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
+  bookingRef: { fontFamily: font.bold, fontSize: type.xs, color: colors.textSecondary },
 
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  metaTxt: { fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
+  metaTxt: { fontFamily: font.medium, fontSize: type.xs, color: colors.textSecondary },
 
-  reason: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textPrimary },
+  reason: { fontFamily: font.bold, fontSize: type.base, color: colors.textPrimary },
   desc: {
     fontFamily: font.regular,
     fontSize: type.sm,
@@ -158,15 +182,17 @@ const styles = StyleSheet.create({
   resolutionBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 6,
-    marginTop: 2,
-    padding: 10,
-    borderRadius: 10,
+    gap: 8,
+    marginTop: 4,
+    padding: 12,
+    borderRadius: 12,
     backgroundColor: colors.successBg,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.12)',
   },
   resolutionTxt: {
     flex: 1,
-    fontFamily: font.regular,
+    fontFamily: font.medium,
     fontSize: type.xs,
     color: colors.emerald700,
     lineHeight: leading.xs,

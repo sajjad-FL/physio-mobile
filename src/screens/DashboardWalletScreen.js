@@ -6,6 +6,7 @@ import EmptyState from '../components/ui/EmptyState'
 import LoadingScreen from '../components/ui/LoadingScreen'
 import Chip from '../components/ui/Chip'
 import { colors } from '../theme/colors'
+import { figmaTokens } from '../theme/figmaTokens'
 import { surfaceListShell } from '../theme/surfaceCard'
 import { font, type } from '../theme/typography'
 import { formatInr } from '../utils/currency'
@@ -84,7 +85,7 @@ export default function DashboardWalletScreen({ navigation }) {
           style={({ pressed }) => [styles.bookBtn, pressed && styles.bookBtnPressed]}
           onPress={() => navigation.navigate('PhysioList')}
         >
-          <Ionicons name="add-circle-outline" size={16} color={colors.brand} />
+          <Ionicons name="add-circle-outline" size={16} color={figmaTokens.primary} />
           <Text style={styles.bookBtnTxt}>Book a session</Text>
         </Pressable>
       </View>
@@ -101,8 +102,13 @@ export default function DashboardWalletScreen({ navigation }) {
         </View>
       ) : (
         <>
-          <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitle}>Paid sessions</Text>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionIconWrap}>
+                <Ionicons name="card-outline" size={13} color={figmaTokens.primary} />
+              </View>
+              <Text style={styles.sectionTitle}>Paid sessions</Text>
+            </View>
             <Text style={styles.sectionCount}>{lines.length} total</Text>
           </View>
           <View style={styles.txList}>
@@ -130,7 +136,7 @@ const WalletRow = memo(function WalletRow({ booking, amount, isLast, onPress }) 
       onPress={onPress}
     >
       <View style={styles.txIconWrap}>
-        <Ionicons name="receipt-outline" size={14} color={colors.slate400} />
+        <Ionicons name="receipt-outline" size={14} color={figmaTokens.primary} />
       </View>
       <View style={styles.txBody}>
         <Text style={styles.txDate} numberOfLines={1}>
@@ -157,7 +163,7 @@ const styles = StyleSheet.create({
     right: -60,
     height: 380,
     borderRadius: 190,
-    backgroundColor: 'rgba(162, 240, 239, 0.15)',
+    backgroundColor: 'rgba(162, 240, 239, 0.18)',
     zIndex: 0,
   },
   ambientHeaderGlow2: {
@@ -167,7 +173,7 @@ const styles = StyleSheet.create({
     width: '60%',
     height: 200,
     borderRadius: 100,
-    backgroundColor: 'rgba(13, 107, 107, 0.04)',
+    backgroundColor: 'rgba(13, 107, 107, 0.05)',
     zIndex: 0,
   },
 
@@ -175,38 +181,40 @@ const styles = StyleSheet.create({
   heroCardContainer: {
     margin: 16,
     borderRadius: 20,
-    shadowColor: colors.brand,
+    shadowColor: figmaTokens.primary,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOpacity: 0.15,
+    shadowRadius: 18,
+    elevation: 4,
     zIndex: 2,
   },
   heroCard: {
     borderRadius: 20,
-    backgroundColor: colors.brand,
-    padding: 22,
-    gap: 18,
+    backgroundColor: figmaTokens.primary,
+    padding: 18,
+    gap: 20,
     position: 'relative',
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   cardGlowBubble1: {
     position: 'absolute',
-    top: -55,
-    right: -55,
+    top: -50,
+    right: -50,
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.10)',
   },
   cardGlowBubble2: {
     position: 'absolute',
-    bottom: -65,
-    left: -25,
+    bottom: -60,
+    left: -20,
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
   heroTop: {
     flexDirection: 'row',
@@ -217,7 +225,7 @@ const styles = StyleSheet.create({
     fontFamily: font.bold,
     fontSize: type.xs,
     letterSpacing: 1,
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.75)',
     textTransform: 'uppercase',
     marginBottom: 8,
   },
@@ -232,29 +240,33 @@ const styles = StyleSheet.create({
     marginTop: 5,
     fontFamily: font.regular,
     fontSize: type.sm,
-    color: 'rgba(255,255,255,0.65)',
+    color: 'rgba(255,255,255,0.7)',
   },
   heroIconWrap: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
   },
   heroStats: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   heroStatItem: { flex: 1, alignItems: 'center' },
-  heroStatDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.2)' },
+  heroStatDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.15)' },
   heroStatLabel: {
-    fontFamily: font.regular,
+    fontFamily: font.medium,
     fontSize: type.xs,
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.5)',
     marginBottom: 4,
   },
   heroStatValue: { fontFamily: font.bold, fontSize: type.base, color: '#fff' },
@@ -264,19 +276,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 7,
     backgroundColor: colors.white,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  bookBtnPressed: { opacity: 0.85 },
-  bookBtnTxt: { fontFamily: font.semiBold, fontSize: type.base, color: colors.brand },
+  bookBtnPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  bookBtnTxt: { fontFamily: font.bold, fontSize: type.base, color: figmaTokens.primary },
 
   // Section header
-  sectionHead: {
+  sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginHorizontal: 16,
     marginBottom: 10,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionIconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    backgroundColor: figmaTokens.mintSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sectionTitle: { fontFamily: font.bold, fontSize: type.base, color: colors.textPrimary },
   sectionCount: { fontFamily: font.regular, fontSize: type.sm, color: colors.textSecondary },
@@ -285,10 +315,19 @@ const styles = StyleSheet.create({
 
   // Transaction list
   txList: {
-    ...surfaceListShell,
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.06)',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 2,
     marginHorizontal: 16,
     marginBottom: 16,
     zIndex: 1,
+    overflow: 'hidden',
   },
   txRow: {
     flexDirection: 'row',
@@ -297,19 +336,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     gap: 10,
   },
-  txRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle },
-  txRowPressed: { backgroundColor: colors.slate50 },
+  txRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(15, 23, 42, 0.06)' },
+  txRowPressed: { backgroundColor: colors.slate50, opacity: 0.85 },
   txIconWrap: {
     width: 32,
     height: 32,
     borderRadius: 9,
-    backgroundColor: colors.emerald50,
+    backgroundColor: figmaTokens.mintSoft,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   txBody: { flex: 1, minWidth: 0 },
-  txDate: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.textPrimary },
+  txDate: { fontFamily: font.bold, fontSize: type.sm, color: colors.textPrimary },
   txPhysio: { marginTop: 2, fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
   txRight: { alignItems: 'flex-end', gap: 5, flexShrink: 0 },
   txAmount: { fontFamily: font.bold, fontSize: type.sm, color: colors.textPrimary },

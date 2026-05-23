@@ -6,6 +6,7 @@ import { colors } from '../../theme/colors'
 import { font, type } from '../../theme/typography'
 import { r } from '../../theme/radius'
 import { useBottomTabBarHeight } from '../../navigation/tabBarMetrics'
+import { figmaTokens } from '../../theme/figmaTokens'
 
 const ROUTE_ICONS = {
   PhysioDashboard: 'calendar-outline',
@@ -107,7 +108,7 @@ function TopNavHeader({
           <View style={styles.dropCard}>
             <View style={styles.dropHead}>
               <View style={styles.dropHeadIconWrap}>
-                <Ionicons name="person-circle-outline" size={17} color={colors.brand} />
+                <Ionicons name="person-circle-outline" size={17} color={figmaTokens.primary} />
               </View>
               <Text style={styles.dropHeadTxt}>Account</Text>
               <Pressable onPress={() => setMenuOpen(false)} hitSlop={10} style={styles.dropClose}>
@@ -126,7 +127,7 @@ function TopNavHeader({
                   <Ionicons
                     name={ROUTE_ICONS[it.route] || 'chevron-forward-outline'}
                     size={13}
-                    color={it.route === '__noop' ? colors.textTertiary : colors.brand}
+                    color={it.route === '__noop' ? colors.textTertiary : figmaTokens.primary}
                   />
                 </View>
                 <Text style={[styles.dropTxt, it.route === '__noop' && styles.dropNoopTxt]}>
@@ -182,7 +183,7 @@ function TopNavHeader({
                     <Ionicons
                       name={ROUTE_ICONS[it.route] || 'chevron-forward-outline'}
                       size={15}
-                      color={colors.brand}
+                      color={figmaTokens.primary}
                     />
                   </View>
                   <Text style={styles.drawerItemTxt}>{it.label}</Text>
@@ -234,17 +235,17 @@ const styles = StyleSheet.create({
   inner: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   titleArea: { flex: 1, minWidth: 0 },
   title: { fontFamily: font.bold, fontSize: type.lg, color: colors.textPrimary },
-  sub: { marginTop: 1, fontFamily: font.medium, fontSize: type.xs, color: colors.brand },
+  sub: { marginTop: 1, fontFamily: font.medium, fontSize: type.xs, color: figmaTokens.primary },
 
   // Brand hamburger button
   brandBtn: {
     height: 36,
     width: 36,
     borderRadius: 10,
-    backgroundColor: colors.brand,
+    backgroundColor: figmaTokens.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.brand,
+    shadowColor: figmaTokens.primary,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
@@ -265,10 +266,10 @@ const styles = StyleSheet.create({
     height: 34,
     width: 34,
     borderRadius: 17,
-    backgroundColor: colors.brand,
+    backgroundColor: figmaTokens.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.brand,
+    shadowColor: figmaTokens.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 5,
@@ -280,7 +281,7 @@ const styles = StyleSheet.create({
     height: 34,
     paddingHorizontal: 12,
     borderRadius: r.lg,
-    backgroundColor: colors.brand,
+    backgroundColor: figmaTokens.primary,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -318,7 +319,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 6,
-    backgroundColor: colors.teal50,
+    backgroundColor: figmaTokens.mintSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -337,7 +338,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 6,
-    backgroundColor: colors.teal50,
+    backgroundColor: figmaTokens.mintSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -367,7 +368,7 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
   drawerHead: {
-    backgroundColor: colors.brand,
+    backgroundColor: figmaTokens.primary,
     paddingHorizontal: 20,
     paddingTop: 22,
     paddingBottom: 22,
@@ -402,7 +403,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 9,
-    backgroundColor: colors.teal50,
+    backgroundColor: figmaTokens.mintSoft,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,

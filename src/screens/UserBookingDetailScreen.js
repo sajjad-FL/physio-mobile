@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, TouchableOpacity } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, TouchableOpacity, Linking } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import RazorpayCheckout from 'react-native-razorpay'
@@ -39,6 +39,117 @@ function cleanRazorpayPrefill(prefill) {
   return out
 }
 
+const BASE_TABS = [
+  { key: 'overview', label: 'Overview', icon: 'home-outline', iconOn: 'home' },
+  { key: 'payments', label: 'Payments', icon: 'card-outline', iconOn: 'card' },
+]
+
+const TabBar = memo(function TabBar({ activeTab, onChange, tabs, badges = {} }) {
+  return (
+    <View style={styles.segmentedContainer}>
+      {tabs.map((tab) => {
+        const active = activeTab === tab.key
+        const hasBadge = badges[tab.key]
+        return (
+          <Pressable
+            key={tab.key}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            style={({ pressed }) => [
+              styles.segmentedTab,
+              active && styles.segmentedTabActive,
+              pressed && { transform: [{ scale: 0.98 }] }
+            ]}
+            onPress={() => onChange(tab.key)}
+          >
+            <Ionicons
+              name={active ? tab.iconOn : tab.icon}
+              size={13}
+              color={active ? colors.brand : colors.slate500}
+            />
+            <Text style={[styles.segmentedTxt, active && styles.segmentedTxtActive]}>
+              {tab.label}
+            </Text>
+            {hasBadge && !active ? <View style={styles.segmentedBadgeDot} /> : null}
+          </Pressable>
+        )
+      })}
+    </View>
+  )
+})
+
+function openWhatsApp(phone) {
+  const cleaned = String(phone || '').replace(/\D/g, '')
+  const number = cleaned.startsWith('91') && cleaned.length === 12 ? cleaned : '91' + cleaned.slice(-10)
+  Linking.openURL(`https://wa.me/${number}`).catch(() => {
+    Toast.show({ type: 'error', text1: 'Could not open WhatsApp' })
+  })
+}
+
+function callPhone(phone) {
+  const cleaned = String(phone || '').replace(/\D/g, '')
+  const number = cleaned.startsWith('91') && cleaned.length === 12 ? cleaned : '91' + cleaned.slice(-10)
+  Linking.openURL(`tel:+${number}`).catch(() => {
+    Toast.show({ type: 'error', text1: 'Could not place call' })
+  })
+}
+
+const SimulatedTransitMap = memo(function SimulatedTransitMap({ transitPhase, physioName }) {
+  let therapistPos = { top: 20, left: 30 }
+  if (transitPhase === 'Dispatched') {
+    therapistPos = { top: 20, left: 30 }
+  } else if (transitPhase === 'In Transit') {
+    therapistPos = { top: 60, left: 100 }
+  } else if (transitPhase === 'Arrived') {
+    therapistPos = { top: 95, left: 180 }
+  } else if (transitPhase === 'Treating') {
+    therapistPos = { top: 95, left: 180 }
+  }
+
+  return (
+    <View style={styles.simMapContainer}>
+      <View style={styles.simMapCanvas}>
+        <View style={[styles.simMapRoad, { top: 30, left: 0, right: 0, height: 8 }]} />
+        <View style={[styles.simMapRoad, { top: 100, left: 0, right: 0, height: 8 }]} />
+        <View style={[styles.simMapRoad, { left: 40, top: 0, bottom: 0, width: 8 }]} />
+        <View style={[styles.simMapRoad, { left: 190, top: 0, bottom: 0, width: 8 }]} />
+
+        <View style={styles.simMapRouteLine} />
+        
+        <View style={[styles.simMapPin, { top: 95, left: 180 }]}>
+          <View style={styles.simMapPinPulse} />
+          <View style={styles.simMapPinDot}>
+            <Ionicons name="pin" size={10} color="#ffffff" />
+          </View>
+          <Text style={styles.simMapPinLabel}>You</Text>
+        </View>
+
+        <View style={[styles.simMapCar, { top: therapistPos.top, left: therapistPos.left }]}>
+          <View style={styles.simMapCarPulse} />
+          <View style={styles.simMapCarBadge}>
+            <Ionicons name="car" size={10} color="#0d9488" />
+          </View>
+          <Text style={styles.simMapCarLabel}>
+            {String(physioName || 'Therapist').split(' ')[0]}
+          </Text>
+        </View>
+
+        <Text style={[styles.simMapStreetName, { top: 14, left: 52 }]}>Apex Avenue</Text>
+        <Text style={[styles.simMapStreetName, { top: 82, left: 84 }]}>Care Street</Text>
+      </View>
+      <View style={styles.simMapOverlayBanner}>
+        <View style={styles.simMapOverlayDot} />
+        <Text style={styles.simMapOverlayTxt}>
+          {transitPhase === 'Dispatched' && 'Therapist is completing route check'}
+          {transitPhase === 'In Transit' && 'Therapist is en route via Apex Avenue'}
+          {transitPhase === 'Arrived' && 'Therapist is outside your address'}
+          {transitPhase === 'Treating' && 'Session in progress'}
+        </Text>
+      </View>
+    </View>
+  )
+})
+
 export default function UserBookingDetailScreen({ route, navigation }) {
   const { id } = route.params || {}
   const [b, setB] = useState(null)
@@ -58,6 +169,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
   const [installmentAmount, setInstallmentAmount] = useState('')
   const [paymentError, setPaymentError] = useState('')
   const [paymentLoading, setPaymentLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState('overview')
 
   const load = useCallback(async () => {
     if (!id) return
@@ -311,83 +423,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
     },
     [actionBusy, b?._id, load, reviewComment, reviewRating],
   )
-  // Live Transit state
-  const [transitPhase, setTransitPhase] = useState('In Transit')
 
-  // Rehab Exercises state
-  const getExercisesForIssue = (issueName) => {
-    const issueLower = String(issueName || '').toLowerCase()
-    if (issueLower.includes('back')) {
-      return [
-        { id: 'stretch', name: 'Lumbar Extension Stretch', target: '3 Sets x 10 Reps', hold: 10, desc: 'Place hands on hips, gently lean backward to extension. Avoid sudden moves.', tip: 'Keep breathing normally, do not hold breath.' },
-        { id: 'cobra', name: 'Cobra Pose / Bhujangasana', target: '3 Sets x 5 Reps', hold: 15, desc: 'Lie on your stomach, palms under shoulders. Press down to raise your upper chest off ground.', tip: 'Relax shoulders down and away from ears.' },
-        { id: 'bridge', name: 'Glute Bridge Holds', target: '3 Sets x 12 Reps', hold: 5, desc: 'Lie on back with knees bent. Squeeze glutes and lift hips to create a straight line.', tip: 'Do not arch lower back excessively.' }
-      ]
-    } else if (issueLower.includes('knee')) {
-      return [
-        { id: 'raise', name: 'Straight Leg Raises', target: '3 Sets x 10 Reps', hold: 5, desc: 'Lie on back, bend one knee. Tighten quad of straight leg and lift to 45 degrees.', tip: 'Ensure the lifting knee stays fully straight.' },
-        { id: 'quad', name: 'Isometric Quad Sets', target: '3 Sets x 15 Reps', hold: 10, desc: 'Place a small towel under knee. Press back of knee down to squeeze thigh muscle.', tip: 'Focus on feeling the contraction in your quadriceps.' }
-      ]
-    } else if (issueLower.includes('stroke') || issueLower.includes('paralysis') || issueLower.includes('neuro')) {
-      return [
-        { id: 'grasp', name: 'Grip & Ball Squeeze', target: '3 Sets x 15 Reps', hold: 5, desc: 'Hold a therapy ball or rolled towel. Squeeze tightly and release slowly.', tip: 'Try to coordinate smooth movement.' },
-        { id: 'ankle', name: 'Seated Ankle Pumps', target: '3 Sets x 20 Reps', hold: 2, desc: 'Point toes down, then pull toes up toward your shins. Rest and repeat.', tip: 'Helps improve blood circulation and ankle mobility.' }
-      ]
-    } else if (issueLower.includes('neck') || issueLower.includes('cervical')) {
-      return [
-        { id: 'retract', name: 'Cervical Retraction (Chin Tucks)', target: '3 Sets x 10 Reps', hold: 5, desc: 'Sit upright. Draw your chin straight backward (like making a double chin).', tip: 'Keep eyes looking straight ahead, don\'t tilt head.' },
-        { id: 'trap', name: 'Upper Trapezius Stretch', target: '3 Sets x 6 Reps', hold: 15, desc: 'Tilt your ear toward your shoulder. Use hand for a gentle extra stretch.', tip: 'Keep the opposite shoulder relaxed and low.' }
-      ]
-    } else {
-      return [
-        { id: 'deep_breath', name: 'Diaphragmatic Breathing', target: '3 Sets x 10 Reps', hold: 5, desc: 'Place one hand on stomach. Inhale deep through nose, exhale through pursed lips.', tip: 'Your stomach should rise and fall, not your chest.' },
-        { id: 'mobility', name: 'Gentle Joint Mobilization', target: '3 Sets x 10 Reps', hold: 5, desc: 'Perform gentle, slow pain-free range of motion for the affected joint.', tip: 'Stop immediately if pain increases.' }
-      ]
-    }
-  }
-
-  const exercises = useMemo(() => getExercisesForIssue(b?.issue), [b?.issue])
-  const [completedExercises, setCompletedExercises] = useState({})
-  const [selectedExercise, setSelectedExercise] = useState(null)
-  
-  const completedCount = useMemo(() => Object.values(completedExercises).filter(Boolean).length, [completedExercises])
-  const totalExercises = exercises.length
-  const completionPercentage = totalExercises > 0 ? (completedCount / totalExercises) * 100 : 0
-
-  // Stopwatch state & logic
-  const [timerSeconds, setTimerSeconds] = useState(30)
-  const [timerRunning, setTimerRunning] = useState(false)
-  const timerIntervalRef = useRef(null)
-
-  useEffect(() => {
-    if (timerRunning) {
-      timerIntervalRef.current = setInterval(() => {
-        setTimerSeconds((prev) => {
-          if (prev <= 1) {
-            clearInterval(timerIntervalRef.current)
-            setTimerRunning(false)
-            return 30
-          }
-          return prev - 1
-        })
-      }, 1000)
-    } else {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current)
-      }
-    }
-    return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current)
-      }
-    }
-  }, [timerRunning])
-
-  const toggleTimer = () => setTimerRunning(!timerRunning)
-  const resetTimer = () => {
-    setTimerRunning(false)
-    setTimerSeconds(30)
-  }
 
   if (loading) {
     return (
@@ -422,7 +458,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
   const reviewedSessionIds = new Set(reviews.map((r) => (r.sessionId ? String(r.sessionId) : 'booking')))
   const overallReview = reviews.find((r) => !r.sessionId)
   const hasCompletedSession = rows.some((r) => r.status === 'completed')
-  const physioName = typeof b.physioId === 'object' ? b.physioId?.name : 'Physiotherapist'
+  const physioName = (b.physioId && typeof b.physioId === 'object') ? (b.physioId.name || 'Physiotherapist') : 'Physiotherapist'
 
   return (
     <ScrollView
@@ -430,640 +466,351 @@ export default function UserBookingDetailScreen({ route, navigation }) {
       contentContainerStyle={styles.scroll}
       showsVerticalScrollIndicator={false}
     >
-      {/* ── Hero card ─────────────────────────────── */}
-      <View style={styles.heroCard}>
-        {/* Brand band */}
-        <View style={styles.heroBand}>
-          <View style={styles.heroGlow} pointerEvents="none" />
-          <Text style={styles.heroLabel}>VISIT</Text>
-          <Text style={styles.heroDate}>{formatBookingDateAndSlot(b.date, b.timeSlot)}</Text>
+      {/* ── Booking Status Header card ─────────────────────────────── */}
+      <View style={styles.headerCard}>
+        <View style={styles.headerTopSection}>
+          <Text style={styles.headerServiceType}>
+            {String(b.serviceType || 'home').toUpperCase()} VISIT
+          </Text>
+          <View style={styles.headerPillRow}>
+            <BandChip label={st.label} />
+            <BandChip label={pay.label} />
+          </View>
+        </View>
+        
+        <View style={styles.headerMiddleSection}>
+          <Text style={styles.headerDateLabel}>APPOINTMENT SCHEDULE</Text>
+          <Text style={styles.headerDate}>{formatBookingDateAndSlot(b.date, b.timeSlot)}</Text>
+          
           {b.rescheduled && b.previousDate ? (
-            <View style={styles.rescheduledRow}>
-              <Ionicons name="swap-horizontal-outline" size={12} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.rescheduledTxt}>
-                Rescheduled from {formatBookingDateAndSlot(b.previousDate, b.previousTimeSlot)}
+            <View style={styles.headerRescheduledRow}>
+              <Ionicons name="swap-horizontal-outline" size={11} color={colors.textSecondary} />
+              <Text style={styles.headerRescheduledTxt}>
+                From: {formatBookingDateAndSlot(b.previousDate, b.previousTimeSlot)}
               </Text>
             </View>
           ) : null}
-          <View style={styles.bandChipRow}>
-            <BandChip label={st.label} />
-            <BandChip label={pay.label} />
-            <BandChip label={sessionStatusLabel(b)} />
-          </View>
         </View>
-        {/* Physio row */}
-        <View style={styles.heroPhysioSection}>
-          <View style={styles.heroPhysioIconWrap}>
-            <Ionicons name="person-outline" size={16} color={colors.brand} />
-          </View>
-          <View style={styles.heroPhysioText}>
-            <Text style={styles.heroPhysioLabel}>Physiotherapist</Text>
-            <Text style={styles.heroPhysioName}>
-              {typeof b.physioId === 'object' ? b.physioId?.name : 'Not assigned yet'}
-            </Text>
-            {b.physioId?.specialization ? (
-              <Text style={styles.heroPhysioSub}>{b.physioId.specialization}</Text>
-            ) : null}
+
+        <View style={styles.headerBottomSection}>
+          <View style={styles.headerPhysioSection}>
+            <View style={styles.headerPhysioAvatarWrap}>
+              <Ionicons name="medical" size={16} color={colors.brand} />
+            </View>
+            <View style={styles.headerPhysioText}>
+              <Text style={styles.headerPhysioLabel}>ASSIGNED SPECIALIST</Text>
+              <Text style={styles.headerPhysioName}>
+                {typeof b.physioId === 'object' ? b.physioId?.name : 'Selecting Specialist...'}
+              </Text>
+              {b.physioId?.specialization ? (
+                <Text style={styles.headerPhysioSub}>{b.physioId.specialization}</Text>
+              ) : null}
+            </View>
+            <View style={[styles.headerSessionBadge, { backgroundColor: colors.brandSoft }]}>
+              <Text style={[styles.headerSessionBadgeTxt, { color: colors.brand }]}>
+                {sessionStatusLabel(b)}
+              </Text>
+            </View>
           </View>
         </View>
       </View>
 
-      {/* ── Therapist Live Transit Tracker ────────────────── */}
-      {b.serviceType === 'home' && b.status !== 'completed' && (
-        <View style={styles.transitCard}>
-          <View style={styles.transitHeader}>
-            <View style={styles.transitIconRing}>
-              <View style={styles.transitIconPulse} />
-              <Ionicons name="navigate" size={16} color="#ffffff" />
-            </View>
-            <View style={styles.transitHeaderText}>
-              <Text style={styles.transitTitle}>Therapist Live Transit Tracker</Text>
-              <Text style={styles.transitEta}>
-                {transitPhase === 'Dispatched' && `${physioName} is preparing for visit`}
-                {transitPhase === 'In Transit' && `${physioName} is arriving in 14 mins`}
-                {transitPhase === 'Arrived' && `${physioName} has arrived at your location`}
-                {transitPhase === 'Treating' && `Session in progress with ${physioName}`}
-              </Text>
-            </View>
-          </View>
+      {/* Tab Bar */}
+      <TabBar
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        tabs={BASE_TABS}
+        badges={{
+          overview: b.serviceType === 'home' && b.planStatus === 'proposed',
+          payments: b.paymentStatus === 'pending' && planReady && !(b.serviceType === 'home' && b.homePlanPaymentMode === 'offline')
+        }}
+      />
 
-          {/* Interactive Simulation Switcher for demo purposes */}
-          <View style={styles.demoControlsContainer}>
-            <Text style={styles.demoLabel}>Demo Simulator:</Text>
-            <View style={styles.demoControls}>
-              {['Dispatched', 'In Transit', 'Arrived', 'Treating'].map((ph) => (
-                <TouchableOpacity
-                  key={ph}
-                  style={[styles.demoBtn, transitPhase === ph && styles.demoBtnActive]}
-                  onPress={() => setTransitPhase(ph)}
-                >
-                  <Text style={[styles.demoBtnTxt, transitPhase === ph && styles.demoBtnTxtActive]}>
-                    {ph}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+      {/* Tab Panels */}
+      {activeTab === 'overview' && (
+        <View style={styles.tabPanel}>
+          {/* Plan approval banner */}
+          {b.serviceType === 'home' && b.planStatus === 'proposed' ? (
+            <View style={styles.banner}>
+              <Ionicons name="information-circle-outline" size={16} color={colors.brand} />
+              <Text style={styles.bannerTxt}>Your physiotherapist proposed a plan. Review and approve it to continue.</Text>
+              <Pressable 
+                style={({ pressed }) => [styles.bannerBtn, pressed && { transform: [{ scale: 0.96 }] }]} 
+                onPress={approvePlan}
+              >
+                <Text style={styles.bannerBtnTxt}>Approve</Text>
+              </Pressable>
             </View>
-          </View>
+          ) : null}
 
-          {/* Stepper progress */}
-          <View style={styles.transitStepper}>
-            {[
-              { id: 'Dispatched', label: 'Dispatched', icon: 'car-outline' },
-              { id: 'In Transit', label: 'In Transit', icon: 'navigate-outline' },
-              { id: 'Arrived', label: 'Arrived', icon: 'pin-outline' },
-              { id: 'Treating', label: 'Treating', icon: 'medical-outline' },
-            ].map((step, idx) => {
-              const phasesList = ['Dispatched', 'In Transit', 'Arrived', 'Treating'];
-              const currentIdx = phasesList.indexOf(transitPhase);
-              const stepIdx = phasesList.indexOf(step.id);
-              
-              const isCompleted = stepIdx < currentIdx;
-              const isActive = stepIdx === currentIdx;
-              const isPending = stepIdx > currentIdx;
-
-              return (
-                <View key={step.id} style={styles.stepperItem}>
-                  <View style={[
-                    styles.stepperDot,
-                    isCompleted && styles.stepperDotCompleted,
-                    isActive && styles.stepperDotActive,
-                    isPending && styles.stepperDotPending
-                  ]}>
-                    <Ionicons name={step.icon} size={12} color={isActive || isCompleted ? '#ffffff' : '#64748b'} />
-                  </View>
-                  <Text style={[
-                    styles.stepperLabel,
-                    isActive && styles.stepperLabelActive,
-                    isCompleted && styles.stepperLabelCompleted
-                  ]}>
-                    {step.label}
-                  </Text>
-                  {idx < 3 && (
-                    <View style={[
-                      styles.stepperLine,
-                      stepIdx < currentIdx && styles.stepperLineCompleted
-                    ]} />
-                  )}
+          {/* Therapist Profile Card */}
+          {typeof b.physioId === 'object' ? (
+            <View style={styles.therapistCard}>
+              <View style={styles.therapistCardHeader}>
+                <View style={styles.therapistAvatarWrap}>
+                  <Ionicons name="medical" size={20} color={colors.brand} />
                 </View>
-              )
-            })}
+                <View style={styles.therapistCardInfo}>
+                  <Text style={styles.therapistLabel}>Your Assigned Therapist</Text>
+                  <Text style={styles.therapistName}>{b.physioId?.name || 'Physiotherapist'}</Text>
+                  {b.physioId?.specialization ? (
+                    <Text style={styles.therapistSub}>{b.physioId.specialization}</Text>
+                  ) : null}
+                </View>
+              </View>
+              <View style={styles.therapistActionsRow}>
+                {b.physioId?.phone ? (
+                  <>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.therapistActionBtn,
+                        styles.therapistCallBtn,
+                        pressed && { transform: [{ scale: 0.95 }] }
+                      ]}
+                      onPress={() => callPhone(b.physioId.phone)}
+                    >
+                      <Ionicons name="call" size={13} color={colors.brand} />
+                      <Text style={styles.therapistActionBtnTxt}>Call</Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.therapistActionBtn,
+                        styles.therapistWaBtn,
+                        pressed && { transform: [{ scale: 0.95 }] }
+                      ]}
+                      onPress={() => openWhatsApp(b.physioId.phone)}
+                    >
+                      <Ionicons name="logo-whatsapp" size={13} color="#25D366" />
+                      <Text style={[styles.therapistActionBtnTxt, { color: '#25D366' }]}>WhatsApp</Text>
+                    </Pressable>
+                  </>
+                ) : null}
+                {b.physioId?._id ? (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.therapistActionBtn,
+                      styles.therapistProfileBtn,
+                      pressed && { transform: [{ scale: 0.95 }] }
+                    ]}
+                    onPress={() => navigation.navigate('PublicPhysician', { id: b.physioId._id })}
+                  >
+                    <Ionicons name="person" size={13} color={colors.white} />
+                    <Text style={[styles.therapistActionBtnTxt, { color: colors.white }]}>Profile</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          ) : (
+            <View style={styles.noTherapistCard}>
+              <View style={styles.noTherapistIconWrap}>
+                <Ionicons name="person-add-outline" size={22} color={colors.slate400} />
+              </View>
+              <Text style={styles.noTherapistTxt}>Matching with a physiotherapist...</Text>
+              <Text style={styles.noTherapistSub}>We are assigning a top specialist for your care.</Text>
+            </View>
+          )}
+
+          {/* Care Context Card */}
+          <View style={styles.sectionCard}>
+            <SectionTitle icon="fitness-outline" title="Care Context" />
+            <KV k="Chief Complaint / Issue" v={b.issue || '—'} />
+            <KV k="Service Type" v={String(b.serviceType || 'home').charAt(0).toUpperCase() + String(b.serviceType || 'home').slice(1)} last />
           </View>
 
-          {/* Security PIN verification block */}
-          <View style={styles.pinContainer}>
-            <View style={styles.pinTextSection}>
-              <Text style={styles.pinLabel}>Safety Verification PIN</Text>
-              <Text style={styles.pinDescription}>Verify this code with {physioName} upon arrival.</Text>
+          {/* Patient Details */}
+          <View style={styles.sectionCard}>
+            <SectionTitle icon="people-outline" title="Participants" />
+            <KV k="Your Name" v={b.userId?.name || '—'} />
+            <KV k="Your Contact" v={b.userId?.phone || '—'} last />
+          </View>
+
+          {/* Feedback Section */}
+          {(overallReview || hasCompletedSession) ? (
+            <View style={styles.sectionCard}>
+              <SectionTitle icon="star-outline" title="Your Feedback" />
+              {overallReview ? (
+                <>
+                  <View style={styles.starsRow}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Ionicons
+                        key={n}
+                        name={n <= overallReview.rating ? 'star' : 'star-outline'}
+                        size={22}
+                        color={n <= overallReview.rating ? colors.warning : colors.slate300}
+                      />
+                    ))}
+                    <Text style={styles.starLabel}>{overallReview.rating}/5</Text>
+                  </View>
+                  {overallReview.comment ? (
+                    <Text style={styles.reviewComment}>{overallReview.comment}</Text>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <Text style={styles.feedbackHint}>Share your experience to help other patients.</Text>
+                  <Pressable
+                    style={({ pressed }) => [styles.feedbackBtn, pressed && { transform: [{ scale: 0.98 }] }]}
+                    onPress={() => setReviewOpen(true)}
+                  >
+                    <Ionicons name="star-outline" size={16} color={colors.white} />
+                    <Text style={styles.feedbackBtnTxt}>Rate your session</Text>
+                  </Pressable>
+                </>
+              )}
             </View>
-            <View style={styles.pinValueCard}>
-              <Text style={styles.pinValue}>8492</Text>
-            </View>
+          ) : null}
+
+          {/* Booking Management Actions */}
+          <View style={styles.actionsCard}>
+            {b.serviceType === 'home' && b.planStatus === 'proposed' ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionBtn,
+                  styles.actionBtnPrimary,
+                  pressed && { transform: [{ scale: 0.98 }], opacity: 0.95 }
+                ]}
+                onPress={approvePlan}
+              >
+                <Ionicons name="checkmark-circle-outline" size={18} color={colors.white} />
+                <Text style={styles.actionBtnPrimaryTxt}>Approve proposed plan</Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              style={({ pressed }) => [
+                styles.actionBtn,
+                styles.actionBtnOutline,
+                pressed && { transform: [{ scale: 0.98 }], opacity: 0.95 }
+              ]}
+              onPress={() => setDisputeOpen(true)}
+            >
+              <Ionicons name="alert-circle-outline" size={18} color={colors.warning} />
+              <Text style={styles.actionBtnOutlineTxt}>Raise dispute</Text>
+            </Pressable>
           </View>
         </View>
       )}
 
-      {/* ── Plan approval banner ───────────────────── */}
-      {b.serviceType === 'home' && b.planStatus === 'proposed' ? (
-        <View style={styles.banner}>
-          <Ionicons name="information-circle-outline" size={16} color={colors.brand} />
-          <Text style={styles.bannerTxt}>Your physiotherapist proposed a plan. Review and approve it to continue.</Text>
-          <Pressable style={styles.bannerBtn} onPress={approvePlan}>
-            <Text style={styles.bannerBtnTxt}>Approve</Text>
-          </Pressable>
-        </View>
-      ) : null}
 
-      {/* ── Participants ──────────────────────────── */}
-      <View style={styles.sectionCard}>
-        <SectionTitle icon="people-outline" title="Participants" />
-        <InfoRow icon="person-circle-outline" label="You" value={b.userId?.name || '—'} sub={b.userId?.phone} />
-        <View style={styles.rowDivider} />
-        <InfoRow
-          icon="medical-outline"
-          label="Physiotherapist"
-          value={typeof b.physioId === 'object' ? b.physioId?.name : 'Not assigned yet'}
-          sub={b.physioId?.phone || b.physioId?.specialization}
-          onPress={
-            typeof b.physioId === 'object' && b.physioId?._id
-              ? () => navigation.navigate('PublicPhysician', { id: b.physioId._id })
-              : undefined
-          }
-        />
-        <View style={styles.rowDivider} />
-        <InfoRow icon="fitness-outline" label="Issue" value={b.issue || '—'} />
-        <View style={styles.rowDivider} />
-        <InfoRow
-          icon="home-outline"
-          label="Service type"
-          value={String(b.serviceType || 'home').charAt(0).toUpperCase() + String(b.serviceType || 'home').slice(1)}
-        />
-      </View>
 
-      {/* ── Installments ──────────────────────────── */}
-      {showInstallments ? (
-        <View style={styles.installmentsWrap}>
-          <InstallmentsPhysioCard
-            title={isOfflinePlan ? 'Collections' : 'Installments'}
-            subtitle={
-              isOfflinePlan
-                ? 'Your physiotherapist records each cash/UPI payment. Admin verification unlocks sessions.'
-                : 'Online installment summary for this plan.'
-            }
-            summary={paymentSummary}
-            payments={paymentsList}
-            emptyMessage={isOfflinePlan ? 'No collections recorded yet.' : 'No installments yet.'}
-          >
-            {isOnlineBooking && outstanding > 0.009 ? (
-              <Pressable
-                style={styles.payInstallmentBtn}
-                onPress={openInstallmentModal}
+      {activeTab === 'payments' && (
+        <View style={styles.tabPanel}>
+          {/* Clean Financial Summary Card */}
+          {outstanding > 0.009 || (Number(b.totalAmount || 0) > 0) ? (
+            <View style={styles.financialCard}>
+              <View style={styles.financialHeader}>
+                <Ionicons name="receipt-outline" size={16} color={colors.brand} />
+                <Text style={styles.financialTitle}>Plan Billing Summary</Text>
+              </View>
+
+              <View style={styles.financialDivider} />
+
+              <View style={styles.financialMetrics}>
+                <View style={styles.financialMetricCol}>
+                  <Text style={styles.financialMetricLabel}>TOTAL PLAN VALUE</Text>
+                  <Text style={styles.financialMetricValue}>₹{Number(b.totalAmount || 0).toFixed(2)}</Text>
+                </View>
+                
+                <View style={[styles.financialMetricCol, { alignItems: 'flex-end' }]}>
+                  <Text style={styles.financialMetricLabel}>OUTSTANDING BALANCE</Text>
+                  <Text style={[
+                    styles.financialMetricValue, 
+                    outstanding > 0.009 ? { color: colors.danger } : { color: colors.success }
+                  ]}>
+                    ₹{outstanding.toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+
+              {Number(b.totalAmount || 0) > 0 ? (
+                <View style={styles.financialProgressContainer}>
+                  <View style={styles.financialProgressHeader}>
+                    <Text style={styles.financialProgressLabel}>Payment Progress</Text>
+                    <Text style={styles.financialProgressText}>
+                      ₹{Math.max(0, Number(b.totalAmount || 0) - outstanding).toFixed(2)} Paid ({Math.round(
+                        Number(b.totalAmount || 0) > 0 
+                          ? ((Math.max(0, Number(b.totalAmount || 0) - outstanding) / Number(b.totalAmount || 0)) * 100) 
+                          : 0
+                      )}%)
+                    </Text>
+                  </View>
+                  <View style={styles.financialProgressBarBg}>
+                    <View style={[
+                      styles.financialProgressBarFill, 
+                      { 
+                        width: `${Number(b.totalAmount || 0) > 0 
+                          ? ((Math.max(0, Number(b.totalAmount || 0) - outstanding) / Number(b.totalAmount || 0)) * 100) 
+                          : 0}%` 
+                      }
+                    ]} />
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Installments */}
+          {showInstallments ? (
+            <View style={styles.installmentsWrap}>
+              <InstallmentsPhysioCard
+                title={isOfflinePlan ? 'Collections' : 'Installments'}
+                subtitle={
+                  isOfflinePlan
+                    ? 'Your physiotherapist records each cash/UPI payment. Admin verification unlocks sessions.'
+                    : 'Online installment summary for this plan.'
+                }
+                summary={paymentSummary}
+                payments={paymentsList}
+                emptyMessage={isOfflinePlan ? 'No collections recorded yet.' : 'No installments yet.'}
               >
-                <Ionicons name="card-outline" size={14} color={colors.brand} />
-                <Text style={styles.payInstallmentTxt}>Pay next installment</Text>
+                {isOnlineBooking && outstanding > 0.009 ? (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.payInstallmentBtn,
+                      pressed && { transform: [{ scale: 0.98 }], opacity: 0.9 }
+                    ]}
+                    onPress={openInstallmentModal}
+                  >
+                    <Ionicons name="card-outline" size={14} color={colors.white} />
+                    <Text style={styles.payInstallmentTxt}>Pay next installment</Text>
+                  </Pressable>
+                ) : null}
+              </InstallmentsPhysioCard>
+            </View>
+          ) : null}
+
+          {/* Plan details */}
+          <View style={styles.sectionCard}>
+            <SectionTitle icon="document-text-outline" title="Plan details" />
+            <KV k="Sessions" v={b.sessions != null ? String(b.sessions) : '—'} />
+            <KV k="Price / session" v={b.amountPerSession != null ? `₹${b.amountPerSession}` : '—'} />
+            {b.discountPercent != null ? <KV k="Discount" v={`${b.discountPercent}%`} /> : null}
+            <KV k="Plan status" v={b.planStatus || '—'} last />
+          </View>
+
+          {/* Payment Details */}
+          <View style={styles.sectionCard}>
+            <SectionTitle icon="card-outline" title="Payment" />
+            <KV k="Mode" v={paymentModeLabel(b)} />
+            <KV k="Amount" v={paymentAmountLabel(b)} />
+            <KV k="Payment hold" v={paymentStatusLabel(b.paymentStatus)} />
+            <KV k="Payment step" v={marketplacePaymentStatusLabel(b.payment?.status)} last={!showLegacyPay} />
+            {showLegacyPay ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.payFullBtn,
+                  paymentLoading && { opacity: 0.7 },
+                  pressed && { transform: [{ scale: 0.98 }] }
+                ]}
+                onPress={payLegacy}
+                disabled={paymentLoading}
+              >
+                <Ionicons name="card-outline" size={18} color={colors.white} />
+                <Text style={styles.payFullBtnTxt}>{paymentLoading ? 'Processing…' : 'Pay full amount'}</Text>
               </Pressable>
             ) : null}
-          </InstallmentsPhysioCard>
-        </View>
-      ) : null}
-
-      {/* ── Active Recovery Roadmap & Milestone Tracker ──────────────────────── */}
-      <View style={styles.sectionCard}>
-        <SectionTitle icon="fitness-outline" title="Active Recovery Roadmap" />
-        
-        {/* Overall Completion Progress */}
-        {(() => {
-          const totalCompleted = rows.filter(r => r.status === 'completed').length
-          const progressPercent = rows.length > 0 ? (totalCompleted / rows.length) * 100 : 0
-          return (
-            <View style={styles.progressContainer}>
-              <View style={styles.progressHeader}>
-                <Text style={styles.progressLabel}>Rehab Completion</Text>
-                <Text style={styles.progressVal}>
-                  {totalCompleted} of {rows.length} Sessions ({Math.round(progressPercent)}%)
-                </Text>
-              </View>
-              <View style={styles.progressBarBg}>
-                <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
-              </View>
-            </View>
-          )
-        })()}
-
-        {/* Phase Timeline Cards */}
-        {(() => {
-          const total = rows.length
-          let phase1Max = Math.max(1, Math.round(total * 0.3))
-          let phase2Max = Math.max(phase1Max + 1, Math.round(total * 0.7))
-
-          if (total <= 3) {
-            phase1Max = 1
-            phase2Max = 2
-          }
-
-          const groupedSessions = {
-            1: [],
-            2: [],
-            3: [],
-          }
-
-          rows.forEach((r) => {
-            if (r.n <= phase1Max) {
-              groupedSessions[1].push(r)
-            } else if (r.n <= phase2Max) {
-              groupedSessions[2].push(r)
-            } else {
-              groupedSessions[3].push(r)
-            }
-          })
-
-          const phases = [
-            {
-              id: 1,
-              title: 'Phase 1: Pain Relief & Mobilization',
-              description: 'Reduce acute pain, restore basic range of motion, and decrease joint inflammation.',
-              target: 'Milestone: >50% pain reduction & basic mobility',
-              icon: 'water-outline',
-            },
-            {
-              id: 2,
-              title: 'Phase 2: Strengthening & Activation',
-              description: 'Rebuild muscle support, correct movement patterns, and activate stabilizer muscles.',
-              target: 'Milestone: Joint load tolerance & stability',
-              icon: 'flash-outline',
-            },
-            {
-              id: 3,
-              title: 'Phase 3: Functional Restoration & Discharge',
-              description: 'Advanced coordination, high-load training, and transition to self-guided Home Exercises.',
-              target: 'Milestone: 100% active recovery & discharge',
-              icon: 'shield-checkmark-outline',
-            },
-          ]
-
-          // Determine active phase
-          let activePhaseId = 1
-          const activeSession = rows.find(r => r.status !== 'completed')
-          if (activeSession) {
-            if (activeSession.n <= phase1Max) {
-              activePhaseId = 1
-            } else if (activeSession.n <= phase2Max) {
-              activePhaseId = 2
-            } else {
-              activePhaseId = 3
-            }
-          } else {
-            activePhaseId = 4 // All sessions are completed
-          }
-
-          return (
-            <View style={styles.roadmapContainer}>
-              {phases.map((phase, idx) => {
-                const phaseSessions = groupedSessions[phase.id]
-                const isLast = idx === phases.length - 1
-                
-                // Determine phase status
-                let status = 'LOCKED'
-                if (phase.id < activePhaseId) {
-                  status = 'ACCOMPLISHED'
-                } else if (phase.id === activePhaseId) {
-                  status = 'IN_PROGRESS'
-                }
-
-                // Node styling helper values
-                let statusColor = colors.slate300
-                let statusIcon = 'lock-closed-outline'
-                if (status === 'ACCOMPLISHED') {
-                  statusColor = colors.success
-                  statusIcon = 'checkmark-circle'
-                } else if (status === 'IN_PROGRESS') {
-                  statusColor = colors.brand
-                  statusIcon = 'pulse-outline'
-                }
-
-                return (
-                  <View style={styles.phaseContainer} key={phase.id}>
-                    {/* Left Column (Timeline path and marker) */}
-                    <View style={styles.phaseLeftColumn}>
-                      <View style={[
-                        styles.phaseIndicatorNode,
-                        status === 'ACCOMPLISHED' && styles.phaseIndicatorNodeAccomplished,
-                        status === 'IN_PROGRESS' && styles.phaseIndicatorNodeInProgress,
-                        status === 'LOCKED' && styles.phaseIndicatorNodeLocked
-                      ]}>
-                        <Ionicons name={statusIcon} size={13} color={statusColor} />
-                      </View>
-                      {!isLast ? (
-                        <View style={[
-                          styles.phaseConnectorLine,
-                          status === 'ACCOMPLISHED' && styles.phaseConnectorLineAccomplished,
-                          status === 'IN_PROGRESS' && styles.phaseConnectorLineInProgress,
-                          status === 'LOCKED' && styles.phaseConnectorLineLocked
-                        ]} />
-                      ) : null}
-                    </View>
-
-                    {/* Right Column (Phase details card) */}
-                    <View style={[
-                      styles.phaseCard,
-                      status === 'ACCOMPLISHED' && styles.phaseCardAccomplished,
-                      status === 'IN_PROGRESS' && styles.phaseCardInProgress,
-                      status === 'LOCKED' && styles.phaseCardLocked
-                    ]}>
-                      {/* Phase Header */}
-                      <View style={styles.phaseCardHeader}>
-                        <View style={styles.phaseTitleRow}>
-                          <Ionicons name={phase.icon} size={14} color={statusColor} style={{ marginRight: 5 }} />
-                          <Text style={[
-                            styles.phaseTitle,
-                            status === 'LOCKED' && styles.phaseTitleLocked
-                          ]}>
-                            {phase.title}
-                          </Text>
-                        </View>
-                        <View style={[
-                          styles.phaseStatusBadge,
-                          status === 'ACCOMPLISHED' && styles.phaseStatusBadgeAccomplished,
-                          status === 'IN_PROGRESS' && styles.phaseStatusBadgeInProgress,
-                          status === 'LOCKED' && styles.phaseStatusBadgeLocked
-                        ]}>
-                          <Text style={[
-                            styles.phaseStatusBadgeTxt,
-                            status === 'ACCOMPLISHED' && styles.phaseStatusBadgeTxtAccomplished,
-                            status === 'IN_PROGRESS' && styles.phaseStatusBadgeTxtInProgress,
-                            status === 'LOCKED' && styles.phaseStatusBadgeTxtLocked
-                          ]}>
-                            {status === 'ACCOMPLISHED' ? 'Completed' : status === 'IN_PROGRESS' ? 'Active' : 'Locked'}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Phase Description */}
-                      <Text style={[
-                        styles.phaseDescription,
-                        status === 'LOCKED' && styles.phaseDescriptionLocked
-                      ]}>
-                        {phase.description}
-                      </Text>
-
-                      {/* Milestone Badge */}
-                      <View style={[
-                        styles.phaseMilestoneBox,
-                        status === 'ACCOMPLISHED' && styles.phaseMilestoneBoxAccomplished,
-                        status === 'IN_PROGRESS' && styles.phaseMilestoneBoxInProgress,
-                        status === 'LOCKED' && styles.phaseMilestoneBoxLocked
-                      ]}>
-                        <Ionicons 
-                          name={status === 'ACCOMPLISHED' ? "ribbon" : "flag-outline"} 
-                          size={12} 
-                          color={status === 'ACCOMPLISHED' ? colors.success : status === 'IN_PROGRESS' ? colors.brand : colors.slate500} 
-                        />
-                        <Text style={[
-                          styles.phaseMilestoneTxt,
-                          status === 'ACCOMPLISHED' && styles.phaseMilestoneTxtAccomplished,
-                          status === 'IN_PROGRESS' && styles.phaseMilestoneTxtInProgress,
-                          status === 'LOCKED' && styles.phaseMilestoneTxtLocked
-                        ]}>
-                          {phase.target}
-                        </Text>
-                      </View>
-
-                      {/* Phase Sessions */}
-                      {phaseSessions.length > 0 ? (
-                        <View style={styles.nestedSessionsList}>
-                          {phaseSessions.map((r, sIdx) => {
-                            const done = r.status === 'completed'
-                            const reviewed = reviewedSessionIds.has(String(r.sessionId || 'booking'))
-                            return (
-                              <View 
-                                key={r.key} 
-                                style={[
-                                  styles.nestedSessionRow,
-                                  done && styles.nestedSessionRowDone,
-                                  sIdx === phaseSessions.length - 1 && { borderBottomWidth: 0, paddingBottom: 0 }
-                                ]}
-                              >
-                                <View style={[
-                                  styles.nestedSessionIndicator,
-                                  done ? styles.nestedSessionIndicatorDone : styles.nestedSessionIndicatorPending
-                                ]}>
-                                  {done ? (
-                                    <Ionicons name="checkmark" size={10} color={colors.white} />
-                                  ) : (
-                                    <Text style={styles.nestedSessionNumText}>{r.n}</Text>
-                                  )}
-                                </View>
-                                
-                                <View style={styles.nestedSessionDetails}>
-                                  <Text style={[
-                                    styles.nestedSessionTitle,
-                                    done && styles.nestedSessionTitleDone
-                                  ]}>
-                                    Session #{r.n}
-                                  </Text>
-                                  <Text style={styles.nestedSessionTime}>
-                                    {formatBookingDateAndSlot(r.date, r.time)}
-                                  </Text>
-                                </View>
-
-                                {/* Action button */}
-                                {done && !reviewed ? (
-                                  <Pressable
-                                    style={styles.nestedRateBtn}
-                                    onPress={() => {
-                                      setSessionReviewTarget(r)
-                                      setReviewOpen(false)
-                                    }}
-                                  >
-                                    <Ionicons name="star-outline" size={11} color={colors.brand} />
-                                    <Text style={styles.nestedRateBtnTxt}>Rate</Text>
-                                  </Pressable>
-                                ) : (
-                                  <View style={[styles.nestedRateBtn, styles.nestedRateBtnMuted]}>
-                                    <Ionicons
-                                      name={reviewed ? 'star' : 'lock-closed-outline'}
-                                      size={10}
-                                      color={reviewed ? colors.warning : colors.slate300}
-                                    />
-                                    <Text style={styles.nestedRateBtnMutedTxt}>
-                                      {reviewed ? 'Reviewed' : 'Locked'}
-                                    </Text>
-                                  </View>
-                                )}
-                              </View>
-                            )
-                          })}
-                        </View>
-                      ) : (
-                        <View style={styles.lockedPromoBox}>
-                          <Ionicons name="lock-closed-outline" size={12} color={colors.slate400} />
-                          <Text style={styles.lockedPromoTxt}>
-                            {total === 1 
-                              ? "Upgrade to a multi-session plan to unlock milestone tracking." 
-                              : "This phase will activate as you complete earlier sessions."
-                            }
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                )
-              })}
-            </View>
-          )
-        })()}
-      </View>
-
-      {/* ── Daily Rehab Companion Card ────────────────── */}
-      <View style={styles.sectionCard}>
-        <View style={styles.rehabHeaderRow}>
-          <SectionTitle icon="fitness-outline" title="Daily Rehabilitation Companion" />
-          <View style={styles.rehabProgressBadge}>
-            <Text style={styles.rehabProgressBadgeTxt}>
-              {completedCount}/{totalExercises} Done
-            </Text>
           </View>
         </View>
-        
-        <Text style={styles.rehabSub}>
-          Complete your daily home exercise plan prescribed for your recovery roadmap.
-        </Text>
-
-        <View style={styles.rehabProgressContainer}>
-          <View style={styles.rehabProgressBarBg}>
-            <View style={[styles.rehabProgressBarFill, { width: `${completionPercentage}%` }]} />
-          </View>
-          <Text style={styles.rehabPercentTxt}>{Math.round(completionPercentage)}% Completed Today</Text>
-        </View>
-
-        <View style={styles.exerciseList}>
-          {exercises.map((ex) => {
-            const isCompleted = !!completedExercises[ex.id];
-            return (
-              <View key={ex.id} style={[styles.exerciseRow, isCompleted && styles.exerciseRowCompleted]}>
-                <TouchableOpacity
-                  style={styles.exerciseCheckbox}
-                  onPress={() => {
-                    setCompletedExercises(prev => ({
-                      ...prev,
-                      [ex.id]: !prev[ex.id]
-                    }))
-                  }}
-                >
-                  <View style={[styles.checkboxBox, isCompleted && styles.checkboxBoxChecked]}>
-                    {isCompleted && (
-                      <Ionicons name="checkmark" size={12} color="#ffffff" />
-                    )}
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.exerciseDetailsBtn}
-                  onPress={() => {
-                    setSelectedExercise(ex)
-                    setTimerSeconds(30)
-                    setTimerRunning(false)
-                  }}
-                >
-                  <View style={styles.exerciseTitleCol}>
-                    <Text style={[styles.exerciseName, isCompleted && styles.exerciseNameCompleted]}>
-                      {ex.name}
-                    </Text>
-                    <Text style={styles.exerciseTarget}>{ex.target} • Hold for {ex.hold}s</Text>
-                  </View>
-                  <View style={styles.exArrowWrap}>
-                    <Text style={styles.exStartBtnTxt}>Guide</Text>
-                    <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-                  </View>
-                </TouchableOpacity>
-              </View>
-            )
-          })}
-        </View>
-      </View>
-
-      {/* ── Plan details ─────────────────────────── */}
-      <View style={styles.sectionCard}>
-        <SectionTitle icon="document-text-outline" title="Plan details" />
-        <KV k="Sessions" v={b.sessions != null ? String(b.sessions) : '—'} />
-        <KV k="Price / session" v={b.amountPerSession != null ? `₹${b.amountPerSession}` : '—'} />
-        {b.discountPercent != null ? <KV k="Discount" v={`${b.discountPercent}%`} /> : null}
-        <KV k="Plan status" v={b.planStatus || '—'} last />
-      </View>
-
-      {/* ── Payment ──────────────────────────────── */}
-      <View style={styles.sectionCard}>
-        <SectionTitle icon="card-outline" title="Payment" />
-        <KV k="Mode" v={paymentModeLabel(b)} />
-        <KV k="Amount" v={paymentAmountLabel(b)} />
-        <KV k="Payment hold" v={paymentStatusLabel(b.paymentStatus)} />
-        <KV k="Payment step" v={marketplacePaymentStatusLabel(b.payment?.status)} last={!showLegacyPay} />
-        {showLegacyPay ? (
-          <Pressable
-            style={[styles.payFullBtn, paymentLoading && { opacity: 0.7 }]}
-            onPress={payLegacy}
-            disabled={paymentLoading}
-          >
-            <Ionicons name="card-outline" size={18} color={colors.white} />
-            <Text style={styles.payFullBtnTxt}>{paymentLoading ? 'Processing…' : 'Pay full amount'}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-
-      {/* ── Feedback ──────────────────────────────── */}
-      {overallReview || hasCompletedSession ? (
-        <View style={styles.sectionCard}>
-          <SectionTitle icon="star-outline" title="Your feedback" />
-          {overallReview ? (
-            <>
-              <View style={styles.starsRow}>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <Ionicons
-                    key={n}
-                    name={n <= overallReview.rating ? 'star' : 'star-outline'}
-                    size={22}
-                    color={n <= overallReview.rating ? colors.warning : colors.slate300}
-                  />
-                ))}
-                <Text style={styles.starLabel}>{overallReview.rating}/5</Text>
-              </View>
-              {overallReview.comment ? (
-                <Text style={styles.reviewComment}>{overallReview.comment}</Text>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <Text style={styles.feedbackHint}>Share your experience to help other patients.</Text>
-              <Pressable
-                style={({ pressed }) => [styles.feedbackBtn, pressed && styles.feedbackBtnPressed]}
-                onPress={() => setReviewOpen(true)}
-              >
-                <Ionicons name="star-outline" size={16} color={colors.white} />
-                <Text style={styles.feedbackBtnTxt}>Rate your session</Text>
-              </Pressable>
-            </>
-          )}
-        </View>
-      ) : null}
-
-      {/* ── Actions ──────────────────────────────── */}
-      <View style={styles.actionsCard}>
-        {b.serviceType === 'home' && b.planStatus === 'proposed' ? (
-          <Pressable
-            style={({ pressed }) => [styles.actionBtn, styles.actionBtnPrimary, pressed && { opacity: 0.85 }]}
-            onPress={approvePlan}
-          >
-            <Ionicons name="checkmark-circle-outline" size={18} color={colors.white} />
-            <Text style={styles.actionBtnPrimaryTxt}>Approve plan</Text>
-          </Pressable>
-        ) : null}
-        <Pressable
-          style={({ pressed }) => [styles.actionBtn, styles.actionBtnOutline, pressed && { opacity: 0.7 }]}
-          onPress={() => setDisputeOpen(true)}
-        >
-          <Ionicons name="alert-circle-outline" size={18} color={colors.warning} />
-          <Text style={styles.actionBtnOutlineTxt}>Raise dispute</Text>
-        </Pressable>
-      </View>
+      )}
 
       {/* ── Dispute modal ─────────────────────────── */}
       <Modal transparent visible={disputeOpen} animationType="fade" onRequestClose={() => setDisputeOpen(false)}>
@@ -1266,113 +1013,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
         </View>
       </Modal>
 
-      {/* ── Exercise Detail Modal with Stopwatch ──────────────────── */}
-      <Modal
-        transparent
-        visible={!!selectedExercise}
-        animationType="slide"
-        onRequestClose={() => setSelectedExercise(null)}
-      >
-        <View style={styles.modalRoot}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSelectedExercise(null)} />
-          <View style={[styles.modalCard, { maxHeight: '80%' }]}>
-            {selectedExercise ? (
-              <>
-                <View style={styles.modalHeader}>
-                  <View style={[styles.modalIconWrap, { backgroundColor: colors.teal50 }]}>
-                    <Ionicons name="fitness-outline" size={18} color={colors.brand} />
-                  </View>
-                  <View style={styles.modalHeaderText}>
-                    <Text style={styles.modalTitle}>{selectedExercise.name}</Text>
-                    <Text style={styles.modalSub}>{selectedExercise.target}</Text>
-                  </View>
-                  <Pressable onPress={() => setSelectedExercise(null)} hitSlop={12} style={styles.modalClose}>
-                    <Ionicons name="close" size={18} color={colors.slate400} />
-                  </Pressable>
-                </View>
-                
-                <ScrollView contentContainerStyle={styles.exerciseModalScroll}>
-                  <View style={styles.guideCard}>
-                    <Text style={styles.guideHeading}>Instructions</Text>
-                    <Text style={styles.guideText}>{selectedExercise.desc}</Text>
-                    
-                    <View style={styles.tipBox}>
-                      <Ionicons name="bulb-outline" size={14} color="#f59e0b" style={{ marginRight: 6 }} />
-                      <Text style={styles.tipText}>
-                        <Text style={{ fontWeight: '700' }}>Pro Tip: </Text>
-                        {selectedExercise.tip}
-                      </Text>
-                    </View>
-                  </View>
 
-                  {/* Stopwatch section */}
-                  <View style={styles.stopwatchCard}>
-                    <Text style={styles.stopwatchTitle}>Hold / Rest Timer</Text>
-                    
-                    <View style={styles.stopwatchDigitsBox}>
-                      <Text style={styles.stopwatchDigits}>
-                        00:{timerSeconds < 10 ? `0${timerSeconds}` : timerSeconds}
-                      </Text>
-                      <Text style={styles.stopwatchUnit}>sec</Text>
-                    </View>
-
-                    <View style={styles.stopwatchControls}>
-                      <TouchableOpacity
-                        style={[styles.stopwatchBtn, styles.stopwatchBtnReset]}
-                        onPress={resetTimer}
-                      >
-                        <Text style={styles.stopwatchBtnResetText}>Reset</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[
-                          styles.stopwatchBtn,
-                          timerRunning ? styles.stopwatchBtnPause : styles.stopwatchBtnStart
-                        ]}
-                        onPress={toggleTimer}
-                      >
-                        <Ionicons
-                          name={timerRunning ? "pause-outline" : "play-outline"}
-                          size={16}
-                          color="#ffffff"
-                          style={{ marginRight: 4 }}
-                        />
-                        <Text style={styles.stopwatchBtnStartText}>
-                          {timerRunning ? 'Pause' : 'Start'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                  
-                  <TouchableOpacity
-                    style={[
-                      styles.exerciseCompleteModalBtn,
-                      completedExercises[selectedExercise.id] && styles.exerciseCompleteModalBtnDone
-                    ]}
-                    onPress={() => {
-                      setCompletedExercises(prev => ({
-                        ...prev,
-                        [selectedExercise.id]: !prev[selectedExercise.id]
-                      }))
-                      setSelectedExercise(null)
-                    }}
-                  >
-                    <Ionicons
-                      name={completedExercises[selectedExercise.id] ? "checkmark-done-circle" : "checkmark-circle-outline"}
-                      size={18}
-                      color="#ffffff"
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text style={styles.exerciseCompleteModalBtnTxt}>
-                      {completedExercises[selectedExercise.id] ? 'Completed!' : 'Mark Exercise Completed'}
-                    </Text>
-                  </TouchableOpacity>
-                </ScrollView>
-              </>
-            ) : null}
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   )
 }
@@ -2572,5 +2213,611 @@ const styles = StyleSheet.create({
     fontFamily: font.bold,
     fontSize: 13,
     color: '#ffffff',
+  },
+  // Apple Segmented Control Tab bar styles
+  segmentedContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 14,
+    padding: 3,
+    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  segmentedTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 8,
+    borderRadius: 11,
+    position: 'relative',
+  },
+  segmentedTabActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  segmentedTxt: {
+    fontFamily: font.medium,
+    fontSize: type.xs,
+    color: colors.slate500,
+  },
+  segmentedTxtActive: {
+    fontFamily: font.bold,
+    color: colors.brand,
+  },
+  segmentedBadgeDot: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.danger,
+    borderWidth: 1,
+    borderColor: colors.white,
+  },
+  tabPanel: {
+    gap: 12,
+  },
+
+  // Transit collapsed styles
+  transitCompactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  transitStatusBadgeCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  transitStatusDotCompact: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10b981',
+  },
+  transitStatusTextCompact: {
+    fontFamily: font.bold,
+    fontSize: 9.5,
+    color: '#10b981',
+  },
+  pinCompactBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.brand,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  pinCompactLabel: {
+    fontFamily: font.medium,
+    fontSize: 9.5,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  pinCompactValue: {
+    fontFamily: font.bold,
+    fontSize: 10.5,
+    color: '#ffffff',
+    letterSpacing: 0.5,
+  },
+
+  // Booking Status Header card styles
+  headerCard: {
+    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    marginBottom: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  headerTopSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.slate50,
+  },
+  headerServiceType: {
+    fontFamily: font.bold,
+    fontSize: 9,
+    letterSpacing: 1.2,
+    color: colors.textSecondary,
+  },
+  headerPillRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  headerMiddleSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  headerDateLabel: {
+    fontFamily: font.bold,
+    fontSize: 8,
+    letterSpacing: 1,
+    color: colors.textTertiary,
+    marginBottom: 4,
+  },
+  headerDate: {
+    fontFamily: font.bold,
+    fontSize: type.lg,
+    color: colors.textPrimary,
+    letterSpacing: -0.3,
+  },
+  headerRescheduledRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  headerRescheduledTxt: {
+    fontFamily: font.medium,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+  },
+  headerBottomSection: {
+    padding: 16,
+    backgroundColor: colors.white,
+  },
+  headerPhysioSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerPhysioAvatarWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
+  },
+  headerPhysioText: {
+    flex: 1,
+  },
+  headerPhysioLabel: {
+    fontFamily: font.bold,
+    fontSize: 8,
+    letterSpacing: 1,
+    color: colors.textTertiary,
+  },
+  headerPhysioName: {
+    fontFamily: font.bold,
+    fontSize: type.sm,
+    color: colors.textPrimary,
+    marginTop: 2,
+  },
+  headerPhysioSub: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  headerSessionBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  headerSessionBadgeTxt: {
+    fontFamily: font.bold,
+    fontSize: 9,
+  },
+
+  // Simulated Vector Map styles (Light Clean Theme)
+  simMapContainer: {
+    height: 160,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: colors.slate50,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  simMapCanvas: {
+    flex: 1,
+    position: 'relative',
+    backgroundColor: colors.slate50,
+  },
+  simMapRoad: {
+    position: 'absolute',
+    backgroundColor: colors.slate200,
+    opacity: 0.8,
+  },
+  simMapRouteLine: {
+    position: 'absolute',
+    top: 36,
+    left: 46,
+    width: 150,
+    height: 70,
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: colors.brand, // Clean brand route path
+    borderStyle: 'solid',
+    opacity: 0.8,
+  },
+  simMapPin: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -16,
+    marginLeft: -10,
+  },
+  simMapPinPulse: {
+    position: 'absolute',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#ef4444',
+    opacity: 0.2,
+  },
+  simMapPinDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  simMapPinLabel: {
+    fontFamily: font.bold,
+    fontSize: 7,
+    color: colors.textPrimary,
+    marginTop: 2,
+    backgroundColor: colors.white,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    overflow: 'hidden',
+  },
+  simMapCar: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -16,
+    marginLeft: -10,
+  },
+  simMapCarPulse: {
+    position: 'absolute',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.brand,
+    opacity: 0.2,
+  },
+  simMapCarBadge: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.brand,
+  },
+  simMapCarLabel: {
+    fontFamily: font.bold,
+    fontSize: 7,
+    color: colors.brand,
+    marginTop: 2,
+    backgroundColor: colors.white,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    overflow: 'hidden',
+  },
+  simMapStreetName: {
+    position: 'absolute',
+    fontFamily: font.medium,
+    fontSize: 7,
+    color: colors.textTertiary,
+  },
+  simMapOverlayBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.white,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  simMapOverlayDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.success,
+  },
+  simMapOverlayTxt: {
+    fontFamily: font.semiBold,
+    fontSize: 9,
+    color: colors.textSecondary,
+  },
+
+  // Billing Overview Card styles
+  financialCard: {
+    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  financialHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  financialTitle: {
+    fontFamily: font.bold,
+    fontSize: type.base,
+    color: colors.textPrimary,
+  },
+  financialDivider: {
+    height: 1,
+    backgroundColor: colors.borderSubtle,
+    marginVertical: 12,
+  },
+  financialMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  financialMetricCol: {
+    flex: 1,
+  },
+  financialMetricLabel: {
+    fontFamily: font.bold,
+    fontSize: 8,
+    letterSpacing: 0.8,
+    color: colors.textTertiary,
+    marginBottom: 4,
+  },
+  financialMetricValue: {
+    fontFamily: font.bold,
+    fontSize: type.xl,
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  financialProgressContainer: {
+    marginTop: 4,
+  },
+  financialProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  financialProgressLabel: {
+    fontFamily: font.medium,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+  },
+  financialProgressText: {
+    fontFamily: font.bold,
+    fontSize: type.xs,
+    color: colors.textPrimary,
+  },
+  financialProgressBarBg: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.slate100,
+    overflow: 'hidden',
+  },
+  financialProgressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: colors.brand,
+  },
+
+  // Fitness exercise tag styles
+  exerciseTagsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  exerciseTagText: {
+    fontFamily: font.medium,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+  },
+  exerciseTagDivider: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: colors.slate400,
+  },
+  exerciseDiffBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: colors.slate100,
+  },
+  exerciseDiffBadgeLight: {
+    backgroundColor: '#ecfdf5',
+  },
+  exerciseDiffBadgeMedium: {
+    backgroundColor: '#fffbeb',
+  },
+  exerciseDiffText: {
+    fontFamily: font.bold,
+    fontSize: 8,
+    color: colors.textSecondary,
+  },
+  exerciseDurText: {
+    fontFamily: font.medium,
+    fontSize: type.xs,
+    color: colors.textTertiary,
+  },
+
+  // Apple Watch/Nike Circular Stopwatch HUD styles
+  stopwatchRingOuter: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 4,
+    borderColor: '#1e293b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 16,
+    shadowColor: '#38bdf8',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+  },
+  simStopwatchRing: {
+    width: 144,
+    height: 144,
+    borderRadius: 72,
+    backgroundColor: '#0b0f19',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Therapist Card styles
+  therapistCard: {
+    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 16,
+    gap: 14,
+    ...CARD_SHADOW,
+  },
+  therapistCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  therapistAvatarWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.teal50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.brandSoft,
+  },
+  therapistCardInfo: {
+    flex: 1,
+  },
+  therapistLabel: {
+    fontFamily: font.medium,
+    fontSize: type.xs,
+    color: colors.textTertiary,
+  },
+  therapistName: {
+    fontFamily: font.bold,
+    fontSize: type.md,
+    color: colors.textPrimary,
+    marginTop: 2,
+  },
+  therapistSub: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  therapistActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  therapistActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  therapistCallBtn: {
+    borderColor: colors.brandSoft,
+    backgroundColor: colors.teal50,
+  },
+  therapistWaBtn: {
+    borderColor: 'rgba(37, 211, 102, 0.15)',
+    backgroundColor: 'rgba(37, 211, 102, 0.05)',
+  },
+  therapistProfileBtn: {
+    borderColor: colors.brand,
+    backgroundColor: colors.brand,
+  },
+  therapistActionBtnTxt: {
+    fontFamily: font.bold,
+    fontSize: type.xs,
+    color: colors.brand,
+  },
+  noTherapistCard: {
+    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...CARD_SHADOW,
+  },
+  noTherapistIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.slate100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  noTherapistTxt: {
+    fontFamily: font.bold,
+    fontSize: type.sm,
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  noTherapistSub: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
   },
 })

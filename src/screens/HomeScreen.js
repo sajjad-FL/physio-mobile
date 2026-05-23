@@ -412,8 +412,54 @@ export default function HomeScreen({ navigation }) {
     return 'Extreme'
   }
 
+  const getPainEmoji = (val) => {
+    if (val <= 3) return '😊'
+    if (val <= 6) return '😐'
+    if (val <= 8) return '😟'
+    return '😫'
+  }
+
+  const getClinicalGuideTitle = (val) => {
+    if (val <= 3) return 'Mild Discomfort'
+    if (val <= 6) return 'Moderate Pain'
+    if (val <= 8) return 'Severe Pain'
+    return 'Extreme Pain'
+  }
+
+  const getClinicalGuideDesc = (val) => {
+    if (val <= 3) return 'Rehab focus: gentle mobility exercises and light active stretching to recover joint range of motion. Safe for home routines.'
+    if (val <= 6) return 'Rehab focus: progressive load management, active stabilization, and customized therapeutic strength exercises.'
+    if (val <= 8) return 'Rehab focus: passive pain-relief modalities, gentle manual therapy, and joint mobilization. Avoid heavy active loading.'
+    return 'Rehab focus: strict pain control, postural unloading, and emergency-safe gentle manual care under direct senior oversight.'
+  }
+
   const pulseAnim = useRef(new Animated.Value(0.4)).current
   const activePulseAnim = useRef(new Animated.Value(0.3)).current
+  const scanAnim = useRef(new Animated.Value(0)).current
+  const emojiScaleAnim = useRef(new Animated.Value(1)).current
+
+  const handlePainScaleChange = (num) => {
+    setSelectedPainScale(num)
+    emojiScaleAnim.setValue(0.4)
+    Animated.spring(emojiScaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 40,
+      useNativeDriver: true,
+    }).start()
+  }
+
+  const handleSpotSelect = (spot) => {
+    setSelectedSpot(spot)
+    setSelectedPainScale(5)
+    emojiScaleAnim.setValue(0.4)
+    Animated.spring(emojiScaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 40,
+      useNativeDriver: true,
+    }).start()
+  }
 
   useEffect(() => {
     Animated.loop(
@@ -448,6 +494,23 @@ export default function HomeScreen({ navigation }) {
       ])
     ).start()
   }, [activePulseAnim])
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanAnim, {
+          toValue: 1,
+          duration: 3000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scanAnim, {
+          toValue: 0,
+          duration: 3000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start()
+  }, [scanAnim])
 
   useEffect(() => {
     if (!token) {
@@ -777,6 +840,32 @@ export default function HomeScreen({ navigation }) {
             </View>
 
             <View style={styles.mapViewport}>
+              {/* Blueprint Tech Grid Background */}
+              <View style={styles.gridOverlay} pointerEvents="none">
+                {[...Array(6)].map((_, i) => (
+                  <View key={`h-${i}`} style={[styles.gridLineH, { top: (250 / 6) * i }]} />
+                ))}
+                {[...Array(6)].map((_, i) => (
+                  <View key={`v-${i}`} style={[styles.gridLineV, { left: (200 / 6) * i }]} />
+                ))}
+              </View>
+
+              {/* Sweeping scan beam */}
+              <Animated.View
+                style={[
+                  styles.scanBar,
+                  {
+                    transform: [{
+                      translateY: scanAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-10, 260],
+                      })
+                    }]
+                  }
+                ]}
+                pointerEvents="none"
+              />
+
               <View style={styles.bodyGraphicContainer}>
                 {/* Head */}
                 <View style={styles.bodyHead} />
@@ -819,10 +908,7 @@ export default function HomeScreen({ navigation }) {
                     <TouchableOpacity
                       key={spot.id}
                       activeOpacity={0.8}
-                      onPress={() => {
-                        setSelectedSpot(spot);
-                        setSelectedPainScale(5);
-                      }}
+                      onPress={() => handleSpotSelect(spot)}
                       style={[
                         styles.hotspot,
                         { top: spot.top, left: spot.left, borderWidth: 0, backgroundColor: 'transparent' }
@@ -863,13 +949,24 @@ export default function HomeScreen({ navigation }) {
 
                   {/* Custom Pain segment slider */}
                   <View style={styles.painScaleContainer}>
-                    <View style={styles.painScaleLabelRow}>
-                      <Text style={styles.painScaleHeading}>Pain Intensity Scale</Text>
-                      <View style={[styles.painScaleBadge, { backgroundColor: getPainBgColor(selectedPainScale) }]}>
-                        <Text style={[styles.painScaleBadgeText, { color: getPainColor(selectedPainScale) }]}>
+                    <View style={styles.painHeaderWithEmoji}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.painScaleHeading}>Pain Intensity Scale</Text>
+                        <Text style={styles.painScaleSubheading}>Select level 1 (mild) to 10 (extreme)</Text>
+                      </View>
+                      <Animated.View style={[
+                        styles.emojiBubble,
+                        {
+                          backgroundColor: getPainBgColor(selectedPainScale),
+                          borderColor: getPainColor(selectedPainScale) + '40',
+                          transform: [{ scale: emojiScaleAnim }]
+                        }
+                      ]}>
+                        <Text style={styles.emojiText}>{getPainEmoji(selectedPainScale)}</Text>
+                        <Text style={[styles.emojiLabel, { color: getPainColor(selectedPainScale) }]}>
                           {selectedPainScale} - {getPainLabel(selectedPainScale)}
                         </Text>
-                      </View>
+                      </Animated.View>
                     </View>
                     
                     <View style={styles.painScaleSegments}>
@@ -890,7 +987,7 @@ export default function HomeScreen({ navigation }) {
                                 elevation: 3,
                               }
                             ]}
-                            onPress={() => setSelectedPainScale(num)}
+                            onPress={() => handlePainScaleChange(num)}
                           >
                             <Text style={[
                               styles.painScaleSegmentText,
@@ -907,6 +1004,19 @@ export default function HomeScreen({ navigation }) {
                       <Text style={styles.painScaleRangeText}>Moderate</Text>
                       <Text style={styles.painScaleRangeText}>Severe</Text>
                       <Text style={styles.painScaleRangeText}>Extreme</Text>
+                    </View>
+
+                    {/* Clinical Guidelines Card */}
+                    <View style={[styles.clinicalGuideCard, { backgroundColor: getPainBgColor(selectedPainScale) + '15', borderColor: getPainColor(selectedPainScale) + '20' }]}>
+                      <Ionicons name="medical" size={12} color={getPainColor(selectedPainScale)} style={{ marginTop: 2, marginRight: 6 }} />
+                      <View style={styles.clinicalGuideBody}>
+                        <Text style={[styles.clinicalGuideTitle, { color: getPainColor(selectedPainScale) }]}>
+                          {getClinicalGuideTitle(selectedPainScale)}
+                        </Text>
+                        <Text style={styles.clinicalGuideDesc}>
+                          {getClinicalGuideDesc(selectedPainScale)}
+                        </Text>
+                      </View>
                     </View>
                   </View>
 
@@ -3499,5 +3609,91 @@ const styles = StyleSheet.create({
     fontSize: 8.5,
     color: '#94a3b8',
     fontWeight: '600',
+  },
+  // Blueprint Tech Grid Background
+  gridOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.15,
+  },
+  gridLineH: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: '#0d6b6b',
+  },
+  gridLineV: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: '#0d6b6b',
+  },
+  // Sweeping scan beam
+  scanBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: '#2dd4bf',
+    shadowColor: '#2dd4bf',
+    shadowOpacity: 0.8,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 5,
+    zIndex: 5,
+  },
+  // Pain scale styles
+  painHeaderWithEmoji: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    gap: 8,
+  },
+  painScaleSubheading: {
+    fontFamily: font.regular,
+    fontSize: 8,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  emojiBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+  },
+  emojiText: {
+    fontSize: 14,
+  },
+  emojiLabel: {
+    fontFamily: font.bold,
+    fontSize: 8.5,
+  },
+  // Clinical Guideline
+  clinicalGuideCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 8,
+    marginTop: 10,
+  },
+  clinicalGuideBody: {
+    flex: 1,
+  },
+  clinicalGuideTitle: {
+    fontFamily: font.bold,
+    fontSize: 9,
+    marginBottom: 1,
+  },
+  clinicalGuideDesc: {
+    fontFamily: font.regular,
+    fontSize: 8,
+    color: '#475569',
+    lineHeight: 11,
   },
 })
