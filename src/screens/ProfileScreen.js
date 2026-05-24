@@ -8,7 +8,6 @@ import {
   Image,
   Modal,
   Platform,
-  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -483,11 +482,7 @@ export default function ProfileScreen({ navigation }) {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 56 : 0}
-    >
+    <View style={styles.flex}>
       {/* Ambient Top Background Halo Glow */}
       <View style={styles.ambientHeaderGlow} pointerEvents="none" />
       <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
@@ -507,7 +502,6 @@ export default function ProfileScreen({ navigation }) {
         contentContainerStyle={[styles.pad, { paddingBottom: Math.max(insets.bottom, 20) + 28 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
       >
         {/* ── Luxe Profile Card ─────────────────────── */}
         <View style={styles.profileCard}>
@@ -733,6 +727,7 @@ export default function ProfileScreen({ navigation }) {
             placeholder="Apartment/Flat, Street details, Landmark, Area"
             placeholderTextColor={colors.slate400}
             multiline
+            editable={false}
             error={fieldErrors.address || fieldErrors.addressCoords}
           />
         </View>
@@ -957,7 +952,7 @@ export default function ProfileScreen({ navigation }) {
         onUseMyLocation={useLocationForModal}
         onUseLocation={applyMapPinToDraft}
       />
-    </KeyboardAvoidingView>
+    </View>
   )
 }
 
@@ -1250,11 +1245,6 @@ const styles = StyleSheet.create({
   inputContainerFocused: {
     borderColor: figmaTokens.primary,
     backgroundColor: colors.white,
-    shadowColor: figmaTokens.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
   },
   inputContainerError: {
     borderColor: colors.danger,
