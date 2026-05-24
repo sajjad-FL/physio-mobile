@@ -29,7 +29,6 @@ import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { figmaTokens, figmaShadowCard, figmaShadowGlow } from '../theme/figmaTokens'
 import { assetUrl } from '../utils/assetUrl'
-import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll'
 import { validateProfileLiveField } from '../utils/profileLiveValidation'
 
 const GENDERS = [
@@ -143,10 +142,6 @@ function PremiumDateInput({ label, value, onPress, error }) {
 
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets()
-  const { padBottom, scrollViewProps, keyboardAvoidingViewProps } = useKeyboardAwareScroll({
-    iosHeaderOffset: 0,
-    extraBottomPadding: 28,
-  })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -488,7 +483,11 @@ export default function ProfileScreen({ navigation }) {
   }
 
   return (
-    <KeyboardAvoidingView {...keyboardAvoidingViewProps} style={styles.flex}>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 56 : 0}
+    >
       {/* Ambient Top Background Halo Glow */}
       <View style={styles.ambientHeaderGlow} pointerEvents="none" />
       <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
@@ -505,9 +504,10 @@ export default function ProfileScreen({ navigation }) {
       </View>
 
       <ScrollView
-        {...scrollViewProps}
-        contentContainerStyle={[styles.pad, { paddingBottom: padBottom }]}
+        contentContainerStyle={[styles.pad, { paddingBottom: Math.max(insets.bottom, 20) + 28 }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {/* ── Luxe Profile Card ─────────────────────── */}
         <View style={styles.profileCard}>

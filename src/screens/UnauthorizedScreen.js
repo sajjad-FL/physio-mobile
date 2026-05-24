@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import Button from '../components/ui/Button'
 import { clearSession, getRoleSync } from '../auth/tokenStore'
+import { useAuth } from '../context/AuthContext'
 import { colors } from '../theme/colors'
 import { getWebLoginUrl, openWebLoginInBrowser } from '../utils/webApp'
 
 export default function UnauthorizedScreen({ navigation }) {
+  const { logout } = useAuth()
   const [envHint, setEnvHint] = useState('')
-  const isAdmin = getRoleSync() === 'admin'
+  const role = getRoleSync()
+  const isAdmin = role === 'admin'
+  const isPhysio = role === 'physio'
 
   useEffect(() => {
     if (!isAdmin) return
@@ -30,6 +34,21 @@ export default function UnauthorizedScreen({ navigation }) {
       clearTimeout(t)
     }
   }, [navigation, isAdmin])
+
+  if (isPhysio) {
+    return (
+      <View style={styles.wrap}>
+        <Text style={styles.title}>Use the provider app</Text>
+        <Text style={styles.sub}>
+          Physiotherapist accounts sign in through the PhysioKhom Provider app, not this patient app. Install the
+          provider app and sign in with the same phone number.
+        </Text>
+        <Button title="Log out" onPress={() => logout(navigation)} />
+        <View style={styles.btnGap} />
+        <Button title="Go home" variant="outline" onPress={() => navigation.replace('Home')} />
+      </View>
+    )
+  }
 
   if (!isAdmin) {
     return (
@@ -61,4 +80,5 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700', color: colors.slate900 },
   sub: { marginTop: 8, marginBottom: 16, fontSize: 13, color: colors.slate500, lineHeight: 19 },
   hint: { marginBottom: 12, fontSize: 12, color: colors.slate600, lineHeight: 17 },
+  btnGap: { height: 10 },
 })

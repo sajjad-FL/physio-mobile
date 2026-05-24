@@ -79,6 +79,16 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** Returns true when a "HH:MM-HH:MM" slot is in the past or within 2 h from now (client-local). */
+function isSlotUnavailableOnClient(timeSlot) {
+  const m = /^(\d{2}):(\d{2})/.exec(String(timeSlot || '').trim())
+  if (!m) return false
+  const now = new Date()
+  const slotStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(m[1]), Number(m[2]), 0)
+  // past OR within 2-hour lead-time window
+  return (slotStart.getTime() - now.getTime()) < 2 * 60 * 60 * 1000
+}
+
 function prettyDate(iso) {
   if (!iso) return ''
   const [y, m, d] = String(iso).split('-')
@@ -224,7 +234,6 @@ function StepCard({ step, title, subtitle, locked, done, children }) {
 function PhysioPickerCard({ physio: p, selected, onSelect }) {
   const avg = Number(p.avgRating) || 0
   const total = Number(p.totalReviews) || 0
-  const dist = p.distanceKm == null ? null : `${Number(p.distanceKm).toFixed(1)} km`
   const avatarUri = assetUrl(p.avatar)
   const feeLabel = nearbyPhysioFeeLabel(p)
 
@@ -274,12 +283,6 @@ function PhysioPickerCard({ physio: p, selected, onSelect }) {
             {p.experience ? (
               <View style={styles.physioMetaPill}>
                 <Text style={styles.physioMetaPillTxt}>{p.experience}yr exp</Text>
-              </View>
-            ) : null}
-            {dist ? (
-              <View style={styles.physioMetaPill}>
-                <Ionicons name="location-outline" size={9} color={colors.textTertiary} />
-                <Text style={styles.physioMetaPillTxt}>{dist}</Text>
               </View>
             ) : null}
           </View>
@@ -430,6 +433,9 @@ export default function PhysioListScreen({ navigation, route }) {
 
   // Submit
   const [submitting, setSubmitting] = useState(false)
+  const [successBookingId, setSuccessBookingId] = useState(null)
+  const [successMessage, setSuccessMessage] = useState('')
+  const [paymentCancelModal, setPaymentCancelModal] = useState(false)
   const [useWalletCredit, setUseWalletCredit] = useState(false)
   const { data: referralData } = useReferralMyCode(Boolean(token))
   const walletBalance = Number(referralData?.walletBalance) || 0
@@ -584,7 +590,15 @@ export default function PhysioListScreen({ navigation, route }) {
   const loadSlots = useCallback(async () => {
     try {
       const res = await api.get('/slots', { params: { date } })
-      setSlots((res.data?.slots || []).filter((s) => s.available))
+      const isToday = date === todayISO()
+      setSlots(
+        (res.data?.slots || []).filter((s) => {
+          if (!s.available) return false
+          // Client-side guard: hide past/too-soon slots for today (covers server timezone drift)
+          if (isToday && isSlotUnavailableOnClient(s.timeSlot)) return false
+          return true
+        })
+      )
       setTimeSlot('')
     } catch {
       setSlots([])
@@ -640,13 +654,10 @@ export default function PhysioListScreen({ navigation, route }) {
       }
 
       if (serviceType === 'home') {
-        await api.post('/bookings/request-home', body)
-        Toast.show({
-          type: 'success',
-          text1: 'Request sent!',
-          text2: 'Our team will assign a physiotherapist soon.',
-        })
-        navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'UserTabs' }] }))
+        const bookingRes = await api.post('/bookings/request-home', body)
+        const newBookingId = bookingRes.data?._id
+        setSuccessMessage("We're finding the best physiotherapist for your condition and we will contact you shortly.")
+        setSuccessBookingId(newBookingId || 'new')
         return
       }
 
@@ -707,7 +718,7 @@ export default function PhysioListScreen({ navigation, route }) {
         return
       }
 
-      setSubmitting(false)
+      // Keep submitting=true until checkout is fully resolved (success, failure, or cancel)
       RazorpayCheckout.open(options)
         .then(async (response) => {
           try {
@@ -718,25 +729,36 @@ export default function PhysioListScreen({ navigation, route }) {
               razorpay_signature: response.razorpay_signature,
             })
             const bookingId = done.data?._id
-            Toast.show({
-              type: 'success',
-              text1: 'Payment successful',
-              text2: 'Your online consultation is confirmed.',
-            })
-            if (bookingId) navigateToPaidOnlineBooking(bookingId)
-            else navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'UserTabs' }] }))
+            setSuccessMessage('Payment successful! Your online consultation is confirmed. Your physiotherapist will join at the scheduled time.')
+            setSuccessBookingId(bookingId || 'new')
           } catch (e) {
             Toast.show({
               type: 'error',
               text1: e.response?.data?.message || e.message || 'Could not confirm payment',
             })
+          } finally {
+            setSubmitting(false)
           }
         })
         .catch((error) => {
-          Toast.show({
-            type: 'error',
-            text1: error.description ? `Payment failed: ${error.description}` : `Payment error: ${error.message || JSON.stringify(error)}`,
-          })
+          const rzp = error?.error || error
+          const code = String(rzp?.code || '').toUpperCase()
+          const desc = String(rzp?.description || rzp?.message || '').toLowerCase()
+          const isCancelled =
+            code === 'PAYMENT_CANCELLED' ||
+            code === 'BAD_REQUEST_ERROR' ||
+            desc.includes('cancel') ||
+            desc.includes('exit') ||
+            desc.includes('user dropped')
+          if (isCancelled) {
+            setPaymentCancelModal(true)
+          } else {
+            Toast.show({
+              type: 'error',
+              text1: rzp?.description || rzp?.message || 'Payment failed. Please try again.',
+            })
+          }
+          setSubmitting(false)
         })
       return
     } catch (e) {
@@ -1036,7 +1058,7 @@ export default function PhysioListScreen({ navigation, route }) {
                   },
                   {
                     value: 'online',
-                    title: 'Online Video',
+                    title: 'Online Consultation',
                     desc: 'Secure video session with real-time digital posture guidance.',
                     icon: 'videocam-outline',
                     activeIcon: 'videocam'
@@ -1493,6 +1515,89 @@ export default function PhysioListScreen({ navigation, route }) {
         onUseMyLocation={useMyLocationForMapPicker}
         onUseLocation={applyMapPin}
       />
+
+      {/* ── Payment cancelled modal ──────────────────────────────────────── */}
+      <Modal visible={paymentCancelModal} transparent animationType="fade">
+        <View style={styles.successOverlay}>
+          <View style={styles.successCard}>
+            <View style={[styles.successIconCircle, { backgroundColor: '#FFF3E0' }]}>
+              <Ionicons name="close-circle" size={56} color="#F59E0B" />
+            </View>
+            <Text style={styles.successTitle}>Payment Cancelled</Text>
+            <Text style={styles.successBody}>
+              Your payment was not completed. No amount has been charged. You can try booking again whenever you're ready.
+            </Text>
+            <Pressable
+              style={[styles.successBtn, { backgroundColor: '#F59E0B' }]}
+              onPress={() => {
+                setPaymentCancelModal(false)
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: 'UserTabs',
+                        state: { index: 0, routes: [{ name: 'DashboardHome' }] },
+                      },
+                    ],
+                  })
+                )
+              }}
+            >
+              <Text style={styles.successBtnTxt}>OK, Go to Dashboard</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Booking success modal ─────────────────────────────────────────── */}
+      <Modal visible={!!successBookingId} transparent animationType="fade">
+        <View style={styles.successOverlay}>
+          <View style={styles.successCard}>
+            <View style={styles.successIconCircle}>
+              <Ionicons name="checkmark-circle" size={56} color={colors.brand} />
+            </View>
+            <Text style={styles.successTitle}>Booking Confirmed!</Text>
+            <Text style={styles.successBody}>{successMessage}</Text>
+            <Pressable
+              style={styles.successBtn}
+              onPress={() => {
+                const id = successBookingId
+                setSuccessBookingId(null)
+                setSuccessMessage('')
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [
+                      {
+                        name: 'UserTabs',
+                        state: {
+                          index: 1,
+                          routes: [
+                            { name: 'DashboardHome' },
+                            {
+                              name: 'Bookings',
+                              state: {
+                                index: 1,
+                                routes: [
+                                  { name: 'BookingsList' },
+                                  { name: 'BookingDetail', params: { id } },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  })
+                )
+              }}
+            >
+              <Text style={styles.successBtnTxt}>View Booking</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -2347,9 +2452,9 @@ const styles = StyleSheet.create({
   },
   physioCardRow: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
   physioAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
+    width: 64,
+    height: 64,
+    borderRadius: 18,
     backgroundColor: colors.slate200,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2475,5 +2580,63 @@ const styles = StyleSheet.create({
   },
   wizardStepLabelDone: {
     color: colors.slate600,
+  },
+
+  // ── Booking success modal ──────────────────────────────────────────────────
+  successOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  successCard: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: 28,
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20 },
+      android: { elevation: 10 },
+    }),
+  },
+  successIconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: colors.teal50 || '#e6f7f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  successTitle: {
+    fontFamily: font.bold,
+    fontSize: 20,
+    color: colors.textPrimary,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  successBody: {
+    fontFamily: font.regular,
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: 24,
+  },
+  successBtn: {
+    backgroundColor: colors.brand,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 36,
+    width: '100%',
+    alignItems: 'center',
+  },
+  successBtnTxt: {
+    fontFamily: font.semibold || font.bold,
+    fontSize: 15,
+    color: colors.white,
   },
 })

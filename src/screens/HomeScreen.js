@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useRef } from 'react'
+import { memo, useState, useEffect, useRef, useMemo } from 'react'
 import { Alert, Animated, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
@@ -8,8 +8,39 @@ import { StitchHeader } from '../components/home/StitchHeader'
 import { colors } from '../theme/colors'
 import { font, type } from '../theme/typography'
 import { figmaTokens } from '../theme/figmaTokens'
-import { siteOrigin } from '../utils/siteOrigin'
 import { api } from '../api/client'
+
+const DEFAULT_SERVICE_AREA = {
+  label: 'Kokrajhar',
+  lat: 26.4014,
+  lng: 90.2667,
+}
+
+const DEFAULT_DISPLAY_SPECIALISTS = 3
+
+function displaySpecialistCount(count) {
+  const n = Number(count)
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_DISPLAY_SPECIALISTS
+  return n
+}
+
+function extractAreaLabel(location, fallback = DEFAULT_SERVICE_AREA.label) {
+  const text = String(location || '').trim()
+  if (!text) return fallback
+  const parts = text.split(',').map((s) => s.trim()).filter(Boolean)
+  if (parts.length === 0) return fallback
+  const match = parts.find((p) => /kokrajhar/i.test(p))
+  if (match) return match.replace(/\d+/g, '').trim() || fallback
+  return parts[parts.length - 1] || fallback
+}
+
+function countActionableBookings(bookings) {
+  return (Array.isArray(bookings) ? bookings : []).filter((b) => {
+    if (b?.planStatus === 'proposed') return true
+    if (b?.planStatus === 'approved' && b?.paymentStatus === 'pending') return true
+    return false
+  }).length
+}
 
 const WHY_FEATURES = [
   {
@@ -55,7 +86,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Which areas do you serve?',
-    a: 'We actively serve Guwahati and surrounding metropolitan areas. Type your locality at booking to confirm coverage.',
+    a: 'We actively serve Kokrajhar and surrounding metropolitan areas. Type your locality at booking to confirm coverage.',
     cat: 'Booking',
   },
   {
@@ -66,47 +97,53 @@ const FAQ_ITEMS = [
 ]
 
 const SPECIALTIES = [
-  { id: 'Back Pain', title: 'Orthopedic', icon: 'body-outline', bg: '#e6f4f3', color: '#0d6b6b' },
-  { id: 'Stroke/Paralysis', title: 'Neuro Rehab', icon: 'pulse-outline', bg: '#eff6ff', color: '#2563eb' },
-  { id: 'Knee Pain', title: 'Knee & Joint', icon: 'walk-outline', bg: '#f5f3ff', color: '#5b21b6' },
-  { id: 'Post Surgery Rehab', title: 'Post-Op', icon: 'medkit-outline', bg: '#ecfdf5', color: '#047857' },
-  { id: 'Neck Pain', title: 'Neck & Spine', icon: 'fitness-outline', bg: '#fffbeb', color: '#f59e0b' },
-  { id: 'Many More', title: 'Other Care', icon: 'medical-outline', bg: '#fff1f2', color: '#dc2626' },
+  { id: 'Back Pain', title: 'Orthopedic', image: require('../../assets/images/specialty_orthopedic.png'), bg: '#e6f4f3', color: '#0d6b6b' },
+  { id: 'Stroke/Paralysis', title: 'Neuro Rehab', image: require('../../assets/images/specialty_neuro.png'), bg: '#eff6ff', color: '#2563eb' },
+  { id: 'Knee Pain', title: 'Knee & Joint', image: require('../../assets/images/specialty_knee.png'), bg: '#f5f3ff', color: '#5b21b6' },
+  { id: 'Post Surgery Rehab', title: 'Post-Op', image: require('../../assets/images/specialty_post_op.png'), bg: '#ecfdf5', color: '#047857' },
+  { id: 'Neck Pain', title: 'Neck & Spine', image: require('../../assets/images/specialty_neck.png'), bg: '#fffbeb', color: '#f59e0b' },
+  { id: 'Many More', title: 'Other Care', image: require('../../assets/images/specialty_other.png'), bg: '#fff1f2', color: '#dc2626' },
 ]
 
-const PROMO_BANNERS = [
+const PLAN_TIER_CARDS = [
   {
-    title: 'Free Initial Assessment',
-    desc: 'Get your first physical health consultation at home free. Limited slots today.',
-    badge: 'LIMITED OFFER',
-    saveCallout: '100% FREE',
+    label: '7-Day Plan',
+    sessions: 7,
+    discountPercent: 0,
+    badge: 'STARTER',
+    saveCallout: null,
+    desc: '7 daily home sessions. Pay 1 session upfront, 100% by session 5.',
+    icon: 'calendar-outline',
     bg: '#ffffff',
     border: '#e2e8f0',
     color: '#0d6b6b',
     titleColor: '#0f172a',
-    icon: 'gift-outline',
   },
   {
-    title: 'Neuro Recovery Bundle',
-    desc: 'Specialized stroke and paralysis rehabilitation plan. Custom packages available.',
-    badge: 'BEST SELLER',
-    saveCallout: 'SAVE 15%',
+    label: '15-Day Plan',
+    sessions: 15,
+    discountPercent: 3.33,
+    badge: 'MOST POPULAR',
+    saveCallout: 'SAVE 3.33%',
+    desc: '15 sessions. Pay 50% by session 5, 100% by session 12.',
+    icon: 'pulse-outline',
     bg: '#f4fbf7',
     border: '#a7f3d0',
     color: '#059669',
     titleColor: '#064e3b',
-    icon: 'pulse-outline',
   },
   {
-    title: 'Standardized Doorstep Care',
-    desc: 'Certified expert physical therapists bringing clinical gear directly to you.',
-    badge: 'PREMIUM',
-    saveCallout: 'SAVE ₹1,500',
+    label: '30-Day Plan',
+    sessions: 30,
+    discountPercent: 4.67,
+    badge: 'BEST VALUE',
+    saveCallout: 'SAVE 4.67%',
+    desc: '30 sessions. Pay 50% by session 10, 75% by session 20, 100% by session 25.',
+    icon: 'shield-checkmark-outline',
     bg: '#f0f9ff',
     border: '#bae6fd',
     color: '#0284c7',
     titleColor: '#0c4a6e',
-    icon: 'shield-checkmark-outline',
   },
 ]
 
@@ -114,7 +151,7 @@ const TESTIMONIALS = [
   {
     initials: 'PB',
     name: 'Priya Bora',
-    loc: 'Beltola, Guwahati',
+    loc: 'Beltola, Kokrajhar',
     rating: '5.0',
     text: '"My recovery after knee surgery was much faster thanks to regular home physio sessions. The physiotherapist was professional, punctual, and very caring. Highly recommended!"',
     sessions: '12 sessions completed',
@@ -122,7 +159,7 @@ const TESTIMONIALS = [
   {
     initials: 'RK',
     name: 'Rajesh Kalita',
-    loc: 'Kahilipara, Guwahati',
+    loc: 'Kahilipara, Kokrajhar',
     rating: '4.9',
     text: '"Due to stroke, my father had severe mobility issues. The neuro rehabilitation specialist worked wonders. His posture and movement have improved by 70%."',
     sessions: '20 sessions completed',
@@ -130,7 +167,7 @@ const TESTIMONIALS = [
   {
     initials: 'ND',
     name: 'Nayan Das',
-    loc: 'Zoo Road, Guwahati',
+    loc: 'Zoo Road, Kokrajhar',
     rating: '5.0',
     text: '"Extremely convenient! No need to travel through heavy traffic with lower back pain. Dr. Sharma brought all bands and clinical gear. Excellent home treatment."',
     sessions: '8 sessions completed',
@@ -208,13 +245,13 @@ function FaqRow({ q, a, last }) {
   )
 }
 
-const HealthHubCard = memo(function HealthHubCard({ token, navigation, openWhatsApp }) {
+const HealthHubCard = memo(function HealthHubCard({ token, navigation, openWhatsApp, activeBooking }) {
   const [consultationClaimed, setConsultationClaimed] = useState(false)
 
   const handleClaimConsultation = () => {
     setConsultationClaimed(true)
     Alert.alert(
-      'Consultation Claimed! 🎉',
+      'Consultation Claimed!',
       'Our Care Coordinator will call you in the next 15 minutes to understand your symptoms and match you with the right specialist.',
       [
         { text: 'OK' },
@@ -224,26 +261,83 @@ const HealthHubCard = memo(function HealthHubCard({ token, navigation, openWhats
   }
 
   if (token) {
-    // Logged in Patient Active Package Card
+    if (!activeBooking) {
+      // Logged in but no active booking — prompt to book
+      return (
+        <View style={styles.hubCard}>
+          <View style={styles.hubHeader}>
+            <View style={styles.hubHeaderLeft}>
+              <View style={[styles.hubBadge, { backgroundColor: figmaTokens.primary + '20', borderColor: figmaTokens.primary + '30' }]}>
+                <Ionicons name="calendar-outline" size={10} color={figmaTokens.primary} />
+                <Text style={[styles.hubBadgeText, { color: figmaTokens.primary }]}>No Active Plan</Text>
+              </View>
+              <Text style={styles.hubTitle}>Start your recovery today</Text>
+            </View>
+          </View>
+          <Text style={[styles.hubProgressText, { marginBottom: 12 }]}>
+            Book a home visit with a verified physiotherapist and begin your personalised care plan.
+          </Text>
+          <View style={styles.hubActions}>
+            <TouchableOpacity
+              style={styles.hubActionBtnPri}
+              onPress={() => navigation.navigate('PhysioList')}
+            >
+              <Text style={styles.hubActionTextPri}>Book a Session</Text>
+              <Ionicons name="chevron-forward" size={12} color={colors.white} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )
+    }
+
+    // Derive live values from the active booking
+    const schedule = Array.isArray(activeBooking.schedule) ? activeBooking.schedule : []
+    const totalSessions = Number(activeBooking.sessions) || Math.max(1, schedule.length)
+    const completedSessions = schedule.filter((s) => s.status === 'completed').length
+    const sessionsLeft = Math.max(0, totalSessions - completedSessions)
+    const progressPct = totalSessions > 0 ? Math.round((completedSessions / totalSessions) * 100) : 0
+
+    const physioName = typeof activeBooking.physioId === 'object' && activeBooking.physioId?.name
+      ? activeBooking.physioId.name
+      : null
+
+    const today = new Date()
+    const todayYmd = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+    const nextScheduleEntry = schedule.find((s) => s.status !== 'completed' && s.date >= todayYmd)
+    const nextVisitText = nextScheduleEntry
+      ? `${nextScheduleEntry.date} · ${nextScheduleEntry.time || activeBooking.timeSlot || ''} · At Home`
+      : activeBooking.date
+        ? `${activeBooking.date} · ${activeBooking.timeSlot || ''} · At Home`
+        : 'To be scheduled'
+
+    const planTitle = activeBooking.issue || 'Home Visit Plan'
+    const badgeLabel = activeBooking.planStatus === 'proposed'
+      ? 'Plan Pending Approval'
+      : activeBooking.planStatus === 'approved'
+        ? 'Active Recovery Plan'
+        : 'Booking Confirmed'
+
     return (
       <View style={styles.hubCard}>
         <View style={styles.hubHeader}>
           <View style={styles.hubHeaderLeft}>
             <View style={styles.hubBadge}>
               <Ionicons name="pulse" size={10} color={colors.white} />
-              <Text style={styles.hubBadgeText}>Active Recovery Plan</Text>
+              <Text style={styles.hubBadgeText}>{badgeLabel}</Text>
             </View>
-            <Text style={styles.hubTitle}>Knee & Joint Rehabilitation</Text>
+            <Text style={styles.hubTitle} numberOfLines={2}>{planTitle}</Text>
           </View>
-          <Text style={styles.hubSessionsLeft}>8 of 10 left</Text>
+          <Text style={styles.hubSessionsLeft}>{sessionsLeft} of {totalSessions} left</Text>
         </View>
 
         {/* Progress Bar */}
         <View style={styles.hubProgressContainer}>
           <View style={styles.hubProgressBarBg}>
-            <View style={[styles.hubProgressBarFill, { width: '80%' }]} />
+            <View style={[styles.hubProgressBarFill, { width: `${progressPct}%` }]} />
           </View>
-          <Text style={styles.hubProgressText}>80% sessions remaining (2 completed)</Text>
+          <Text style={styles.hubProgressText}>
+            {progressPct}% sessions remaining ({completedSessions} completed)
+          </Text>
         </View>
 
         {/* Next Session Details */}
@@ -252,18 +346,22 @@ const HealthHubCard = memo(function HealthHubCard({ token, navigation, openWhats
             <Ionicons name="person" size={18} color={figmaTokens.primary} />
           </View>
           <View style={styles.hubDocInfo}>
-            <Text style={styles.hubDocName}>Dr. Amit Sharma, MPT</Text>
-            <Text style={styles.hubDocSub}>Next visit: Tomorrow, 10:00 AM · At Home</Text>
+            <Text style={styles.hubDocName}>
+              {physioName ? (physioName.startsWith('Dr') ? physioName : `Dr. ${physioName}`) : 'Specialist being assigned'}
+            </Text>
+            <Text style={styles.hubDocSub} numberOfLines={1}>Next visit: {nextVisitText}</Text>
           </View>
           <View style={styles.hubStatusIndicator}>
             <View style={styles.hubStatusDot} />
-            <Text style={styles.hubStatusText}>Confirmed</Text>
+            <Text style={styles.hubStatusText}>
+              {physioName ? 'Confirmed' : 'Pending'}
+            </Text>
           </View>
         </View>
 
         {/* Quick Actions */}
         <View style={styles.hubActions}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.hubActionBtnSec}
             onPress={() => {
               Alert.alert('Contact Support', 'Calling Care Coordinator...', [
@@ -275,9 +373,15 @@ const HealthHubCard = memo(function HealthHubCard({ token, navigation, openWhats
             <Ionicons name="call-outline" size={12} color={colors.textPrimary} />
             <Text style={styles.hubActionTextSec}>Help Desk</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.hubActionBtnPri}
-            onPress={() => navigation.navigate(getDefaultDashboardScreen())}
+            onPress={() => {
+              if (activeBooking._id) {
+                navigation.navigate('Bookings', { screen: 'BookingDetail', params: { id: activeBooking._id } })
+              } else {
+                navigation.navigate(getDefaultDashboardScreen())
+              }
+            }}
           >
             <Text style={styles.hubActionTextPri}>Manage Schedule</Text>
             <Ionicons name="chevron-forward" size={12} color={colors.white} />
@@ -385,6 +489,18 @@ export default function HomeScreen({ navigation }) {
   const [userName, setUserName] = useState('')
   const [featuredPhysios, setFeaturedPhysios] = useState([])
   const [loadingPhysios, setLoadingPhysios] = useState(true)
+  const [serviceAreaLabel, setServiceAreaLabel] = useState(DEFAULT_SERVICE_AREA.label)
+  const [searchCoords, setSearchCoords] = useState({
+    lat: DEFAULT_SERVICE_AREA.lat,
+    lng: DEFAULT_SERVICE_AREA.lng,
+  })
+  const [homeStats, setHomeStats] = useState({
+    activeSpecialists: null,
+    bookingRateToday: null,
+    loading: true,
+  })
+  const [alertCount, setAlertCount] = useState(0)
+  const [activeBooking, setActiveBooking] = useState(null)
   const [activeFaqCat, setActiveFaqCat] = useState('All')
   const [painViewMode, setPainViewMode] = useState('grid') // 'grid' | 'map'
   const [bodyViewSide, setBodyViewSide] = useState('front') // 'front' | 'back'
@@ -515,15 +631,26 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => {
     if (!token) {
       setUserName('')
+      setAlertCount(0)
       return
     }
     let active = true
     async function fetchProfile() {
       try {
         const response = await api.get('/profile')
-        if (active && response.data && response.data.name) {
+        if (!active || !response.data) return
+        if (response.data.name) {
           const firstName = response.data.name.split(' ')[0]
           setUserName(firstName)
+        }
+        const profileLocation = response.data.address?.text || ''
+        if (profileLocation) {
+          setServiceAreaLabel(extractAreaLabel(profileLocation))
+        }
+        const lat = Number(response.data.address?.lat)
+        const lng = Number(response.data.address?.lng)
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          setSearchCoords({ lat, lng })
         }
       } catch (err) {
         // Silent fallback
@@ -536,12 +663,73 @@ export default function HomeScreen({ navigation }) {
   }, [token])
 
   useEffect(() => {
+    if (!token) {
+      setAlertCount(0)
+      setActiveBooking(null)
+      return
+    }
+    let active = true
+    async function fetchAlerts() {
+      try {
+        const response = await api.get('/bookings/mine', { params: { limit: 20 } })
+        if (!active) return
+        const bookings = response.data?.data || []
+        setAlertCount(countActionableBookings(bookings))
+        const found = bookings.find((b) => b.sessionStatus !== 'completed') || null
+        setActiveBooking(found)
+      } catch (err) {
+        if (active) {
+          setAlertCount(0)
+          setActiveBooking(null)
+        }
+      }
+    }
+    fetchAlerts()
+    return () => {
+      active = false
+    }
+  }, [token])
+
+  useEffect(() => {
+    let active = true
+    async function fetchHomeStats() {
+      try {
+        setHomeStats((prev) => ({ ...prev, loading: true }))
+        const response = await api.get('/platform/home-stats', {
+          params: {
+            lat: searchCoords.lat,
+            lng: searchCoords.lng,
+            city: serviceAreaLabel,
+          },
+        })
+        if (!active) return
+        setHomeStats({
+          activeSpecialists: Number(response.data?.activeSpecialists ?? 0),
+          bookingRateToday:
+            response.data?.bookingRateToday == null
+              ? null
+              : Number(response.data.bookingRateToday),
+          loading: false,
+        })
+      } catch (err) {
+        if (active) {
+          setHomeStats({ activeSpecialists: 0, bookingRateToday: null, loading: false })
+        }
+      }
+    }
+    fetchHomeStats()
+    return () => {
+      active = false
+    }
+  }, [searchCoords.lat, searchCoords.lng, serviceAreaLabel])
+
+  useEffect(() => {
     let active = true
     async function fetchPhysios() {
       try {
         setLoadingPhysios(true)
         const response = await api.get('/physios/nearby', {
-          params: { lat: 26.1445, lng: 91.7362, limit: 6 },
+          params: { lat: searchCoords.lat, lng: searchCoords.lng, limit: 6 },
         })
         if (active) {
           setFeaturedPhysios(response.data.physios || [])
@@ -558,15 +746,30 @@ export default function HomeScreen({ navigation }) {
     return () => {
       active = false
     }
-  }, [])
+  }, [searchCoords.lat, searchCoords.lng])
 
   const showLocationSelector = () => {
+    const displayCount = displaySpecialistCount(homeStats.activeSpecialists)
+    const specialistLine =
+      homeStats.activeSpecialists == null
+        ? 'Loading specialist availability…'
+        : `${displayCount} verified specialist${displayCount === 1 ? '' : 's'} are currently available near ${serviceAreaLabel}.`
     Alert.alert(
       'Service Coverage Area',
-      'We currently provide verified home-visit physiotherapy services in Guwahati, Assam and nearby metropolitan areas.\n\nMore locations coming soon across Northeast India!',
+      `We provide verified home-visit physiotherapy in ${serviceAreaLabel}, Assam and nearby areas.\n\n${specialistLine}`,
       [{ text: 'OK', style: 'default' }]
     )
   }
+
+  const demandInsightText = useMemo(() => {
+    if (homeStats.loading) return 'Checking live availability in your area…'
+    const count = displaySpecialistCount(homeStats.activeSpecialists)
+    const ratePart =
+      homeStats.bookingRateToday == null
+        ? ''
+        : ` · ${homeStats.bookingRateToday}% slots filled today`
+    return `⚡ ${count} active specialist${count === 1 ? '' : 's'} in ${serviceAreaLabel}${ratePart}`
+  }, [homeStats.loading, homeStats.activeSpecialists, homeStats.bookingRateToday, serviceAreaLabel])
 
   const openWhatsAppConcierge = () => {
     const message = encodeURIComponent("Hello PhysioKhom, I need assistance with booking a physiotherapist session.")
@@ -610,13 +813,24 @@ export default function HomeScreen({ navigation }) {
           </View>
           <View style={styles.headerRight}>
             <Pressable
-              onPress={() => Alert.alert('Notifications', 'No new alerts.', [{ text: 'OK' }])}
+              onPress={() => {
+                if (alertCount > 0) {
+                  if (!token) return navigation.navigate('Login')
+                  navigation.navigate(getDefaultDashboardScreen())
+                  return
+                }
+                Alert.alert('Notifications', 'No new alerts.', [{ text: 'OK' }])
+              }}
               style={styles.headerIconBtn}
             >
               <Ionicons name="notifications-outline" size={18} color={colors.textPrimary} />
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>2</Text>
-              </View>
+              {alertCount > 0 ? (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {alertCount > 9 ? '9+' : String(alertCount)}
+                  </Text>
+                </View>
+              ) : null}
             </Pressable>
             <Pressable
               onPress={() => {
@@ -638,7 +852,7 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.demandInsightContainer}>
           <View style={styles.demandInsightPulse} />
           <Text style={styles.demandInsightText}>
-            ⚡ 14 active specialists in Guwahati · 98% booking rate today
+            {demandInsightText}
           </Text>
         </View>
 
@@ -651,7 +865,7 @@ export default function HomeScreen({ navigation }) {
             <View style={styles.searchLocationIconBg}>
               <Ionicons name="location-sharp" size={12} color={figmaTokens.primary} />
             </View>
-            <Text style={styles.searchLocationText} numberOfLines={1}>Guwahati</Text>
+            <Text style={styles.searchLocationText} numberOfLines={1}>{serviceAreaLabel}</Text>
             <Ionicons name="chevron-down" size={10} color={colors.textSecondary} />
           </Pressable>
           
@@ -692,6 +906,7 @@ export default function HomeScreen({ navigation }) {
           token={token}
           navigation={navigation}
           openWhatsApp={openWhatsAppConcierge}
+          activeBooking={activeBooking}
         />
 
         {/* ── Specialties Row (Circular Icons Carousel) ───────────────── */}
@@ -706,7 +921,7 @@ export default function HomeScreen({ navigation }) {
             <SpecialtyCard
               key={spec.title}
               title={spec.title}
-              icon={spec.icon}
+              image={spec.image}
               bg={spec.bg}
               color={spec.color}
               onPress={() => {
@@ -758,9 +973,11 @@ export default function HomeScreen({ navigation }) {
                 onPress={() => navigation.navigate('PhysioList', { issue: 'Back Pain' })}
                 style={[styles.painCard, { backgroundColor: '#fef2f2', borderColor: '#fee2e2' }]}
               >
-                <View style={[styles.painIconCircle, { backgroundColor: '#fee2e2' }]}>
-                  <Ionicons name="body-outline" size={16} color="#ef4444" />
-                </View>
+                <Image 
+                  source={require('../../assets/images/illustration_back_pain.png')} 
+                  style={styles.painIllustrationImage} 
+                  resizeMode="cover"
+                />
                 <View style={styles.painCardBody}>
                   <Text style={[styles.painCardTitle, { color: '#b91c1c' }]}>Lower Back</Text>
                   <Text style={styles.painCardDesc} numberOfLines={2}>Stiffness, slip disc, spasm, backache</Text>
@@ -774,9 +991,11 @@ export default function HomeScreen({ navigation }) {
                 onPress={() => navigation.navigate('PhysioList', { issue: 'Knee Pain' })}
                 style={[styles.painCard, { backgroundColor: '#fff7ed', borderColor: '#ffedd5' }]}
               >
-                <View style={[styles.painIconCircle, { backgroundColor: '#ffedd5' }]}>
-                  <Ionicons name="walk-outline" size={16} color="#f97316" />
-                </View>
+                <Image 
+                  source={require('../../assets/images/illustration_knee_pain.png')} 
+                  style={styles.painIllustrationImage} 
+                  resizeMode="cover"
+                />
                 <View style={styles.painCardBody}>
                   <Text style={[styles.painCardTitle, { color: '#c2410c' }]}>Knee & Joint</Text>
                   <Text style={styles.painCardDesc} numberOfLines={2}>Ligament injury, arthritis, stiffness</Text>
@@ -792,9 +1011,11 @@ export default function HomeScreen({ navigation }) {
                 onPress={() => navigation.navigate('PhysioList', { issue: 'Neck Pain' })}
                 style={[styles.painCard, { backgroundColor: '#f5f3ff', borderColor: '#ddd6fe' }]}
               >
-                <View style={[styles.painIconCircle, { backgroundColor: '#ddd6fe' }]}>
-                  <Ionicons name="fitness-outline" size={16} color="#8b5cf6" />
-                </View>
+                <Image 
+                  source={require('../../assets/images/illustration_neck_pain.png')} 
+                  style={styles.painIllustrationImage} 
+                  resizeMode="cover"
+                />
                 <View style={styles.painCardBody}>
                   <Text style={[styles.painCardTitle, { color: '#6d28d9' }]}>Neck & Spine</Text>
                   <Text style={styles.painCardDesc} numberOfLines={2}>Cervical pain, frozen shoulder, strain</Text>
@@ -808,9 +1029,11 @@ export default function HomeScreen({ navigation }) {
                 onPress={() => navigation.navigate('PhysioList', { issue: 'Stroke/Paralysis' })}
                 style={[styles.painCard, { backgroundColor: '#f0fdf4', borderColor: '#dcfce7' }]}
               >
-                <View style={[styles.painIconCircle, { backgroundColor: '#dcfce7' }]}>
-                  <Ionicons name="pulse-outline" size={16} color="#22c55e" />
-                </View>
+                <Image 
+                  source={require('../../assets/images/illustration_neuro_rehab.png')} 
+                  style={styles.painIllustrationImage} 
+                  resizeMode="cover"
+                />
                 <View style={styles.painCardBody}>
                   <Text style={[styles.painCardTitle, { color: '#15803d' }]}>Neuro Rehab</Text>
                   <Text style={styles.painCardDesc} numberOfLines={2}>Stroke recovery, paralysis care, numbness</Text>
@@ -1041,26 +1264,27 @@ export default function HomeScreen({ navigation }) {
           </View>
         )}
 
-        {/* ── Offers & Rehab Packages Carousel (Editorial style) ─────── */}
-        <SectionHeader icon="gift-outline" title="Featured Packages" />
+        {/* ── Home Care Plans Carousel ────────────────────────────────── */}
+        <SectionHeader icon="calendar-outline" title="Home Care Plans" />
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.promoCarousel}
           decelerationRate="fast"
         >
-          {PROMO_BANNERS.map((promo, idx) => (
+          {PLAN_TIER_CARDS.map((plan, idx) => (
             <PromoCard
               key={idx}
-              title={promo.title}
-              desc={promo.desc}
-              badge={promo.badge}
-              saveCallout={promo.saveCallout}
-              bg={promo.bg}
-              border={promo.border}
-              color={promo.color}
-              titleColor={promo.titleColor}
-              icon={promo.icon}
+              title={plan.label}
+              desc={plan.desc}
+              badge={plan.badge}
+              saveCallout={plan.saveCallout}
+              sessions={plan.sessions}
+              bg={plan.bg}
+              border={plan.border}
+              color={plan.color}
+              titleColor={plan.titleColor}
+              icon={plan.icon}
             />
           ))}
         </ScrollView>
@@ -1268,38 +1492,6 @@ export default function HomeScreen({ navigation }) {
           <Ionicons name="chevron-forward" size={14} color="#166534" style={styles.whatsappChevron} />
         </Pressable>
 
-        {/* ── Physio CTA Banner ────────────────────────────────────────── */}
-        <Pressable
-          onPress={() => {
-            Alert.alert(
-              'Join as a Physiotherapist',
-              'To register and offer services, please download the "PhysioKhom Pro" app from the App Store / Play Store, or register on our website.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Register on Web',
-                  onPress: () => {
-                    const url = `${siteOrigin()}/register-physio`
-                    Linking.openURL(url).catch(() => {})
-                  },
-                },
-              ]
-            )
-          }}
-          style={({ pressed }) => [styles.physioCta, pressed && { opacity: 0.95 }]}
-        >
-          <View style={styles.physioCtaIconWrap}>
-            <Ionicons name="medical-outline" size={20} color={figmaTokens.primary} />
-          </View>
-          <View style={styles.physioCtaBody}>
-            <Text style={styles.physioCtaTitle}>Are you a physiotherapist?</Text>
-            <Text style={styles.physioCtaSub}>List your practice · schedule flexible home visits</Text>
-          </View>
-          <View style={styles.physioCtaChevron}>
-            <Ionicons name="arrow-forward" size={13} color={figmaTokens.primary} />
-          </View>
-        </Pressable>
-
         {/* ── Testimonial Card Slider (Horizontal Carousel) ─────────────── */}
         <SectionHeader icon="chatbubbles-outline" title="What Patients Say" />
         <ScrollView
@@ -1463,7 +1655,7 @@ export default function HomeScreen({ navigation }) {
   )
 }
 
-const SpecialtyCard = memo(function SpecialtyCard({ title, icon, bg, color, onPress }) {
+const SpecialtyCard = memo(function SpecialtyCard({ title, image, bg, color, onPress }) {
   const dynamicBorderColor = color + '22'
   const dynamicShadowColor = color
 
@@ -1485,7 +1677,7 @@ const SpecialtyCard = memo(function SpecialtyCard({ title, icon, bg, color, onPr
         }
       ]}>
         <View style={[styles.specialtyIconInner, { backgroundColor: bg }]}>
-          <Ionicons name={icon} size={20} color={color} />
+          <Image source={image} style={styles.specialtyIconImage} resizeMode="contain" />
         </View>
       </View>
       <Text style={styles.specialtyLabel} numberOfLines={1}>
@@ -1495,7 +1687,7 @@ const SpecialtyCard = memo(function SpecialtyCard({ title, icon, bg, color, onPr
   )
 })
 
-const PromoCard = memo(function PromoCard({ title, desc, badge, saveCallout, bg, border, color, titleColor, icon }) {
+const PromoCard = memo(function PromoCard({ title, desc, badge, saveCallout, sessions, bg, border, color, titleColor, icon }) {
   return (
     <View style={[styles.promoCard, { backgroundColor: bg, borderColor: border }]}>
       <View style={styles.promoHeader}>
@@ -1514,6 +1706,9 @@ const PromoCard = memo(function PromoCard({ title, desc, badge, saveCallout, bg,
           <Text style={[styles.promoTitle, { color: titleColor }]} numberOfLines={1}>{title}</Text>
         </View>
         <Text style={styles.promoDesc} numberOfLines={2}>{desc}</Text>
+        {sessions != null ? (
+          <Text style={styles.promoSessions}>{sessions} sessions included</Text>
+        ) : null}
       </View>
     </View>
   )
@@ -1930,6 +2125,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  specialtyIconImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 22,
+  },
+  painIllustrationImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+  },
   specialtyLabel: {
     fontFamily: font.bold,
     fontSize: 9,
@@ -2010,6 +2215,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 14,
     color: colors.textSecondary,
+  },
+  promoSessions: {
+    fontFamily: font.semiBold,
+    fontSize: 10,
+    color: colors.textSecondary,
+    marginTop: 6,
   },
 
   // Featured Specialists
@@ -2467,52 +2678,6 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   whatsappChevron: {
-    flexShrink: 0,
-  },
-
-  // Physio CTA Banner
-  physioCta: {
-    marginTop: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    backgroundColor: '#e6f4f3',
-    borderWidth: 1,
-    borderColor: 'rgba(13, 107, 107, 0.1)',
-    padding: 14,
-    gap: 12,
-    ...CARD_SHADOW,
-  },
-  physioCtaIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  physioCtaBody: {
-    flex: 1,
-  },
-  physioCtaTitle: {
-    fontFamily: font.bold,
-    fontSize: type.sm,
-    color: colors.textPrimary,
-  },
-  physioCtaSub: {
-    fontFamily: font.regular,
-    fontSize: 10,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  physioCtaChevron: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
     flexShrink: 0,
   },
 

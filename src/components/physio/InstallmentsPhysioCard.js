@@ -40,8 +40,11 @@ export default function InstallmentsPhysioCard({
   const totalAmount = Number(s.totalAmount || 0)
   const totalPaid = Number(s.totalPaid || 0)
   const outstanding = Number(s.outstanding || Math.max(0, totalAmount - totalPaid))
-  const coveredSessions = Number(s.coveredSessions || 0)
-  const sessionsCount = Number(s.sessionsCount || 0)
+  const milestoneStatus = Array.isArray(s.milestoneStatus) ? s.milestoneStatus : null
+  const paidPct = totalAmount > 0 ? totalPaid / totalAmount : 0
+  const nextMilestone = milestoneStatus ? milestoneStatus.find((m) => !m.met) : null
+  const allMet = milestoneStatus ? milestoneStatus.every((m) => m.met) : false
+
   const rows = Array.isArray(payments)
     ? [...payments].sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0))
     : []
@@ -67,11 +70,23 @@ export default function InstallmentsPhysioCard({
           <Text style={styles.sumL}>Outstanding</Text>
           <Text style={styles.sumV}>{formatRupees(outstanding)}</Text>
         </View>
-        <View style={styles.sumBox}>
-          <Text style={styles.sumL}>Sessions covered</Text>
-          <Text style={styles.sumV}>
-            {coveredSessions} <Text style={styles.sumMuted}>of {sessionsCount || '—'}</Text>
-          </Text>
+        <View style={[styles.sumBox, allMet && styles.sumBoxMet]}>
+          <Text style={styles.sumL}>Next milestone</Text>
+          {milestoneStatus ? (
+            allMet ? (
+              <Text style={[styles.sumV, styles.sumVMet]}>All met</Text>
+            ) : (
+              <Text style={styles.sumV}>
+                Session {nextMilestone.bySession}{'\n'}
+                <Text style={styles.sumMuted}>{Math.round(nextMilestone.requiredPct * 100)}% required</Text>
+              </Text>
+            )
+          ) : (
+            <Text style={styles.sumV}>
+              {Math.round(paidPct * 100)}%
+              <Text style={styles.sumMuted}> paid</Text>
+            </Text>
+          )}
         </View>
       </View>
 
@@ -118,8 +133,10 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSubtle,
     backgroundColor: colors.slate50,
   },
+  sumBoxMet: { borderColor: '#a7f3d0', backgroundColor: '#f0fdf4' },
   sumL: { fontSize: 10, fontWeight: '700', color: colors.slate500, textTransform: 'uppercase' },
   sumV: { marginTop: 6, fontSize: 15, fontWeight: '700', color: colors.slate900 },
+  sumVMet: { color: '#15803d' },
   sumMuted: { fontSize: 12, fontWeight: '400', color: colors.slate500 },
   empty: {
     marginTop: 14,

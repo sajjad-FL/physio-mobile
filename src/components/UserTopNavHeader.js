@@ -2,13 +2,13 @@ import TopNavHeader from './ui/TopNavHeader'
 import { useAuth } from '../context/AuthContext'
 
 const MENU_ITEMS = [
-  { label: 'Dashboard', route: 'DashboardHome' },
+  { label: 'Home', route: 'DashboardHome' },
   { label: 'Book a session', route: 'PhysioList' },
   { label: 'Profile', route: 'Profile' },
 ]
 
 const SIDE_ITEMS = [
-  { label: 'Dashboard', route: 'DashboardHome' },
+  { label: 'Home', route: 'DashboardHome' },
   { label: 'Bookings', route: 'Bookings' },
   { label: 'Wallet', route: 'Wallet' },
   { label: 'Profile', route: 'Profile' },
