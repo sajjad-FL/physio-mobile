@@ -18,6 +18,7 @@ import {
 import Toast from 'react-native-toast-message'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { api } from '../api/client'
+import { getTokenSync } from '../auth/tokenStore'
 import {
   DEFAULT_REFERRAL_REWARD_AMOUNT,
   DEFAULT_REFERRAL_SIGNUP_BONUS_AMOUNT,
@@ -366,35 +367,46 @@ export default function ProfileScreen({ navigation }) {
       return
     }
     const uri = asset.uri
-    const mime = asset.mimeType || 'image/jpeg'
-    if (!/^image\/(jpeg|png|webp)$/.test(mime)) {
-      Toast.show({ type: 'error', text1: 'Please choose a JPEG, PNG, or WebP image' })
+    // Normalize mime: iOS returns 'image/heic' for HEIF photos (edited URI is JPEG),
+    // some Android returns 'image/jpg' instead of 'image/jpeg'
+    let mime = asset.mimeType || 'image/jpeg'
+    if (mime === 'image/heic' || mime === 'image/heif') mime = 'image/jpeg'
+    if (mime === 'image/jpg') mime = 'image/jpeg'
+    if (!mime.startsWith('image/')) {
+      Toast.show({ type: 'error', text1: 'Please choose an image file' })
       return
     }
     setPreviewLocal(uri)
     setUploading(true)
     try {
       const fd = new FormData()
+      let next = ''
+
       if (Platform.OS === 'web') {
         const resp = await fetch(uri)
         const blob = await resp.blob()
-        const file = new File([blob], asset.fileName || 'avatar.jpg', { type: mime })
-        fd.append('avatar', file)
+        fd.append('avatar', new File([blob], asset.fileName || 'avatar.jpg', { type: mime }))
+        const res = await api.patch('/profile/avatar', fd)
+        next = res.data?.avatarUrl || ''
       } else {
-        fd.append('avatar', {
-          uri,
-          name: asset.fileName || 'avatar.jpg',
-          type: mime,
+        fd.append('avatar', { uri, name: asset.fileName || 'avatar.jpg', type: mime })
+        const token = getTokenSync()
+        const fetchRes = await fetch(`${api.defaults.baseURL}/profile/avatar`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
         })
+        const json = await fetchRes.json().catch(() => ({}))
+        if (!fetchRes.ok) throw new Error(json?.message || 'Upload failed')
+        next = json?.avatarUrl || ''
       }
-      const res = await api.patch('/profile/avatar', fd)
-      const next = res.data?.avatarUrl || ''
+
       setAvatarUrl(next)
       setPreviewLocal(null)
       Toast.show({ type: 'success', text1: 'Photo updated' })
     } catch (err) {
       setPreviewLocal(null)
-      Toast.show({ type: 'error', text1: err.response?.data?.message || 'Upload failed' })
+      Toast.show({ type: 'error', text1: err.message || 'Upload failed' })
     } finally {
       setUploading(false)
     }
