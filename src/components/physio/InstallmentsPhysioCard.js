@@ -39,9 +39,11 @@ export default function InstallmentsPhysioCard({
   const s = summary || {}
   const totalAmount = Number(s.totalAmount || 0)
   const totalPaid = Number(s.totalPaid || 0)
-  const outstanding = Number(s.outstanding || Math.max(0, totalAmount - totalPaid))
+  const totalCollected = Number(s.totalCollected || 0)
+  const effectivePaid = totalPaid + totalCollected
+  const outstanding = Math.max(0, totalAmount - effectivePaid)
   const milestoneStatus = Array.isArray(s.milestoneStatus) ? s.milestoneStatus : null
-  const paidPct = totalAmount > 0 ? totalPaid / totalAmount : 0
+  const paidPct = totalAmount > 0 ? effectivePaid / totalAmount : 0
   const nextMilestone = milestoneStatus ? milestoneStatus.find((m) => !m.met) : null
   const allMet = milestoneStatus ? milestoneStatus.every((m) => m.met) : false
 
@@ -62,7 +64,7 @@ export default function InstallmentsPhysioCard({
         <View style={styles.sumBox}>
           <Text style={styles.sumL}>Paid</Text>
           <Text style={styles.sumV}>
-            {formatRupees(totalPaid)}{' '}
+            {formatRupees(effectivePaid)}{' '}
             <Text style={styles.sumMuted}>of {formatRupees(totalAmount)}</Text>
           </Text>
         </View>
@@ -98,6 +100,11 @@ export default function InstallmentsPhysioCard({
         rows.map((p) => (
           <View key={p._id} style={styles.line}>
             <Text style={styles.lineWhen}>{formatDt(p.verifiedAt || p.collectedAt || p.createdAt)}</Text>
+            {p.sessionOrdinal ? (
+              <Text style={styles.lineSession}>Session {p.sessionOrdinal}</Text>
+            ) : (
+              <Text style={styles.lineSessionGeneral}>General</Text>
+            )}
             <Text style={styles.lineMode}>{p.mode ? String(p.mode) : '—'}</Text>
             <Text style={styles.lineAmt}>{formatRupees(p.amount)}</Text>
             <Text style={styles.lineSt}>{STATUS_LABEL[p.status] || p.status}</Text>
@@ -155,6 +162,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderSubtle,
   },
   lineWhen: { fontSize: 13, fontWeight: '600', color: colors.slate900 },
+  lineSession: { marginTop: 4, fontSize: 11, fontWeight: '700', color: colors.brand },
+  lineSessionGeneral: { marginTop: 4, fontSize: 11, fontWeight: '600', color: colors.slate500 },
   lineMode: { marginTop: 4, fontSize: 12, color: colors.slate600, textTransform: 'capitalize' },
   lineAmt: { marginTop: 4, fontSize: 14, fontWeight: '700', color: colors.slate900 },
   lineSt: { marginTop: 6, fontSize: 12, fontWeight: '600', color: colors.slate700 },

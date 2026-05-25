@@ -20,6 +20,8 @@ export function normalizeSessionRows(b) {
       status: s.status || 'scheduled',
       completedAt: s.completedAt || null,
       noShowReason: s.noShowReason || '',
+      patientConfirmed: Boolean(s.patientConfirmed),
+      paymentAtCompletion: Number(s.paymentAtCompletion || 0),
       perSession: true,
     }))
   }
@@ -34,6 +36,8 @@ export function normalizeSessionRows(b) {
       status: b.sessionStatus === 'completed' ? 'completed' : 'scheduled',
       completedAt: null,
       noShowReason: '',
+      patientConfirmed: false,
+      paymentAtCompletion: 0,
       perSession: false,
     },
   ]
