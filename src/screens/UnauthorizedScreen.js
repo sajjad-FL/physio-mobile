@@ -40,7 +40,7 @@ export default function UnauthorizedScreen({ navigation }) {
       <View style={styles.wrap}>
         <Text style={styles.title}>Use the provider app</Text>
         <Text style={styles.sub}>
-          Physiotherapist accounts sign in through the PhysioKhom Provider app, not this patient app. Install the
+          Physiotherapist accounts sign in through the PhysiOkhom Provider app, not this patient app. Install the
           provider app and sign in with the same phone number.
         </Text>
         <Button title="Log out" onPress={() => logout(navigation)} />

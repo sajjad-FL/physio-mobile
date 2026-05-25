@@ -38,5 +38,19 @@ export function patientFilterSummary(filter, dateRange) {
   return PATIENT_FILTER_LABELS[filter] || filter
 }
 
+/** Most recently created booking first; tie-break by session date/time. */
+export function comparePatientBookingsLatestFirst(a, b) {
+  const ta = a?.createdAt ? new Date(a.createdAt).getTime() : 0
+  const tb = b?.createdAt ? new Date(b.createdAt).getTime() : 0
+  if (tb !== ta) return tb - ta
+  const dateCmp = String(b.date || '').localeCompare(String(a.date || ''))
+  if (dateCmp !== 0) return dateCmp
+  return String(b.timeSlot || '').localeCompare(String(a.timeSlot || ''))
+}
+
+export function sortPatientBookingsLatestFirst(list) {
+  return [...list].sort(comparePatientBookingsLatestFirst)
+}
+
 export { todayYmd }
 

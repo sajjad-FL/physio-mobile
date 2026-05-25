@@ -49,7 +49,7 @@ export default function ReferEarnScreen() {
   const shareInvite = useCallback(async () => {
     if (!referralCode) return
     const friendPart = friendBonus > 0 ? `They get ₹${friendBonus} on signup. ` : ''
-    const message = `Join PhysioKhom! Use my code ${referralCode} to get started. ${friendPart}You'll earn ₹${earnAmount} when they complete their first session. ${shareUrl}`
+    const message = `Join PhysiOkhom! Use my code ${referralCode} to get started. ${friendPart}You'll earn ₹${earnAmount} when they complete their first session. ${shareUrl}`
     try {
       await Share.share({ message })
     } catch {

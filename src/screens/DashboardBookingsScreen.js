@@ -11,7 +11,7 @@ import { colors } from '../theme/colors'
 import { figmaTokens } from '../theme/figmaTokens'
 import { surfaceCard } from '../theme/surfaceCard'
 import { font, type } from '../theme/typography'
-import { matchesPatientBookingFilter, patientFilterSummary, todayYmd } from '../utils/patientBookingFilters'
+import { matchesPatientBookingFilter, patientFilterSummary, sortPatientBookingsLatestFirst, todayYmd } from '../utils/patientBookingFilters'
 import { formatInr } from '../utils/currency'
 import { useMyBookings } from '../api/queries'
 
@@ -24,7 +24,8 @@ export default function DashboardBookingsScreen({ navigation }) {
 
   const filtered = useMemo(() => {
     const today = todayYmd()
-    return rows.filter((b) => matchesPatientBookingFilter(b, { filter, dateRange, today }))
+    const matched = rows.filter((b) => matchesPatientBookingFilter(b, { filter, dateRange, today }))
+    return sortPatientBookingsLatestFirst(matched)
   }, [rows, filter, dateRange])
 
   const filtersActive = filter !== 'all' || dateRange.start || dateRange.end

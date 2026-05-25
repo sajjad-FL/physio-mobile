@@ -319,7 +319,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
         key: keyId,
         amount,
         currency,
-        name: 'PhysioKhom',
+        name: 'PhysiOkhom',
         description: 'Physiotherapy Booking Payment',
         order_id: orderId,
         prefill: cleanRazorpayPrefill(prefill),
@@ -425,7 +425,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
         key: keyId,
         amount: orderAmount,
         currency,
-        name: 'PhysioKhom',
+        name: 'PhysiOkhom',
         description: 'Physiotherapy Installment Payment',
         order_id: orderId,
         prefill: cleanRazorpayPrefill(prefill),
@@ -583,7 +583,13 @@ export default function UserBookingDetailScreen({ route, navigation }) {
     )
   }
 
-  if (b.status === 'pending') {
+  // Show waiting screen only while assignment is pending (physio hasn't accepted).
+  // planStatus === 'proposed' means the physio already engaged with the booking —
+  // never send the patient back to the waiting screen at that stage.
+  const planProposed = b.serviceType === 'home' && b.planStatus === 'proposed'
+  const planApproved = b.serviceType === 'home' && b.planStatus === 'approved'
+
+  if ((b.status === 'pending' || b.status === 'assigned') && !planProposed && !planApproved) {
     return <PendingBookingView booking={b} navigation={navigation} />
   }
 
@@ -722,7 +728,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
         onChange={setActiveTab}
         tabs={BASE_TABS}
         badges={{
-          overview: b.serviceType === 'home' && b.planStatus === 'proposed',
+          overview: planProposed,
           payments: b.paymentStatus === 'pending' && planReady && !(b.serviceType === 'home' && b.homePlanPaymentMode === 'offline')
         }}
       />
@@ -730,16 +736,96 @@ export default function UserBookingDetailScreen({ route, navigation }) {
       {/* Tab Panels */}
       {activeTab === 'overview' && (
         <View style={styles.tabPanel}>
-          {/* Plan approval banner */}
-          {b.serviceType === 'home' && b.planStatus === 'proposed' ? (
-            <View style={styles.banner}>
-              <Ionicons name="information-circle-outline" size={16} color={colors.brand} />
-              <Text style={styles.bannerTxt}>Your physiotherapist proposed a plan. Review and approve it to continue.</Text>
-              <Pressable 
-                style={({ pressed }) => [styles.bannerBtn, pressed && { transform: [{ scale: 0.96 }] }]} 
+          {/* Plan review card — shown when physio has proposed a plan */}
+          {planProposed ? (
+            <View style={styles.planReviewCard}>
+              {/* Header */}
+              <View style={styles.planReviewHeader}>
+                <View style={styles.planReviewIconWrap}>
+                  <Ionicons name="document-text-outline" size={20} color={colors.brand} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.planReviewTitle}>Treatment Plan Proposed</Text>
+                  <Text style={styles.planReviewSub}>Review the details below and approve to proceed</Text>
+                </View>
+              </View>
+
+              {/* Key metrics row */}
+              {(b.sessions != null || b.amountPerSession != null || Number(b.totalAmount || 0) > 0) ? (
+                <View style={styles.planReviewGrid}>
+                  {b.sessions != null ? (
+                    <View style={styles.planReviewMetric}>
+                      <Text style={styles.planReviewMetricVal}>{b.sessions}</Text>
+                      <Text style={styles.planReviewMetricLbl}>Sessions</Text>
+                    </View>
+                  ) : null}
+                  {b.amountPerSession != null ? (
+                    <View style={styles.planReviewMetric}>
+                      <Text style={styles.planReviewMetricVal}>₹{b.amountPerSession}</Text>
+                      <Text style={styles.planReviewMetricLbl}>Per session</Text>
+                    </View>
+                  ) : null}
+                  {Number(b.totalAmount || 0) > 0 ? (
+                    <View style={styles.planReviewMetric}>
+                      <Text style={styles.planReviewMetricVal}>₹{Number(b.totalAmount).toFixed(0)}</Text>
+                      <Text style={styles.planReviewMetricLbl}>Total</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Payment mode */}
+              {b.homePlanPaymentMode ? (
+                <View style={styles.planReviewRow}>
+                  <Ionicons
+                    name={b.homePlanPaymentMode === 'online' ? 'card-outline' : 'cash-outline'}
+                    size={14}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={styles.planReviewRowTxt}>
+                    Payment: {b.homePlanPaymentMode === 'online' ? 'Online' : 'Offline (cash)'}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Discount badge */}
+              {b.discountPercent != null && b.discountPercent > 0 ? (
+                <View style={styles.planReviewRow}>
+                  <Ionicons name="pricetag-outline" size={14} color={colors.brand} />
+                  <Text style={[styles.planReviewRowTxt, { color: colors.brand, fontFamily: font.medium }]}>
+                    {b.discountPercent}% discount applied
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Schedule preview */}
+              {Array.isArray(b.schedule) && b.schedule.length > 0 ? (
+                <View style={styles.planReviewSchedule}>
+                  <Text style={styles.planReviewScheduleTitle}>Scheduled Sessions</Text>
+                  {b.schedule.slice(0, 3).map((s, i) => (
+                    <View key={i} style={styles.planReviewScheduleRow}>
+                      <View style={styles.planReviewScheduleDot} />
+                      <Text style={styles.planReviewScheduleTxt}>
+                        Session {i + 1} — {formatBookingDateAndSlot(s.date, s.time)}
+                      </Text>
+                    </View>
+                  ))}
+                  {b.schedule.length > 3 ? (
+                    <Text style={styles.planReviewScheduleMore}>+{b.schedule.length - 3} more sessions</Text>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Approve button */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.planReviewApproveBtn,
+                  pressed && { opacity: 0.88, transform: [{ scale: 0.98 }] },
+                ]}
                 onPress={approvePlan}
               >
-                <Text style={styles.bannerBtnTxt}>Approve</Text>
+                <Ionicons name="checkmark-circle-outline" size={18} color={colors.white} />
+                <Text style={styles.planReviewApproveBtnTxt}>Approve Plan</Text>
               </Pressable>
             </View>
           ) : null}
@@ -1430,6 +1516,126 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brand,
   },
   bannerBtnTxt: { fontFamily: font.semiBold, fontSize: type.xs, color: colors.white },
+
+  // Plan review card (planStatus === 'proposed')
+  planReviewCard: {
+    borderRadius: 16,
+    backgroundColor: colors.teal50,
+    borderWidth: 1.5,
+    borderColor: colors.brand,
+    padding: 16,
+    gap: 14,
+  },
+  planReviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  planReviewIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  planReviewTitle: {
+    fontFamily: font.semiBold,
+    fontSize: type.base,
+    color: colors.teal800,
+    marginBottom: 2,
+  },
+  planReviewSub: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.teal800,
+    lineHeight: leading.xs,
+    opacity: 0.75,
+  },
+  planReviewGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  planReviewMetric: {
+    flex: 1,
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.brandSoft,
+  },
+  planReviewMetricVal: {
+    fontFamily: font.bold,
+    fontSize: type.md,
+    color: colors.textPrimary,
+  },
+  planReviewMetricLbl: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  planReviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  planReviewRowTxt: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+  },
+  planReviewSchedule: {
+    gap: 6,
+  },
+  planReviewScheduleTitle: {
+    fontFamily: font.semiBold,
+    fontSize: type.xs,
+    color: colors.teal800,
+    marginBottom: 2,
+  },
+  planReviewScheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  planReviewScheduleDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.brand,
+    flexShrink: 0,
+  },
+  planReviewScheduleTxt: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  planReviewScheduleMore: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textTertiary,
+    marginTop: 2,
+    paddingLeft: 14,
+  },
+  planReviewApproveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.brand,
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginTop: 2,
+  },
+  planReviewApproveBtnTxt: {
+    fontFamily: font.semiBold,
+    fontSize: type.sm,
+    color: colors.white,
+  },
 
   // Section cards
   sectionCard: {

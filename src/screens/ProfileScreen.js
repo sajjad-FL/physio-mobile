@@ -554,7 +554,7 @@ export default function ProfileScreen({ navigation }) {
                 </View>
                 {phone ? <Text style={styles.rolePhoneSub}>{phone}</Text> : null}
               </View>
-              <Text style={styles.profileCardName} numberOfLines={1}>{name || 'PhysioKhom User'}</Text>
+              <Text style={styles.profileCardName} numberOfLines={1}>{name || 'PhysiOkhom User'}</Text>
               
               {/* Profile Strength Progress Bar */}
               <View style={styles.strengthContainer}>

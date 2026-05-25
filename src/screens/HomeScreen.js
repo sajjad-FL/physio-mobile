@@ -76,7 +76,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Are your physiotherapists certified?',
-    a: 'Absolutely. Every provider on PhysioKhom holds a BPT/MPT degree and has cleared our professional verification.',
+    a: 'Absolutely. Every provider on PhysiOkhom holds a BPT/MPT degree and has cleared our professional verification.',
     cat: 'Therapists',
   },
   {
@@ -772,7 +772,7 @@ export default function HomeScreen({ navigation }) {
   }, [homeStats.loading, homeStats.activeSpecialists, homeStats.bookingRateToday, serviceAreaLabel])
 
   const openWhatsAppConcierge = () => {
-    const message = encodeURIComponent("Hello PhysioKhom, I need assistance with booking a physiotherapist session.")
+    const message = encodeURIComponent("Hello PhysiOkhom, I need assistance with booking a physiotherapist session.")
     const url = `https://wa.me/918453580556?text=${message}`
     Linking.openURL(url).catch(() => {
       Alert.alert('Error', 'Could not open WhatsApp. Please contact support.')
@@ -807,7 +807,7 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.headerSection}>
           <View style={styles.headerLeft}>
             <Text style={styles.headerGreeting}>
-              {userName ? `Hello, ${userName} 👋` : 'Welcome to PhysioKhom'}
+              {userName ? `Hello, ${userName} 👋` : 'Welcome to PhysiOkhom'}
             </Text>
             <Text style={styles.headerTitle}>Find verified home care</Text>
           </View>
@@ -1387,7 +1387,7 @@ export default function HomeScreen({ navigation }) {
               <Ionicons name="checkmark-circle" size={14} color="#15803d" />
               <Text style={[styles.compareHeaderTitle, { color: '#15803d' }]}>At-Home Care</Text>
             </View>
-            <Text style={styles.compareSubtitle}>With PhysioKhom</Text>
+            <Text style={styles.compareSubtitle}>With PhysiOkhom</Text>
             <View style={styles.compareList}>
               <View style={styles.compareItem}>
                 <Ionicons name="checkmark" size={10} color="#15803d" style={styles.compareItemIcon} />
@@ -1436,7 +1436,7 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
 
-        {/* ── Why PhysioKhom Card Grid (2-column layout) ───────────────── */}
+        {/* ── Why PhysiOkhom Card Grid (2-column layout) ───────────────── */}
         <SectionHeader icon="star-outline" title="Why Patients Choose Us" />
         <View style={styles.whyGrid}>
           <View style={styles.whyGridRow}>
@@ -1535,7 +1535,7 @@ export default function HomeScreen({ navigation }) {
               <Ionicons name="shield-checkmark" size={20} color="#d97706" />
             </View>
             <View style={styles.safetyTitleWrap}>
-              <Text style={styles.safetyTitle}>The PhysioKhom At-Home Safety Promise</Text>
+              <Text style={styles.safetyTitle}>The PhysiOkhom At-Home Safety Promise</Text>
               <Text style={styles.safetySubtitle}>Making home rehabilitation secure and comfortable</Text>
             </View>
           </View>

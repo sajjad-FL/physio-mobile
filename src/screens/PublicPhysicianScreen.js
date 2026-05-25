@@ -355,7 +355,7 @@ export default function PublicPhysicianScreen({ route, navigation }) {
                 </View>
                 <View style={styles.credentialText}>
                   <Text style={styles.credentialTitle}>Verified Professional</Text>
-                  <Text style={styles.credentialDesc}>Registration and credentials checked by Physiokhom.</Text>
+                  <Text style={styles.credentialDesc}>Registration and credentials checked by PhysiOkhom.</Text>
                 </View>
               </View>
               
