@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { formatBookingDateAndSlot } from '../utils/date'
 import EmptyState from '../components/ui/EmptyState'
@@ -11,46 +11,51 @@ import { surfaceListShell } from '../theme/surfaceCard'
 import { font, type } from '../theme/typography'
 import { formatInr } from '../utils/currency'
 import { paymentBadge } from '../utils/dashboardUtils'
-import { useMyBookings } from '../api/queries'
+import { useWalletSummary } from '../api/queries'
 
 export default function DashboardWalletScreen({ navigation }) {
-  const { data, isLoading } = useMyBookings({ page: 1, limit: 100 })
-  const bookings = data || []
+  const { data, isLoading, isRefetching, refetch } = useWalletSummary()
+  const summary = data || { walletBalance: 0, totalSpend: 0, heldTotal: 0, releasedTotal: 0, recentPayments: [] }
 
-  const { totalSpend, lines } = useMemo(() => {
-    let sum = 0
-    const rows = []
-    for (const b of bookings) {
-      const amt = Number(b.totalAmount) || 0
-      const paid = b.paymentStatus === 'released' || b.paymentStatus === 'held' || b.paymentStatus === 'paid'
-      if (paid && amt) {
-        sum += amt
-        rows.push({ b, amt })
-      }
-    }
-    rows.sort((a, b) => String(b.b.createdAt || '').localeCompare(String(a.b.createdAt || '')))
-    return { totalSpend: sum, lines: rows.slice(0, 15) }
-  }, [bookings])
+  const totalSpend = summary.totalSpend || 0
+  const heldTotal = summary.heldTotal || 0
+  const releasedTotal = summary.releasedTotal || 0
+  const lines = summary.recentPayments || []
 
-  const heldTotal = useMemo(
-    () => bookings.reduce((s, b) => (b.paymentStatus === 'held' ? s + (Number(b.totalAmount) || 0) : s), 0),
-    [bookings],
-  )
-  const releasedTotal = useMemo(
-    () => bookings.reduce((s, b) => (b.paymentStatus === 'released' ? s + (Number(b.totalAmount) || 0) : s), 0),
-    [bookings],
-  )
-
-  if (isLoading && !bookings.length) return <LoadingScreen />
+  if (isLoading && !summary.recentPayments) return <LoadingScreen />
 
   return (
     <ScrollView
       contentContainerStyle={styles.scroll}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefetching}
+          onRefresh={refetch}
+          colors={[colors.brand]}
+          tintColor={colors.brand}
+        />
+      }
     >
       {/* Ambient Top Background Halo Glow */}
       <View style={styles.ambientHeaderGlow} pointerEvents="none" />
       <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
+
+      {/* Wallet Credits (Referral) Card */}
+      <View style={styles.referralCardContainer}>
+        <View style={styles.referralCard}>
+          <View style={styles.referralCardTop}>
+            <View>
+              <Text style={styles.referralCardLabel}>WALLET CREDITS (REFERRAL)</Text>
+              <Text style={styles.referralCardAmount}>{formatInr(summary.walletBalance)}</Text>
+              <Text style={styles.referralCardSub}>Available to use at checkout</Text>
+            </View>
+            <View style={styles.referralCardIconWrap}>
+              <Ionicons name="gift-outline" size={20} color={figmaTokens.primary} />
+            </View>
+          </View>
+        </View>
+      </View>
 
       {/* Hero spend card */}
       <View style={styles.heroCardContainer}>
@@ -112,11 +117,11 @@ export default function DashboardWalletScreen({ navigation }) {
             <Text style={styles.sectionCount}>{lines.length} total</Text>
           </View>
           <View style={styles.txList}>
-            {lines.map(({ b, amt }, index) => (
+            {lines.map((b, index) => (
               <WalletRow
                 key={b._id}
                 booking={b}
-                amount={amt}
+                amount={b.totalAmount || 0}
                 isLast={index === lines.length - 1}
                 onPress={() => navigation.navigate('Bookings', { screen: 'BookingDetail', params: { id: b._id } })}
               />
@@ -352,4 +357,54 @@ const styles = StyleSheet.create({
   txPhysio: { marginTop: 2, fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
   txRight: { alignItems: 'flex-end', gap: 5, flexShrink: 0 },
   txAmount: { fontFamily: font.bold, fontSize: type.sm, color: colors.textPrimary },
+  referralCardContainer: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 20,
+    shadowColor: figmaTokens.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 2,
+    zIndex: 2,
+  },
+  referralCard: {
+    borderRadius: 20,
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0',
+    borderWidth: 1,
+    padding: 18,
+  },
+  referralCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  referralCardLabel: {
+    fontFamily: font.bold,
+    fontSize: 10,
+    letterSpacing: 1,
+    color: '#064e3b',
+    marginBottom: 4,
+  },
+  referralCardAmount: {
+    fontFamily: font.bold,
+    fontSize: 26,
+    color: '#065f46',
+    letterSpacing: -0.5,
+  },
+  referralCardSub: {
+    marginTop: 2,
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: '#047857',
+  },
+  referralCardIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#d1fae5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 })

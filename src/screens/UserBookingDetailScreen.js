@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
-import { ActivityIndicator, Animated, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, TouchableOpacity, Linking } from 'react-native'
+import { ActivityIndicator, Animated, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, TouchableOpacity, Linking } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import RazorpayCheckout from 'react-native-razorpay'
@@ -149,7 +149,7 @@ const SimulatedTransitMap = memo(function SimulatedTransitMap({ transitPhase, ph
   )
 })
 
-function PendingBookingView({ booking: b, navigation }) {
+function PendingBookingView({ booking: b, navigation, refreshing, onRefresh }) {
   const pulseAnim = useRef(new Animated.Value(1)).current
   const ringAnim = useRef(new Animated.Value(0)).current
 
@@ -185,7 +185,20 @@ function PendingBookingView({ booking: b, navigation }) {
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.pendingScroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.pendingScroll}
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+        alwaysBounceVertical={true}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.brand]}
+            tintColor={colors.brand}
+          />
+        }
+      >
         {/* Animated pulse icon */}
         <View style={styles.pendingPulseWrap}>
           <Animated.View
@@ -252,6 +265,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
   const { id } = route.params || {}
   const [b, setB] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [reviews, setReviews] = useState([])
   const [disputeOpen, setDisputeOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
@@ -288,6 +302,12 @@ export default function UserBookingDetailScreen({ route, navigation }) {
       setLoading(false)
     }
   }, [id])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await load()
+    setRefreshing(false)
+  }, [load])
 
   const payLegacy = useCallback(async () => {
     if (!b?._id || paymentLoading) return
@@ -590,7 +610,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
   const planApproved = b.serviceType === 'home' && b.planStatus === 'approved'
 
   if ((b.status === 'pending' || b.status === 'assigned') && !planProposed && !planApproved) {
-    return <PendingBookingView booking={b} navigation={navigation} />
+    return <PendingBookingView booking={b} navigation={navigation} refreshing={refreshing} onRefresh={onRefresh} />
   }
 
   const paymentSummary = b.paymentSummary || null
@@ -602,6 +622,10 @@ export default function UserBookingDetailScreen({ route, navigation }) {
   const outstanding = Number(paymentSummary?.outstanding || 0)
   const perSession = Number(paymentSummary?.amountPerSession || 0)
   const milestoneStatus = Array.isArray(paymentSummary?.milestoneStatus) ? paymentSummary.milestoneStatus : null
+  const totalAmount = Number(paymentSummary?.totalAmount ?? b.totalAmount ?? b.payment?.amount ?? 0)
+  const totalPaid = Number(paymentSummary?.totalPaid ?? b.totalPaid ?? 0)
+  const totalCollected = Number(paymentSummary?.totalCollected ?? 0)
+  const effectivePaid = totalPaid + totalCollected
   const planReady = b.serviceType === 'online' || b.planStatus === 'approved'
   const showInstallments = planReady && (sessionsCount > 1 || isOnlineBooking) && (Number(b.totalAmount || 0) > 0 || paymentsList.length > 0)
   const showLegacyPay = b.paymentStatus === 'pending' && planReady && !(b.serviceType === 'home' && b.homePlanPaymentMode === 'offline')
@@ -615,6 +639,16 @@ export default function UserBookingDetailScreen({ route, navigation }) {
       style={styles.root}
       contentContainerStyle={styles.scroll}
       showsVerticalScrollIndicator={false}
+      bounces={true}
+      alwaysBounceVertical={true}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[colors.brand]}
+          tintColor={colors.brand}
+        />
+      }
     >
       {/* ── Booking Status Header card ─────────────────────────────── */}
       <View style={styles.headerCard}>
@@ -1062,25 +1096,29 @@ export default function UserBookingDetailScreen({ route, navigation }) {
                     <Ionicons name="time-outline" size={14} color={colors.brand} />
                     <Text style={styles.milestoneHeaderTxt}>Payment Schedule</Text>
                   </View>
-                  {milestoneStatus.map((m) => (
-                    <View key={m.bySession} style={[styles.milestoneRow, m.met && styles.milestoneRowMet]}>
-                      <View style={[styles.milestoneDot, m.met && styles.milestoneDotMet]}>
-                        <Ionicons
-                          name={m.met ? 'checkmark' : 'ellipse'}
-                          size={8}
-                          color={m.met ? '#fff' : colors.amber800}
-                        />
+                  {milestoneStatus.map((m) => {
+                    const reqAmt = Math.ceil(m.requiredPct * totalAmount)
+                    const remainingToPay = Math.max(0, reqAmt - effectivePaid)
+                    return (
+                      <View key={m.bySession} style={[styles.milestoneRow, m.met && styles.milestoneRowMet]}>
+                        <View style={[styles.milestoneDot, m.met && styles.milestoneDotMet]}>
+                          <Ionicons
+                            name={m.met ? 'checkmark' : 'ellipse'}
+                            size={8}
+                            color={m.met ? '#fff' : colors.amber800}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.milestoneLbl, m.met && styles.milestoneLblMet]}>
+                            By session {m.bySession} — ₹{reqAmt.toLocaleString('en-IN')} of total
+                          </Text>
+                          <Text style={styles.milestoneSub}>
+                            {m.met ? 'Paid' : `Pending (You need to pay ₹${remainingToPay.toLocaleString('en-IN')})`}
+                          </Text>
+                        </View>
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.milestoneLbl, m.met && styles.milestoneLblMet]}>
-                          By session {m.bySession} — {Math.round(m.requiredPct * 100)}% of total
-                        </Text>
-                        <Text style={styles.milestoneSub}>
-                          {m.met ? 'Paid' : 'Pending'}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
+                    )
+                  })}
                 </View>
               ) : null}
 

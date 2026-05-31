@@ -1,5 +1,5 @@
 import { memo, useMemo, useState } from 'react'
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { formatBookingDateAndSlot } from '../utils/date'
 import { bookingStatusBadge } from '../utils/dashboardUtils'
@@ -19,7 +19,7 @@ export default function DashboardBookingsScreen({ navigation }) {
   const [filter, setFilter] = useState('all')
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
   const [filterOpen, setFilterOpen] = useState(false)
-  const { data, isLoading, refetch } = useMyBookings({ page: 1, limit: 100 })
+  const { data, isLoading, isRefetching, refetch } = useMyBookings({ page: 1, limit: 100 })
   const rows = data || []
 
   const filtered = useMemo(() => {
@@ -59,8 +59,14 @@ export default function DashboardBookingsScreen({ navigation }) {
       <FlatList
         data={filtered}
         keyExtractor={(item) => String(item._id)}
-        refreshing={false}
-        onRefresh={refetch}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            colors={[colors.brand]}
+            tintColor={colors.brand}
+          />
+        }
         contentContainerStyle={filtered.length === 0 ? styles.emptyPad : styles.listPad}
         ListEmptyComponent={
           <EmptyState
@@ -96,7 +102,7 @@ export default function DashboardBookingsScreen({ navigation }) {
 }
 
 const BookingCard = memo(function BookingCard({ item, onPress }) {
-  const st = bookingStatusBadge(item.status, item.sessionStatus, item.paymentStatus)
+  const st = bookingStatusBadge(item.status, item.sessionStatus, item.paymentStatus, item.planStatus)
   const amt = Number(item.totalAmount) || 0
   const indicatorColor = 
     item.status === 'cancelled' ? colors.red500 :

@@ -8,6 +8,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -438,6 +439,7 @@ export default function PhysioListScreen({ navigation, route }) {
   const [selectedPhysioId, setSelectedPhysioId] = useState('')
   const [physioPickerOpen, setPhysioPickerOpen] = useState(false)
   const [physioLoading, setPhysioLoading] = useState(false)
+  const [refreshingPhysios, setRefreshingPhysios] = useState(false)
 
   // Submit
   const [submitting, setSubmitting] = useState(false)
@@ -620,6 +622,30 @@ export default function PhysioListScreen({ navigation, route }) {
     loadSlots()
   }, [token, loadSlots])
 
+  const loadNearbyPhysios = useCallback(async () => {
+    if (!Number.isFinite(addressLat) || !Number.isFinite(addressLng)) return
+    setPhysioLoading(true)
+    try {
+      const res = await api.get('/physios/nearby', { params: { lat: addressLat, lng: addressLng, limit: 12 } })
+      const list = res.data?.physios || []
+      setAvailablePhysios(list)
+      if (!list.some((p) => String(p._id) === String(selectedPhysioId))) {
+        setSelectedPhysioId('')
+      }
+    } catch {
+      setAvailablePhysios([])
+      setSelectedPhysioId('')
+    } finally {
+      setPhysioLoading(false)
+    }
+  }, [addressLat, addressLng, selectedPhysioId])
+
+  const onRefreshPhysios = useCallback(async () => {
+    setRefreshingPhysios(true)
+    await loadNearbyPhysios()
+    setRefreshingPhysios(false)
+  }, [loadNearbyPhysios])
+
   // Load nearby physios for online service type
   useEffect(() => {
     if (serviceType !== 'online') {
@@ -627,20 +653,8 @@ export default function PhysioListScreen({ navigation, route }) {
       setSelectedPhysioId('')
       return
     }
-    if (!Number.isFinite(addressLat) || !Number.isFinite(addressLng)) return
-    let cancelled = false
-    setPhysioLoading(true)
-    api.get('/physios/nearby', { params: { lat: addressLat, lng: addressLng, limit: 12 } })
-      .then((res) => {
-        if (cancelled) return
-        const list = res.data?.physios || []
-        setAvailablePhysios(list)
-        if (!list.some((p) => String(p._id) === String(selectedPhysioId))) setSelectedPhysioId('')
-      })
-      .catch(() => { if (!cancelled) { setAvailablePhysios([]); setSelectedPhysioId('') } })
-      .finally(() => { if (!cancelled) setPhysioLoading(false) })
-    return () => { cancelled = true }
-  }, [serviceType, addressLat, addressLng])
+    loadNearbyPhysios()
+  }, [serviceType, loadNearbyPhysios])
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
   async function submitBooking() {
@@ -1491,7 +1505,20 @@ export default function PhysioListScreen({ navigation, route }) {
                 <Text style={styles.physioPickerEmptySub}>Try changing your location or check back later.</Text>
               </View>
             ) : (
-              <ScrollView style={styles.physioList} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={styles.physioList}
+                showsVerticalScrollIndicator={false}
+                bounces={true}
+                alwaysBounceVertical={true}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshingPhysios}
+                    onRefresh={onRefreshPhysios}
+                    colors={[colors.brand]}
+                    tintColor={colors.brand}
+                  />
+                }
+              >
                 {availablePhysios.map((p) => (
                   <PhysioPickerCard
                     key={p._id}

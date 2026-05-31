@@ -1,7 +1,8 @@
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { Ionicons } from '@expo/vector-icons'
-import * as ImagePicker from 'expo-image-picker'
 import * as Location from 'expo-location'
+import * as ImagePicker from 'expo-image-picker'
+import * as WebBrowser from 'expo-web-browser'
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import {
   ActivityIndicator,
@@ -9,6 +10,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -143,6 +145,7 @@ function PremiumDateInput({ label, value, onPress, error }) {
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets()
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [locating, setLocating] = useState(false)
@@ -225,6 +228,12 @@ export default function ProfileScreen({ navigation }) {
       setLoading(false)
     }
   }, [])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await load()
+    setRefreshing(false)
+  }, [load])
 
   useEffect(() => {
     load()
@@ -514,6 +523,16 @@ export default function ProfileScreen({ navigation }) {
         contentContainerStyle={[styles.pad, { paddingBottom: Math.max(insets.bottom, 20) + 28 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        bounces={true}
+        alwaysBounceVertical={true}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.brand]}
+            tintColor={colors.brand}
+          />
+        }
       >
         {/* ── Luxe Profile Card ─────────────────────── */}
         <View style={styles.profileCard}>
@@ -895,6 +914,18 @@ export default function ProfileScreen({ navigation }) {
             </>
           )}
         </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          style={({ pressed }) => [
+            styles.privacyLink,
+            pressed && { opacity: 0.7 }
+          ]}
+          onPress={() => WebBrowser.openBrowserAsync('https://physiokhom.com/privacy-policy')}
+        >
+          <Ionicons name="shield-checkmark-outline" size={13} color={colors.slate500} />
+          <Text style={styles.privacyLinkTxt}>Privacy Policy</Text>
+        </Pressable>
         <View style={{ height: 16 }} />
       </ScrollView>
 
@@ -972,6 +1003,20 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: figmaTokens.canvas, position: 'relative' },
   pad: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, zIndex: 2 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: figmaTokens.canvas },
+  privacyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 16,
+    gap: 6,
+  },
+  privacyLinkTxt: {
+    fontFamily: font.bold,
+    fontSize: type.xs,
+    color: colors.slate500,
+    textDecorationLine: 'underline',
+  },
 
   // Ambient Header glows
   ambientHeaderGlow: {

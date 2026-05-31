@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   Share,
   StyleSheet,
@@ -28,8 +29,14 @@ function statusLabel(s) {
 }
 
 export default function ReferEarnScreen() {
-  const { data: myCode, isLoading: codeLoading, refetch: refetchCode } = useReferralMyCode()
-  const { data: referrals = [], isLoading: statsLoading, refetch: refetchStats } = useReferralStats()
+  const { data: myCode, isLoading: codeLoading, isRefetching: codeRefetching, refetch: refetchCode } = useReferralMyCode()
+  const { data: referrals = [], isLoading: statsLoading, isRefetching: statsRefetching, refetch: refetchStats } = useReferralStats()
+
+  const refreshing = codeRefetching || statsRefetching
+
+  const onRefresh = useCallback(async () => {
+    await Promise.all([refetchCode(), refetchStats()])
+  }, [refetchCode, refetchStats])
 
   const referralCode = myCode?.referralCode || ''
   const walletBalance = Number(myCode?.walletBalance) || 0
@@ -65,7 +72,18 @@ export default function ReferEarnScreen() {
       <View style={styles.ambientHeaderGlow} pointerEvents="none" />
       <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.brand]}
+            tintColor={colors.brand}
+          />
+        }
+      >
         <Text style={styles.title}>Refer &amp; Earn</Text>
         <Text style={styles.sub}>
           Share your code.

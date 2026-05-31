@@ -10,6 +10,7 @@ import KeyboardAwareScrollView from '../components/ui/KeyboardAwareScrollView'
 import { colors } from '../theme/colors'
 import { authFormCard } from '../theme/authFormCard'
 import { font, type, leading } from '../theme/typography'
+import { sendFirebaseOtp, confirmFirebaseOtp, toE164India, friendlyFirebaseError } from '../utils/firebasePhoneAuth'
 
 const STEPS = [
   { key: 'phone', n: 1, icon: 'phone-portrait-outline', title: 'Enter your mobile', sub: 'We\'ll send a verification code to your registered number.' },
@@ -25,6 +26,7 @@ export default function ForgotPasswordScreen({ navigation }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
+  const [confirmation, setConfirmation] = useState(null)
 
   const stepMeta = STEPS.find((s) => s.key === step) || STEPS[0]
 
@@ -35,10 +37,12 @@ export default function ForgotPasswordScreen({ navigation }) {
     setLoading(true)
     try {
       await api.post('/auth/forgot-password', { phone: pv.normalized })
+      const conf = await sendFirebaseOtp(toE164India(phone))
+      setConfirmation(conf)
       Toast.show({ type: 'success', text1: 'Verification code sent' })
       setStep('otp')
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Could not send code')
+      setError(friendlyFirebaseError(err) || err.response?.data?.message || err.message || 'Could not send code')
     } finally {
       setLoading(false)
     }
@@ -52,11 +56,12 @@ export default function ForgotPasswordScreen({ navigation }) {
     if (oe) { setFieldErrors({ otp: oe }); return }
     setLoading(true)
     try {
-      await api.post('/auth/verify-otp', { phone: pv.normalized, otp: otp.replace(/\D/g, '') })
+      const idToken = await confirmFirebaseOtp(confirmation, otp)
+      await api.post('/auth/verify-otp', { firebaseIdToken: idToken })
       Toast.show({ type: 'success', text1: 'Code verified' })
       setStep('password')
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Invalid code')
+      setError(friendlyFirebaseError(err) || err.response?.data?.message || err.message || 'Invalid code')
     } finally {
       setLoading(false)
     }

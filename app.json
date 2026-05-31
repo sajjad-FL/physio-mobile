@@ -3,6 +3,7 @@
     "name": "PhysiOkhom",
     "slug": "physiokhom",
     "version": "1.0.0",
+    "icon": "./assets/images/icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "physiokhom",

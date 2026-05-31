@@ -1,5 +1,5 @@
-import { memo, useMemo } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { memo, useCallback, useMemo } from 'react'
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useMyBookings, useMyDisputes, useProfile } from '../api/queries'
 import { formatBookingDateAndSlot } from '../utils/date'
@@ -14,9 +14,17 @@ const BOOKING_PARAMS = { page: 1, limit: 100 }
 const DISPUTE_PARAMS = { page: 1, limit: 20 }
 
 export default function DashboardHomeScreen({ navigation }) {
-  const { data: bookings, isLoading: bookingsLoading } = useMyBookings(BOOKING_PARAMS)
-  const { data: disputesData, isLoading: disputesLoading } = useMyDisputes(DISPUTE_PARAMS)
-  const { data: profile, isLoading: profileLoading } = useProfile()
+  const { data: bookings, isLoading: bookingsLoading, isRefetching: bookingsRefetching, refetch: refetchBookings } = useMyBookings(BOOKING_PARAMS)
+  const { data: disputesData, isLoading: disputesLoading, isRefetching: disputesRefetching, refetch: refetchDisputes } = useMyDisputes(DISPUTE_PARAMS)
+  const { data: profile, isLoading: profileLoading, isRefetching: profileRefetching, refetch: refetchProfile } = useProfile()
+
+  const ptRefreshing = bookingsRefetching || disputesRefetching || profileRefetching
+
+  const onRefresh = useCallback(() => {
+    refetchBookings()
+    refetchDisputes()
+    refetchProfile()
+  }, [refetchBookings, refetchDisputes, refetchProfile])
 
   const loading = bookingsLoading || disputesLoading || profileLoading
   const needsProfile = !loading && !bookings && !disputesData
@@ -76,7 +84,18 @@ export default function DashboardHomeScreen({ navigation }) {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      contentContainerStyle={styles.scroll}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={ptRefreshing}
+          onRefresh={onRefresh}
+          colors={[colors.brand]}
+          tintColor={colors.brand}
+        />
+      }
+    >
       {/* Ambient Top Background Halo Glow */}
       <View style={styles.ambientHeaderGlow} pointerEvents="none" />
       <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
@@ -199,13 +218,13 @@ export default function DashboardHomeScreen({ navigation }) {
 
         <View style={styles.statCard}>
           <View style={styles.statHead}>
-            <Text style={styles.statLabel}>Care Spend</Text>
+            <Text style={styles.statLabel}>Total Paid</Text>
             <View style={[styles.statIconBadge, { backgroundColor: figmaTokens.mintSoft }]}>
               <Ionicons name="wallet-outline" size={12} color={figmaTokens.primary} />
             </View>
           </View>
           <Text style={styles.statMoney}>{formatInr(revenueTotal)}</Text>
-          <Text style={styles.statSub}>held + released</Text>
+          <Text style={styles.statSub}>all time</Text>
         </View>
       </View>
 
@@ -248,7 +267,7 @@ export default function DashboardHomeScreen({ navigation }) {
 }
 
 const ActivityRow = memo(function ActivityRow({ item, onPress, isLast }) {
-  const st = bookingStatusBadge(item.status, item.sessionStatus, item.paymentStatus)
+  const st = bookingStatusBadge(item.status, item.sessionStatus, item.paymentStatus, item.planStatus)
   return (
     <Pressable
       style={({ pressed }) => [
