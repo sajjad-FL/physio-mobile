@@ -75,4 +75,16 @@ export async function getExpoPushTokenOrNull() {
   }
 }
 
+export function setupNotificationTapHandler(navigationRef) {
+  return Notifications.addNotificationResponseReceivedListener((response) => {
+    const data = response.notification.request.content.data || {}
+    if (data.bookingId && navigationRef?.isReady?.()) {
+      navigationRef.navigate('Bookings', {
+        screen: 'BookingDetail',
+        params: { id: data.bookingId },
+      })
+    }
+  })
+}
+
 export { ANDROID_DEFAULT_CHANNEL }

@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../../theme/colors'
@@ -12,11 +12,15 @@ export const StitchHeader = memo(function StitchHeader({ token, onSignIn, onDash
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) + 6 }]}>
       <View style={styles.row}>
         <View style={styles.brandRow}>
-          <View style={styles.logoMark}>
-            <Ionicons name="pulse" size={13} color={colors.white} />
-          </View>
-          <Text style={styles.brandPhysio}>Physio</Text>
-          <Text style={styles.brandKhom}>Khom</Text>
+          <Image
+            source={require('../../../assets/images/logo.png')}
+            style={styles.logoMark}
+            resizeMode="contain"
+          />
+          <Text numberOfLines={1}>
+            <Text style={styles.brandPhysio}>PhysiO</Text>
+            <Text style={styles.brandKhom}>khom</Text>
+          </Text>
         </View>
         {token ? (
           <Pressable onPress={onDashboard} style={styles.dashBtn} hitSlop={8}>
@@ -46,17 +50,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 36 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   logoMark: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
-    backgroundColor: figmaTokens.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: figmaTokens.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    width: 36,
+    height: 36,
   },
   brandPhysio: { fontFamily: font.bold, fontSize: type.lg, color: colors.textPrimary, letterSpacing: -0.3 },
   brandKhom: { fontFamily: font.bold, fontSize: type.lg, color: figmaTokens.primary, letterSpacing: -0.3 },

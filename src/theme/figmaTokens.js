@@ -1,5 +1,5 @@
 /**
- * PhysioKhom — shared tokens from HTML references (Sign up steps 1–3, Sign in, Landing).
+ * PhysiOkhom — shared tokens from HTML references (Sign up steps 1–3, Sign in, Landing).
  * Teal CTAs: #0d6b6b · Solid primary (Sign in / Create account): #005151 · Canvas: #f9f9fc / signup #f8fafc
  */
 import { Platform } from 'react-native'

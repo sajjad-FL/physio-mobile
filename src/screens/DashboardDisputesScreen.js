@@ -1,5 +1,5 @@
 import { memo, useState } from 'react'
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { formatBookingDateAndSlot } from '../utils/date'
 import Chip from '../components/ui/Chip'
@@ -20,7 +20,7 @@ function statusAccent(status) {
 
 export default function DashboardDisputesScreen() {
   const [page, setPage] = useState(1)
-  const { data, isLoading, refetch } = useMyDisputes({ page, limit: 8 })
+  const { data, isLoading, isRefetching, refetch } = useMyDisputes({ page, limit: 8 })
   const rows = data?.rows || []
   const totalPages = data?.totalPages || 1
 
@@ -41,8 +41,14 @@ export default function DashboardDisputesScreen() {
       <FlatList
         data={rows}
         keyExtractor={(item) => String(item._id)}
-        onRefresh={refetch}
-        refreshing={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            colors={[colors.brand]}
+            tintColor={colors.brand}
+          />
+        }
         contentContainerStyle={rows.length === 0 ? styles.emptyPad : styles.listPad}
         ListEmptyComponent={
           <View style={styles.emptyBox}>

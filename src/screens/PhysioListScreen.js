@@ -8,6 +8,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -87,6 +88,14 @@ function isSlotUnavailableOnClient(timeSlot) {
   const slotStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(m[1]), Number(m[2]), 0)
   // past OR within 2-hour lead-time window
   return (slotStart.getTime() - now.getTime()) < 2 * 60 * 60 * 1000
+}
+
+function chunkSlotRows(items, columns = 2) {
+  const rows = []
+  for (let i = 0; i < items.length; i += columns) {
+    rows.push(items.slice(i, i + columns))
+  }
+  return rows
 }
 
 function prettyDate(iso) {
@@ -430,11 +439,13 @@ export default function PhysioListScreen({ navigation, route }) {
   const [selectedPhysioId, setSelectedPhysioId] = useState('')
   const [physioPickerOpen, setPhysioPickerOpen] = useState(false)
   const [physioLoading, setPhysioLoading] = useState(false)
+  const [refreshingPhysios, setRefreshingPhysios] = useState(false)
 
   // Submit
   const [submitting, setSubmitting] = useState(false)
   const [successBookingId, setSuccessBookingId] = useState(null)
   const [successMessage, setSuccessMessage] = useState('')
+  const [successServiceType, setSuccessServiceType] = useState('home')
   const [paymentCancelModal, setPaymentCancelModal] = useState(false)
   const [useWalletCredit, setUseWalletCredit] = useState(false)
   const { data: referralData } = useReferralMyCode(Boolean(token))
@@ -611,6 +622,30 @@ export default function PhysioListScreen({ navigation, route }) {
     loadSlots()
   }, [token, loadSlots])
 
+  const loadNearbyPhysios = useCallback(async () => {
+    if (!Number.isFinite(addressLat) || !Number.isFinite(addressLng)) return
+    setPhysioLoading(true)
+    try {
+      const res = await api.get('/physios/nearby', { params: { lat: addressLat, lng: addressLng, limit: 12 } })
+      const list = res.data?.physios || []
+      setAvailablePhysios(list)
+      if (!list.some((p) => String(p._id) === String(selectedPhysioId))) {
+        setSelectedPhysioId('')
+      }
+    } catch {
+      setAvailablePhysios([])
+      setSelectedPhysioId('')
+    } finally {
+      setPhysioLoading(false)
+    }
+  }, [addressLat, addressLng, selectedPhysioId])
+
+  const onRefreshPhysios = useCallback(async () => {
+    setRefreshingPhysios(true)
+    await loadNearbyPhysios()
+    setRefreshingPhysios(false)
+  }, [loadNearbyPhysios])
+
   // Load nearby physios for online service type
   useEffect(() => {
     if (serviceType !== 'online') {
@@ -618,20 +653,8 @@ export default function PhysioListScreen({ navigation, route }) {
       setSelectedPhysioId('')
       return
     }
-    if (!Number.isFinite(addressLat) || !Number.isFinite(addressLng)) return
-    let cancelled = false
-    setPhysioLoading(true)
-    api.get('/physios/nearby', { params: { lat: addressLat, lng: addressLng, limit: 12 } })
-      .then((res) => {
-        if (cancelled) return
-        const list = res.data?.physios || []
-        setAvailablePhysios(list)
-        if (!list.some((p) => String(p._id) === String(selectedPhysioId))) setSelectedPhysioId('')
-      })
-      .catch(() => { if (!cancelled) { setAvailablePhysios([]); setSelectedPhysioId('') } })
-      .finally(() => { if (!cancelled) setPhysioLoading(false) })
-    return () => { cancelled = true }
-  }, [serviceType, addressLat, addressLng])
+    loadNearbyPhysios()
+  }, [serviceType, loadNearbyPhysios])
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
   async function submitBooking() {
@@ -656,7 +679,8 @@ export default function PhysioListScreen({ navigation, route }) {
       if (serviceType === 'home') {
         const bookingRes = await api.post('/bookings/request-home', body)
         const newBookingId = bookingRes.data?._id
-        setSuccessMessage("We're finding the best physiotherapist for your condition and we will contact you shortly.")
+        setSuccessServiceType('home')
+        setSuccessMessage("Your request has been received. We'll notify you once a physiotherapist is assigned.")
         setSuccessBookingId(newBookingId || 'new')
         return
       }
@@ -702,7 +726,7 @@ export default function PhysioListScreen({ navigation, route }) {
         key: keyId,
         amount: amountPaise,
         currency: currency || 'INR',
-        name: 'PhysioKhom',
+        name: 'PhysiOkhom',
         description: 'Online Consultation booking',
         order_id: orderId,
         prefill: cleanRazorpayPrefill(prefillData),
@@ -729,6 +753,7 @@ export default function PhysioListScreen({ navigation, route }) {
               razorpay_signature: response.razorpay_signature,
             })
             const bookingId = done.data?._id
+            setSuccessServiceType('online')
             setSuccessMessage('Payment successful! Your online consultation is confirmed. Your physiotherapist will join at the scheduled time.')
             setSuccessBookingId(bookingId || 'new')
           } catch (e) {
@@ -1138,30 +1163,38 @@ export default function PhysioListScreen({ navigation, route }) {
                   </View>
                 ) : (
                   <View style={styles.slotsGrid}>
-                    {slots.map((s) => {
-                      const isSelected = timeSlot === s.timeSlot
-                      return (
-                        <Pressable
-                          key={s.timeSlot}
-                          style={[styles.slotChip, isSelected && styles.slotChipSelected]}
-                          onPress={() => {
-                            setTimeSlot(s.timeSlot)
-                            setTimeout(() => {
-                              setCurrentStep(3)
-                            }, 220)
-                          }}
-                        >
-                          <Ionicons
-                            name="time-outline"
-                            size={13}
-                            color={isSelected ? colors.white : colors.brand}
-                          />
-                          <Text style={[styles.slotChipTxt, isSelected && styles.slotChipTxtSelected]}>
-                            {formatBookingTimeSlot(s.timeSlot)}
-                          </Text>
-                        </Pressable>
-                      )
-                    })}
+                    {chunkSlotRows(slots).map((row, rowIndex) => (
+                      <View key={`slot-row-${rowIndex}`} style={styles.slotsRow}>
+                        {row.map((s) => {
+                          const isSelected = timeSlot === s.timeSlot
+                          return (
+                            <Pressable
+                              key={s.timeSlot}
+                              style={[styles.slotChip, isSelected && styles.slotChipSelected]}
+                              onPress={() => {
+                                setTimeSlot(s.timeSlot)
+                                setTimeout(() => {
+                                  setCurrentStep(3)
+                                }, 220)
+                              }}
+                            >
+                              <Ionicons
+                                name="time-outline"
+                                size={13}
+                                color={isSelected ? colors.white : colors.brand}
+                              />
+                              <Text
+                                style={[styles.slotChipTxt, isSelected && styles.slotChipTxtSelected]}
+                                numberOfLines={1}
+                              >
+                                {formatBookingTimeSlot(s.timeSlot)}
+                              </Text>
+                            </Pressable>
+                          )
+                        })}
+                        {row.length === 1 ? <View style={styles.slotChipSpacer} /> : null}
+                      </View>
+                    ))}
                   </View>
                 )}
               </View>
@@ -1332,20 +1365,22 @@ export default function PhysioListScreen({ navigation, route }) {
       ) : null}
 
       {/* ── Sticky summary bar ────────────────────────────────────────────── */}
-      <BookingSummaryBar
-        selectedPhysio={serviceType === 'online' ? selectedPhysio : null}
-        date={date}
-        timeSlot={timeSlot}
-        serviceType={serviceType}
-        canSubmit={canSubmit}
-        loading={submitting}
-        onConfirm={submitBooking}
-        currentStep={currentStep}
-        onContinue={() => setCurrentStep((c) => c + 1)}
-        step1Ok={step1Ok}
-        step2Ok={step2Ok}
-        step3Ok={step3Ok}
-      />
+      {!successBookingId && !paymentCancelModal ? (
+        <BookingSummaryBar
+          selectedPhysio={serviceType === 'online' ? selectedPhysio : null}
+          date={date}
+          timeSlot={timeSlot}
+          serviceType={serviceType}
+          canSubmit={canSubmit}
+          loading={submitting}
+          onConfirm={submitBooking}
+          currentStep={currentStep}
+          onContinue={() => setCurrentStep((c) => c + 1)}
+          step1Ok={step1Ok}
+          step2Ok={step2Ok}
+          step3Ok={step3Ok}
+        />
+      ) : null}
 
       {/* ── Location modal ────────────────────────────────────────────────── */}
       <Modal transparent visible={locationModalOpen} animationType="slide" onRequestClose={() => setLocationModalOpen(false)}>
@@ -1470,7 +1505,20 @@ export default function PhysioListScreen({ navigation, route }) {
                 <Text style={styles.physioPickerEmptySub}>Try changing your location or check back later.</Text>
               </View>
             ) : (
-              <ScrollView style={styles.physioList} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={styles.physioList}
+                showsVerticalScrollIndicator={false}
+                bounces={true}
+                alwaysBounceVertical={true}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshingPhysios}
+                    onRefresh={onRefreshPhysios}
+                    colors={[colors.brand]}
+                    tintColor={colors.brand}
+                  />
+                }
+              >
                 {availablePhysios.map((p) => (
                   <PhysioPickerCard
                     key={p._id}
@@ -1517,84 +1565,99 @@ export default function PhysioListScreen({ navigation, route }) {
       />
 
       {/* ── Payment cancelled modal ──────────────────────────────────────── */}
-      <Modal visible={paymentCancelModal} transparent animationType="fade">
+      <Modal visible={paymentCancelModal} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.successOverlay}>
-          <View style={styles.successCard}>
-            <View style={[styles.successIconCircle, { backgroundColor: '#FFF3E0' }]}>
-              <Ionicons name="close-circle" size={56} color="#F59E0B" />
+          <View style={styles.successCardOuter}>
+            <View style={styles.successCard}>
+              <View style={[styles.successIconCircle, { backgroundColor: '#FFF3E0' }]}>
+                <Ionicons name="close-circle" size={56} color="#F59E0B" />
+              </View>
+              <Text style={styles.successTitle}>Payment Cancelled</Text>
+              <Text style={styles.successBody}>
+                Your payment was not completed. No amount has been charged. You can try booking again whenever you're ready.
+              </Text>
+              <Pressable
+                style={[styles.successBtn, { backgroundColor: '#F59E0B' }]}
+                onPress={() => {
+                  setPaymentCancelModal(false)
+                  navigation.dispatch(
+                    CommonActions.reset({
+                      index: 0,
+                      routes: [
+                        {
+                          name: 'UserTabs',
+                          state: { index: 0, routes: [{ name: 'DashboardHome' }] },
+                        },
+                      ],
+                    })
+                  )
+                }}
+              >
+                <Text style={styles.successBtnTxt}>OK, Go to Dashboard</Text>
+              </Pressable>
             </View>
-            <Text style={styles.successTitle}>Payment Cancelled</Text>
-            <Text style={styles.successBody}>
-              Your payment was not completed. No amount has been charged. You can try booking again whenever you're ready.
-            </Text>
-            <Pressable
-              style={[styles.successBtn, { backgroundColor: '#F59E0B' }]}
-              onPress={() => {
-                setPaymentCancelModal(false)
-                navigation.dispatch(
-                  CommonActions.reset({
-                    index: 0,
-                    routes: [
-                      {
-                        name: 'UserTabs',
-                        state: { index: 0, routes: [{ name: 'DashboardHome' }] },
-                      },
-                    ],
-                  })
-                )
-              }}
-            >
-              <Text style={styles.successBtnTxt}>OK, Go to Dashboard</Text>
-            </Pressable>
           </View>
         </View>
       </Modal>
 
       {/* ── Booking success modal ─────────────────────────────────────────── */}
-      <Modal visible={!!successBookingId} transparent animationType="fade">
+      <Modal visible={!!successBookingId} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.successOverlay}>
-          <View style={styles.successCard}>
-            <View style={styles.successIconCircle}>
-              <Ionicons name="checkmark-circle" size={56} color={colors.brand} />
-            </View>
-            <Text style={styles.successTitle}>Booking Confirmed!</Text>
-            <Text style={styles.successBody}>{successMessage}</Text>
-            <Pressable
-              style={styles.successBtn}
-              onPress={() => {
-                const id = successBookingId
-                setSuccessBookingId(null)
-                setSuccessMessage('')
-                navigation.dispatch(
-                  CommonActions.reset({
-                    index: 0,
-                    routes: [
-                      {
-                        name: 'UserTabs',
-                        state: {
-                          index: 1,
-                          routes: [
-                            { name: 'DashboardHome' },
-                            {
-                              name: 'Bookings',
-                              state: {
-                                index: 1,
-                                routes: [
-                                  { name: 'BookingsList' },
-                                  { name: 'BookingDetail', params: { id } },
-                                ],
+          <View style={styles.successCardOuter}>
+            <View style={styles.successCard}>
+              {successServiceType === 'home' ? (
+                <View style={[styles.successIconCircle, { backgroundColor: colors.brandSoft }]}>
+                  <Ionicons name="time-outline" size={52} color={colors.brand} />
+                </View>
+              ) : (
+                <View style={styles.successIconCircle}>
+                  <Ionicons name="checkmark-circle" size={56} color={colors.brand} />
+                </View>
+              )}
+              <Text style={styles.successTitle}>
+                {successServiceType === 'home' ? 'Awaiting Assignment' : 'Booking Confirmed!'}
+              </Text>
+              <Text style={styles.successBody}>{successMessage}</Text>
+              <Pressable
+                style={styles.successBtn}
+                onPress={() => {
+                  const id = successBookingId
+                  setSuccessBookingId(null)
+                  setSuccessMessage('')
+                  setSuccessServiceType('home')
+                  navigation.dispatch(
+                    CommonActions.reset({
+                      index: 0,
+                      routes: [
+                        {
+                          name: 'UserTabs',
+                          state: {
+                            index: 1,
+                            routes: [
+                              { name: 'DashboardHome' },
+                              {
+                                name: 'Bookings',
+                                state: {
+                                  index: 1,
+                                  routes: [
+                                    { name: 'BookingsList' },
+                                    { name: 'BookingDetail', params: { id } },
+                                  ],
+                                },
                               },
-                            },
-                          ],
+                            ],
+                          },
                         },
-                      },
-                    ],
-                  })
-                )
-              }}
-            >
-              <Text style={styles.successBtnTxt}>View Booking</Text>
-            </Pressable>
+                      ],
+                    })
+                  )
+                }}
+              >
+                <Text style={styles.successBtnTxt}>
+                  {successServiceType === 'home' ? 'View Status' : 'View Booking'}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1976,26 +2039,36 @@ const styles = StyleSheet.create({
 
   // Slots grid
   slotsGrid: {
+    gap: 8,
+  },
+  slotsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'stretch',
     gap: 8,
   },
   slotChip: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 5,
-    paddingHorizontal: 12,
+    minHeight: 40,
+    paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 10,
     backgroundColor: colors.canvas,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
   },
+  slotChipSpacer: {
+    flex: 1,
+  },
   slotChipSelected: {
     backgroundColor: colors.brand,
     borderColor: colors.brand,
   },
   slotChipTxt: {
+    flexShrink: 1,
     fontFamily: font.medium,
     fontSize: type.xs,
     color: colors.textPrimary,
@@ -2588,19 +2661,28 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
   },
-  successCard: {
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    padding: 28,
+  successCardOuter: {
     width: '100%',
     maxWidth: 360,
-    alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    overflow: 'hidden',
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20 },
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.18,
+        shadowRadius: 20,
+      },
       android: { elevation: 10 },
     }),
+  },
+  successCard: {
+    padding: 28,
+    alignItems: 'center',
   },
   successIconCircle: {
     width: 88,
@@ -2633,6 +2715,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 36,
     width: '100%',
     alignItems: 'center',
+    alignSelf: 'stretch',
+    overflow: 'hidden',
   },
   successBtnTxt: {
     fontFamily: font.semibold || font.bold,

@@ -76,7 +76,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Are your physiotherapists certified?',
-    a: 'Absolutely. Every provider on PhysioKhom holds a BPT/MPT degree and has cleared our professional verification.',
+    a: 'Absolutely. Every provider on PhysiOkhom holds a BPT/MPT degree and has cleared our professional verification.',
     cat: 'Therapists',
   },
   {
@@ -98,11 +98,17 @@ const FAQ_ITEMS = [
 
 const SPECIALTIES = [
   { id: 'Back Pain', title: 'Orthopedic', image: require('../../assets/images/specialty_orthopedic.png'), bg: '#e6f4f3', color: '#0d6b6b' },
-  { id: 'Stroke/Paralysis', title: 'Neuro Rehab', image: require('../../assets/images/specialty_neuro.png'), bg: '#eff6ff', color: '#2563eb' },
-  { id: 'Knee Pain', title: 'Knee & Joint', image: require('../../assets/images/specialty_knee.png'), bg: '#f5f3ff', color: '#5b21b6' },
+  { id: 'Neuro Rehab', title: 'Neuro Rehab', image: require('../../assets/images/specialty_neuro.png'), bg: '#eff6ff', color: '#2563eb' },
+  { id: 'Pediatric Rehab', title: 'Pediatric Rehab', image: require('../../assets/images/technique_pediatric.png'), bg: '#eff6ff', color: '#1d4ed8' },
   { id: 'Post Surgery Rehab', title: 'Post-Op', image: require('../../assets/images/specialty_post_op.png'), bg: '#ecfdf5', color: '#047857' },
-  { id: 'Neck Pain', title: 'Neck & Spine', image: require('../../assets/images/specialty_neck.png'), bg: '#fffbeb', color: '#f59e0b' },
+  { id: 'Elderly Care', title: 'Elderly Care', image: require('../../assets/images/technique_elderly.png'), bg: '#f0fdf4', color: '#15803d' },
   { id: 'Many More', title: 'Other Care', image: require('../../assets/images/specialty_other.png'), bg: '#fff1f2', color: '#dc2626' },
+]
+
+const TECHNIQUES = [
+  { id: 'Cupping',        title: 'Cupping Therapy', image: require('../../assets/images/technique_cupping.png'),   bg: '#fff7ed', color: '#c2410c' },
+  { id: 'Dry Needling',   title: 'Dry Needling',    image: require('../../assets/images/technique_needling.png'),  bg: '#f5f3ff', color: '#6d28d9' },
+  { id: 'Kinesio Taping', title: 'Kinesio Taping',  image: require('../../assets/images/technique_kinesio.png'),   bg: '#e6f4f3', color: '#0d6b6b' },
 ]
 
 const PLAN_TIER_CARDS = [
@@ -479,7 +485,7 @@ const FRONT_SPOTS = [
 const BACK_SPOTS = [
   { id: 'upper_back', name: 'Upper Spine & Posture', issue: 'Neck Pain', top: 45, left: 60, icon: 'fitness-outline', desc: 'Upper back postural strain, thoracic stiffness' },
   { id: 'lower_back', name: 'Lower Back Care', issue: 'Back Pain', top: 85, left: 60, icon: 'body-outline', desc: 'Sciatica, slip disc, lumbar muscle spasms' },
-  { id: 'neuro_rehab', name: 'Stroke Rehabilitation', issue: 'Stroke/Paralysis', top: 15, left: 78, icon: 'pulse-outline', desc: 'Hemiplegia, neural weakness, balance issues' },
+  { id: 'neuro_rehab', name: 'Stroke Rehabilitation', issue: 'Neuro Rehab', top: 15, left: 78, icon: 'pulse-outline', desc: 'Hemiplegia, neural weakness, balance issues' },
 ]
 
 export default function HomeScreen({ navigation }) {
@@ -772,7 +778,7 @@ export default function HomeScreen({ navigation }) {
   }, [homeStats.loading, homeStats.activeSpecialists, homeStats.bookingRateToday, serviceAreaLabel])
 
   const openWhatsAppConcierge = () => {
-    const message = encodeURIComponent("Hello PhysioKhom, I need assistance with booking a physiotherapist session.")
+    const message = encodeURIComponent("Hello PhysiOkhom, I need assistance with booking a physiotherapist session.")
     const url = `https://wa.me/918453580556?text=${message}`
     Linking.openURL(url).catch(() => {
       Alert.alert('Error', 'Could not open WhatsApp. Please contact support.')
@@ -807,9 +813,9 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.headerSection}>
           <View style={styles.headerLeft}>
             <Text style={styles.headerGreeting}>
-              {userName ? `Hello, ${userName} 👋` : 'Welcome to PhysioKhom'}
+              {userName ? `Hello, ${userName} 👋` : 'Welcome to PhysiOkhom'}
             </Text>
-            <Text style={styles.headerTitle}>Find verified home care</Text>
+            <Text style={styles.headerTitle}>Connect with expert physiotherapists near you</Text>
           </View>
           <View style={styles.headerRight}>
             <Pressable
@@ -909,8 +915,28 @@ export default function HomeScreen({ navigation }) {
           activeBooking={activeBooking}
         />
 
+        {/* ── Advanced Therapeutic Techniques ───────────────────────── */}
+        <SectionHeader icon="flask-outline" title="Advanced Therapeutic Techniques" />
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.specialtiesScroll}
+          decelerationRate="fast"
+        >
+          {TECHNIQUES.map((tech) => (
+            <SpecialtyCard
+              key={tech.title}
+              title={tech.title}
+              image={tech.image}
+              bg={tech.bg}
+              color={tech.color}
+              onPress={() => navigation.navigate('PhysioList', { issue: tech.id })}
+            />
+          ))}
+        </ScrollView>
+
         {/* ── Specialties Row (Circular Icons Carousel) ───────────────── */}
-        <SectionHeader icon="medical-outline" title="Clinical Specialties" />
+        <SectionHeader icon="medical-outline" title="Clinical Specialities" />
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -941,7 +967,7 @@ export default function HomeScreen({ navigation }) {
             <View style={styles.sectionIconWrap}>
               <Ionicons name="body-outline" size={13} color={figmaTokens.primary} />
             </View>
-            <Text style={styles.sectionTitle}>Where does it hurt?</Text>
+            <Text style={styles.sectionTitle}>Where do you need support?</Text>
           </View>
           
           <View style={styles.painToggleContainer}>
@@ -1026,7 +1052,7 @@ export default function HomeScreen({ navigation }) {
               {/* Neuro/Stroke */}
               <TouchableOpacity 
                 activeOpacity={0.9}
-                onPress={() => navigation.navigate('PhysioList', { issue: 'Stroke/Paralysis' })}
+                onPress={() => navigation.navigate('PhysioList', { issue: 'Neuro Rehab' })}
                 style={[styles.painCard, { backgroundColor: '#f0fdf4', borderColor: '#dcfce7' }]}
               >
                 <Image 
@@ -1035,11 +1061,32 @@ export default function HomeScreen({ navigation }) {
                   resizeMode="cover"
                 />
                 <View style={styles.painCardBody}>
-                  <Text style={[styles.painCardTitle, { color: '#15803d' }]}>Neuro Rehab</Text>
+                  <Text style={[styles.painCardTitle, { color: '#15803d' }]}>Stroke/Paralysis</Text>
                   <Text style={styles.painCardDesc} numberOfLines={2}>Stroke recovery, paralysis care, numbness</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={12} color="#15803d" style={{ marginLeft: 'auto' }} />
               </TouchableOpacity>
+            </View>
+
+            <View style={styles.painRow}>
+              {/* Others */}
+              <TouchableOpacity 
+                activeOpacity={0.9}
+                onPress={() => navigation.navigate('PhysioList')}
+                style={[styles.painCard, { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1' }]}
+              >
+                <Image 
+                  source={require('../../assets/images/illustration_other.png')} 
+                  style={styles.painIllustrationImage} 
+                  resizeMode="cover"
+                />
+                <View style={styles.painCardBody}>
+                  <Text style={[styles.painCardTitle, { color: '#475569' }]}>Others</Text>
+                  <Text style={styles.painCardDesc} numberOfLines={2}>Any other conditions, post-op care, general rehab</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={12} color="#475569" style={{ marginLeft: 'auto' }} />
+              </TouchableOpacity>
+              <View style={{ flex: 1 }} />
             </View>
           </View>
         ) : (
@@ -1264,8 +1311,8 @@ export default function HomeScreen({ navigation }) {
           </View>
         )}
 
-        {/* ── Home Care Plans Carousel ────────────────────────────────── */}
-        <SectionHeader icon="calendar-outline" title="Home Care Plans" />
+        {/* ── Physiotherapy Plans Carousel ────────────────────────────────── */}
+        <SectionHeader icon="calendar-outline" title="Physiotherapy Plans" />
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -1387,7 +1434,7 @@ export default function HomeScreen({ navigation }) {
               <Ionicons name="checkmark-circle" size={14} color="#15803d" />
               <Text style={[styles.compareHeaderTitle, { color: '#15803d' }]}>At-Home Care</Text>
             </View>
-            <Text style={styles.compareSubtitle}>With PhysioKhom</Text>
+            <Text style={styles.compareSubtitle}>With PhysiOkhom</Text>
             <View style={styles.compareList}>
               <View style={styles.compareItem}>
                 <Ionicons name="checkmark" size={10} color="#15803d" style={styles.compareItemIcon} />
@@ -1436,7 +1483,7 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
 
-        {/* ── Why PhysioKhom Card Grid (2-column layout) ───────────────── */}
+        {/* ── Why PhysiOkhom Card Grid (2-column layout) ───────────────── */}
         <SectionHeader icon="star-outline" title="Why Patients Choose Us" />
         <View style={styles.whyGrid}>
           <View style={styles.whyGridRow}>
@@ -1535,7 +1582,7 @@ export default function HomeScreen({ navigation }) {
               <Ionicons name="shield-checkmark" size={20} color="#d97706" />
             </View>
             <View style={styles.safetyTitleWrap}>
-              <Text style={styles.safetyTitle}>The PhysioKhom At-Home Safety Promise</Text>
+              <Text style={styles.safetyTitle}>The PhysiOkhom At-Home Safety Promise</Text>
               <Text style={styles.safetySubtitle}>Making home rehabilitation secure and comfortable</Text>
             </View>
           </View>
@@ -2102,13 +2149,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   specialtyItem: {
-    width: 72,
+    width: 96,
     alignItems: 'center',
   },
   specialtyCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     borderWidth: 1,
     backgroundColor: colors.white,
     alignItems: 'center',
@@ -2119,16 +2166,15 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   specialtyIconInner: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
   specialtyIconImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 22,
+    width: '85%',
+    height: '85%',
   },
   painIllustrationImage: {
     width: 32,
@@ -2137,7 +2183,7 @@ const styles = StyleSheet.create({
   },
   specialtyLabel: {
     fontFamily: font.bold,
-    fontSize: 9,
+    fontSize: 10,
     color: colors.textPrimary,
     marginTop: 8,
     textAlign: 'center',

@@ -168,7 +168,7 @@ function TopNavHeader({
                 <View style={styles.drawerLogoMark}>
                   <Ionicons name="pulse" size={16} color={colors.white} />
                 </View>
-                <Text style={styles.drawerLogoTxt}>PhysioKhom</Text>
+                <Text style={styles.drawerLogoTxt}>PhysiOkhom</Text>
               </View>
               {subtitle ? (
                 <Text style={styles.drawerSubTxt}>{subtitle}</Text>

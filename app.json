@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "PhysioKhom",
+    "name": "PhysiOkhom",
     "slug": "physiokhom",
     "version": "1.0.0",
+    "icon": "./assets/images/icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "physiokhom",
@@ -44,13 +45,13 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "PhysioKhom uses your location to set your coverage point for patient bookings."
+          "locationWhenInUsePermission": "PhysiOkhom uses your location to set your coverage point for patient bookings."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "PhysioKhom accesses your photos so you can set a profile picture."
+          "photosPermission": "PhysiOkhom accesses your photos so you can set a profile picture."
         }
       ],
       [

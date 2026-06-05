@@ -4,7 +4,7 @@ export const ISSUE_OPTIONS = [
   'Neck Pain',
   'Knee Pain',
   'Post Surgery Rehab',
-  'Stroke/Paralysis',
+  'Neuro Rehab',
 ]
 
 export const ISSUE_OTHER_VALUE = '__other__'

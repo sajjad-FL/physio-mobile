@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useRef, useMemo } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, Animated } from 'react-native'
+import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
@@ -111,6 +111,7 @@ export default function PublicPhysicianScreen({ route, navigation }) {
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [reviewsLoading, setReviewsLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('about') // 'about' | 'reviews'
@@ -138,6 +139,12 @@ export default function PublicPhysicianScreen({ route, navigation }) {
       setReviewsLoading(false)
     }
   }, [id])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await loadProfileAndFirstReviews()
+    setRefreshing(false)
+  }, [loadProfileAndFirstReviews])
 
   useEffect(() => {
     loadProfileAndFirstReviews()
@@ -249,7 +256,18 @@ export default function PublicPhysicianScreen({ route, navigation }) {
   ]
 
   return (
-    <Screen style={styles.root} contentStyle={styles.scroll}>
+    <Screen
+      style={styles.root}
+      contentStyle={styles.scroll}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[colors.brand]}
+          tintColor={colors.brand}
+        />
+      }
+    >
       {/* Ambient header design highlights */}
       <View style={styles.ambientHeaderGlow} pointerEvents="none" />
       <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
@@ -355,7 +373,7 @@ export default function PublicPhysicianScreen({ route, navigation }) {
                 </View>
                 <View style={styles.credentialText}>
                   <Text style={styles.credentialTitle}>Verified Professional</Text>
-                  <Text style={styles.credentialDesc}>Registration and credentials checked by Physiokhom.</Text>
+                  <Text style={styles.credentialDesc}>Registration and credentials checked by PhysiOkhom.</Text>
                 </View>
               </View>
               

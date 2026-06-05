@@ -1,7 +1,8 @@
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { Ionicons } from '@expo/vector-icons'
-import * as ImagePicker from 'expo-image-picker'
 import * as Location from 'expo-location'
+import * as ImagePicker from 'expo-image-picker'
+import * as WebBrowser from 'expo-web-browser'
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import {
   ActivityIndicator,
@@ -9,6 +10,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,6 +20,7 @@ import {
 import Toast from 'react-native-toast-message'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { api } from '../api/client'
+import { getTokenSync } from '../auth/tokenStore'
 import {
   DEFAULT_REFERRAL_REWARD_AMOUNT,
   DEFAULT_REFERRAL_SIGNUP_BONUS_AMOUNT,
@@ -142,6 +145,7 @@ function PremiumDateInput({ label, value, onPress, error }) {
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets()
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [locating, setLocating] = useState(false)
@@ -224,6 +228,12 @@ export default function ProfileScreen({ navigation }) {
       setLoading(false)
     }
   }, [])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await load()
+    setRefreshing(false)
+  }, [load])
 
   useEffect(() => {
     load()
@@ -366,35 +376,46 @@ export default function ProfileScreen({ navigation }) {
       return
     }
     const uri = asset.uri
-    const mime = asset.mimeType || 'image/jpeg'
-    if (!/^image\/(jpeg|png|webp)$/.test(mime)) {
-      Toast.show({ type: 'error', text1: 'Please choose a JPEG, PNG, or WebP image' })
+    // Normalize mime: iOS returns 'image/heic' for HEIF photos (edited URI is JPEG),
+    // some Android returns 'image/jpg' instead of 'image/jpeg'
+    let mime = asset.mimeType || 'image/jpeg'
+    if (mime === 'image/heic' || mime === 'image/heif') mime = 'image/jpeg'
+    if (mime === 'image/jpg') mime = 'image/jpeg'
+    if (!mime.startsWith('image/')) {
+      Toast.show({ type: 'error', text1: 'Please choose an image file' })
       return
     }
     setPreviewLocal(uri)
     setUploading(true)
     try {
       const fd = new FormData()
+      let next = ''
+
       if (Platform.OS === 'web') {
         const resp = await fetch(uri)
         const blob = await resp.blob()
-        const file = new File([blob], asset.fileName || 'avatar.jpg', { type: mime })
-        fd.append('avatar', file)
+        fd.append('avatar', new File([blob], asset.fileName || 'avatar.jpg', { type: mime }))
+        const res = await api.patch('/profile/avatar', fd)
+        next = res.data?.avatarUrl || ''
       } else {
-        fd.append('avatar', {
-          uri,
-          name: asset.fileName || 'avatar.jpg',
-          type: mime,
+        fd.append('avatar', { uri, name: asset.fileName || 'avatar.jpg', type: mime })
+        const token = getTokenSync()
+        const fetchRes = await fetch(`${api.defaults.baseURL}/profile/avatar`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
         })
+        const json = await fetchRes.json().catch(() => ({}))
+        if (!fetchRes.ok) throw new Error(json?.message || 'Upload failed')
+        next = json?.avatarUrl || ''
       }
-      const res = await api.patch('/profile/avatar', fd)
-      const next = res.data?.avatarUrl || ''
+
       setAvatarUrl(next)
       setPreviewLocal(null)
       Toast.show({ type: 'success', text1: 'Photo updated' })
     } catch (err) {
       setPreviewLocal(null)
-      Toast.show({ type: 'error', text1: err.response?.data?.message || 'Upload failed' })
+      Toast.show({ type: 'error', text1: err.message || 'Upload failed' })
     } finally {
       setUploading(false)
     }
@@ -502,6 +523,16 @@ export default function ProfileScreen({ navigation }) {
         contentContainerStyle={[styles.pad, { paddingBottom: Math.max(insets.bottom, 20) + 28 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        bounces={true}
+        alwaysBounceVertical={true}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.brand]}
+            tintColor={colors.brand}
+          />
+        }
       >
         {/* ── Luxe Profile Card ─────────────────────── */}
         <View style={styles.profileCard}>
@@ -542,7 +573,7 @@ export default function ProfileScreen({ navigation }) {
                 </View>
                 {phone ? <Text style={styles.rolePhoneSub}>{phone}</Text> : null}
               </View>
-              <Text style={styles.profileCardName} numberOfLines={1}>{name || 'PhysioKhom User'}</Text>
+              <Text style={styles.profileCardName} numberOfLines={1}>{name || 'PhysiOkhom User'}</Text>
               
               {/* Profile Strength Progress Bar */}
               <View style={styles.strengthContainer}>
@@ -883,6 +914,18 @@ export default function ProfileScreen({ navigation }) {
             </>
           )}
         </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          style={({ pressed }) => [
+            styles.privacyLink,
+            pressed && { opacity: 0.7 }
+          ]}
+          onPress={() => WebBrowser.openBrowserAsync('https://physiokhom.com/privacy-policy')}
+        >
+          <Ionicons name="shield-checkmark-outline" size={13} color={colors.slate500} />
+          <Text style={styles.privacyLinkTxt}>Privacy Policy</Text>
+        </Pressable>
         <View style={{ height: 16 }} />
       </ScrollView>
 
@@ -960,6 +1003,20 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: figmaTokens.canvas, position: 'relative' },
   pad: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, zIndex: 2 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: figmaTokens.canvas },
+  privacyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 16,
+    gap: 6,
+  },
+  privacyLinkTxt: {
+    fontFamily: font.bold,
+    fontSize: type.xs,
+    color: colors.slate500,
+    textDecorationLine: 'underline',
+  },
 
   // Ambient Header glows
   ambientHeaderGlow: {

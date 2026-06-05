@@ -5,11 +5,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { loginTokens as t, loginType, loginLeading } from '../../theme/loginTokens'
 import { font } from '../../theme/typography'
 
-function LoginHomeBrandHeader({ brandTitle = 'PhysioKhom', backLabel = 'Home', onBack }) {
+function LoginHomeBrandHeader({ brandTitle = 'PhysiOkhom', backLabel = 'Home', onBack }) {
   const insets = useSafeAreaInsets()
-  const split = String(brandTitle || 'PhysioKhom').split(/(?=Khom)/i)
-  const leftPart = split[0] || 'Physio'
-  const rightPart = split.length > 1 ? split.slice(1).join('') : 'Khom'
+  const split = String(brandTitle || 'PhysiOkhom').split(/(?=khom)/i)
+  const leftPart = split[0] || 'PhysiO'
+  const rightPart = split.length > 1 ? split.slice(1).join('') : 'khom'
 
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) + 6 }]}>

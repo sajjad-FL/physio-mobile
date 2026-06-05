@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
-import { ActivityIndicator, Animated, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, TouchableOpacity, Linking } from 'react-native'
+import { ActivityIndicator, Animated, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, TouchableOpacity, Linking } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import RazorpayCheckout from 'react-native-razorpay'
 import { api } from '../api/client'
 import { formatBookingDateAndSlot } from '../utils/date'
-import { bookingStatusBadge, paymentBadge } from '../utils/dashboardUtils'
 import {
   marketplacePaymentStatusLabel,
   paymentAmountLabel,
@@ -150,7 +149,7 @@ const SimulatedTransitMap = memo(function SimulatedTransitMap({ transitPhase, ph
   )
 })
 
-function PendingBookingView({ booking: b, navigation }) {
+function PendingBookingView({ booking: b, navigation, refreshing, onRefresh }) {
   const pulseAnim = useRef(new Animated.Value(1)).current
   const ringAnim = useRef(new Animated.Value(0)).current
 
@@ -186,7 +185,20 @@ function PendingBookingView({ booking: b, navigation }) {
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.pendingScroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.pendingScroll}
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+        alwaysBounceVertical={true}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.brand]}
+            tintColor={colors.brand}
+          />
+        }
+      >
         {/* Animated pulse icon */}
         <View style={styles.pendingPulseWrap}>
           <Animated.View
@@ -253,6 +265,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
   const { id } = route.params || {}
   const [b, setB] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [reviews, setReviews] = useState([])
   const [disputeOpen, setDisputeOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
@@ -262,6 +275,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewComment, setReviewComment] = useState('')
   const [actionBusy, setActionBusy] = useState(false)
+  const [confirmingSessionId, setConfirmingSessionId] = useState(null)
 
   // Payment states & handlers
   const [installmentOpen, setInstallmentOpen] = useState(false)
@@ -288,6 +302,12 @@ export default function UserBookingDetailScreen({ route, navigation }) {
       setLoading(false)
     }
   }, [id])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await load()
+    setRefreshing(false)
+  }, [load])
 
   const payLegacy = useCallback(async () => {
     if (!b?._id || paymentLoading) return
@@ -319,7 +339,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
         key: keyId,
         amount,
         currency,
-        name: 'PhysioKhom',
+        name: 'PhysiOkhom',
         description: 'Physiotherapy Booking Payment',
         order_id: orderId,
         prefill: cleanRazorpayPrefill(prefill),
@@ -425,7 +445,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
         key: keyId,
         amount: orderAmount,
         currency,
-        name: 'PhysioKhom',
+        name: 'PhysiOkhom',
         description: 'Physiotherapy Installment Payment',
         order_id: orderId,
         prefill: cleanRazorpayPrefill(prefill),
@@ -525,6 +545,20 @@ export default function UserBookingDetailScreen({ route, navigation }) {
     }
   }, [actionBusy, b?._id, disputeDescription, disputeReason, load])
 
+  const confirmSession = useCallback(async (sessionId) => {
+    if (!b?._id || !sessionId || confirmingSessionId) return
+    setConfirmingSessionId(String(sessionId))
+    try {
+      const res = await api.post(`/bookings/${b._id}/sessions/${sessionId}/confirm`)
+      setB(res.data)
+      Toast.show({ type: 'success', text1: 'Session confirmed' })
+    } catch (e) {
+      Toast.show({ type: 'error', text1: e.response?.data?.message || 'Could not confirm session' })
+    } finally {
+      setConfirmingSessionId(null)
+    }
+  }, [b?._id, confirmingSessionId])
+
   const submitReview = useCallback(
     async (sessionId) => {
       if (!b?._id || actionBusy) return
@@ -569,12 +603,16 @@ export default function UserBookingDetailScreen({ route, navigation }) {
     )
   }
 
-  if (b.status === 'pending') {
-    return <PendingBookingView booking={b} navigation={navigation} />
+  // Show waiting screen only while assignment is pending (physio hasn't accepted).
+  // planStatus === 'proposed' means the physio already engaged with the booking —
+  // never send the patient back to the waiting screen at that stage.
+  const planProposed = b.serviceType === 'home' && b.planStatus === 'proposed'
+  const planApproved = b.serviceType === 'home' && b.planStatus === 'approved'
+
+  if ((b.status === 'pending' || b.status === 'assigned') && !planProposed && !planApproved) {
+    return <PendingBookingView booking={b} navigation={navigation} refreshing={refreshing} onRefresh={onRefresh} />
   }
 
-  const st = bookingStatusBadge(b.status, b.sessionStatus, b.paymentStatus)
-  const pay = paymentBadge(b.paymentStatus)
   const paymentSummary = b.paymentSummary || null
   const paymentsList = Array.isArray(b.payments) ? b.payments : []
   const rows = normalizeSessionRows(b)
@@ -584,6 +622,10 @@ export default function UserBookingDetailScreen({ route, navigation }) {
   const outstanding = Number(paymentSummary?.outstanding || 0)
   const perSession = Number(paymentSummary?.amountPerSession || 0)
   const milestoneStatus = Array.isArray(paymentSummary?.milestoneStatus) ? paymentSummary.milestoneStatus : null
+  const totalAmount = Number(paymentSummary?.totalAmount ?? b.totalAmount ?? b.payment?.amount ?? 0)
+  const totalPaid = Number(paymentSummary?.totalPaid ?? b.totalPaid ?? 0)
+  const totalCollected = Number(paymentSummary?.totalCollected ?? 0)
+  const effectivePaid = totalPaid + totalCollected
   const planReady = b.serviceType === 'online' || b.planStatus === 'approved'
   const showInstallments = planReady && (sessionsCount > 1 || isOnlineBooking) && (Number(b.totalAmount || 0) > 0 || paymentsList.length > 0)
   const showLegacyPay = b.paymentStatus === 'pending' && planReady && !(b.serviceType === 'home' && b.homePlanPaymentMode === 'offline')
@@ -597,32 +639,35 @@ export default function UserBookingDetailScreen({ route, navigation }) {
       style={styles.root}
       contentContainerStyle={styles.scroll}
       showsVerticalScrollIndicator={false}
+      bounces={true}
+      alwaysBounceVertical={true}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[colors.brand]}
+          tintColor={colors.brand}
+        />
+      }
     >
       {/* ── Booking Status Header card ─────────────────────────────── */}
       <View style={styles.headerCard}>
         <View style={styles.headerTopSection}>
-          <Text style={styles.headerServiceType}>
-            {String(b.serviceType || 'home').toUpperCase()} VISIT
+          <Text style={styles.headerIssue} numberOfLines={1}>
+            {b.issue || '—'}
           </Text>
-          <View style={styles.headerPillRow}>
-            <BandChip label={st.label} />
-            <BandChip label={pay.label} />
+          <Text style={styles.headerDateCompact} numberOfLines={1}>
+            {formatBookingDateAndSlot(b.date, b.timeSlot)}
+          </Text>
+        </View>
+        {b.rescheduled && b.previousDate ? (
+          <View style={styles.headerRescheduledBanner}>
+            <Ionicons name="swap-horizontal-outline" size={11} color={colors.textSecondary} />
+            <Text style={styles.headerRescheduledTxt} numberOfLines={1}>
+              From: {formatBookingDateAndSlot(b.previousDate, b.previousTimeSlot)}
+            </Text>
           </View>
-        </View>
-        
-        <View style={styles.headerMiddleSection}>
-          <Text style={styles.headerDateLabel}>APPOINTMENT SCHEDULE</Text>
-          <Text style={styles.headerDate}>{formatBookingDateAndSlot(b.date, b.timeSlot)}</Text>
-          
-          {b.rescheduled && b.previousDate ? (
-            <View style={styles.headerRescheduledRow}>
-              <Ionicons name="swap-horizontal-outline" size={11} color={colors.textSecondary} />
-              <Text style={styles.headerRescheduledTxt}>
-                From: {formatBookingDateAndSlot(b.previousDate, b.previousTimeSlot)}
-              </Text>
-            </View>
-          ) : null}
-        </View>
+        ) : null}
 
         <View style={styles.headerBottomSection}>
           <View style={styles.headerPhysioSection}>
@@ -638,27 +683,70 @@ export default function UserBookingDetailScreen({ route, navigation }) {
                 <Text style={styles.headerPhysioSub}>{b.physioId.specialization}</Text>
               ) : null}
             </View>
-            <View style={[styles.headerSessionBadge, { backgroundColor: colors.brandSoft }]}>
-              <Text style={[styles.headerSessionBadgeTxt, { color: colors.brand }]}>
-                {sessionStatusLabel(b)}
-              </Text>
+            <View style={styles.headerPhysioBadges}>
+              <View style={[styles.headerSessionBadge, { backgroundColor: colors.brandSoft }]}>
+                <Text style={[styles.headerSessionBadgeTxt, { color: colors.brand }]}>
+                  {String(b.serviceType || 'home').charAt(0).toUpperCase() + String(b.serviceType || 'home').slice(1)}
+                </Text>
+              </View>
+              <View style={[styles.headerSessionBadge, { backgroundColor: colors.brandSoft }]}>
+                <Text style={[styles.headerSessionBadgeTxt, { color: colors.brand }]}>
+                  {sessionStatusLabel(b)}
+                </Text>
+              </View>
             </View>
           </View>
+
+          {typeof b.physioId === 'object' ? (
+            <View style={styles.headerPhysioActionsRow}>
+              {b.physioId?.phone ? (
+                <>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.headerPhysioActionBtn,
+                      styles.therapistCallBtn,
+                      pressed && { transform: [{ scale: 0.95 }] },
+                    ]}
+                    onPress={() => callPhone(b.physioId.phone)}
+                  >
+                    <Ionicons name="call" size={12} color={colors.brand} />
+                    <Text style={styles.therapistActionBtnTxt}>Call</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.headerPhysioActionBtn,
+                      styles.therapistWaBtn,
+                      pressed && { transform: [{ scale: 0.95 }] },
+                    ]}
+                    onPress={() => openWhatsApp(b.physioId.phone)}
+                  >
+                    <Ionicons name="logo-whatsapp" size={12} color="#25D366" />
+                    <Text style={[styles.therapistActionBtnTxt, { color: '#25D366' }]}>WhatsApp</Text>
+                  </Pressable>
+                </>
+              ) : null}
+              {b.physioId?._id ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.headerPhysioActionBtn,
+                    styles.therapistProfileBtn,
+                    pressed && { transform: [{ scale: 0.95 }] },
+                  ]}
+                  onPress={() => navigation.navigate('PublicPhysician', { id: b.physioId._id })}
+                >
+                  <Ionicons name="person" size={12} color={colors.white} />
+                  <Text style={[styles.therapistActionBtnTxt, { color: colors.white }]}>Profile</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : (
+            <Text style={styles.headerMatchingTxt}>
+              Matching with a physiotherapist — we are assigning a specialist for your care.
+            </Text>
+          )}
         </View>
 
-        {/* ── Plan action strip inside header card ── */}
-        {b.serviceType === 'home' && b.planStatus === 'proposed' ? (
-          <View style={styles.headerActionStrip}>
-            <Pressable style={styles.headerApproveBtn} onPress={approvePlan}>
-              <Ionicons name="checkmark-circle-outline" size={15} color={colors.white} />
-              <Text style={styles.headerApproveTxt}>Approve Plan</Text>
-            </Pressable>
-            <Pressable style={styles.headerDisputeBtn} onPress={() => setDisputeOpen(true)}>
-              <Ionicons name="alert-circle-outline" size={15} color={colors.warning} />
-              <Text style={styles.headerDisputeTxt}>Raise Dispute</Text>
-            </Pressable>
-          </View>
-        ) : b.sessionStatus !== 'completed' ? (
+        {b.sessionStatus !== 'completed' ? (
           <View style={styles.headerActionStrip}>
             <Pressable style={styles.headerDisputeBtn} onPress={() => setDisputeOpen(true)}>
               <Ionicons name="alert-circle-outline" size={15} color={colors.warning} />
@@ -674,7 +762,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
         onChange={setActiveTab}
         tabs={BASE_TABS}
         badges={{
-          overview: b.serviceType === 'home' && b.planStatus === 'proposed',
+          overview: planProposed,
           payments: b.paymentStatus === 'pending' && planReady && !(b.serviceType === 'home' && b.homePlanPaymentMode === 'offline')
         }}
       />
@@ -682,100 +770,225 @@ export default function UserBookingDetailScreen({ route, navigation }) {
       {/* Tab Panels */}
       {activeTab === 'overview' && (
         <View style={styles.tabPanel}>
-          {/* Plan approval banner */}
-          {b.serviceType === 'home' && b.planStatus === 'proposed' ? (
-            <View style={styles.banner}>
-              <Ionicons name="information-circle-outline" size={16} color={colors.brand} />
-              <Text style={styles.bannerTxt}>Your physiotherapist proposed a plan. Review and approve it to continue.</Text>
-              <Pressable 
-                style={({ pressed }) => [styles.bannerBtn, pressed && { transform: [{ scale: 0.96 }] }]} 
+          {/* Plan review card — shown when physio has proposed a plan */}
+          {planProposed ? (
+            <View style={styles.planReviewCard}>
+              {/* Header */}
+              <View style={styles.planReviewHeader}>
+                <View style={styles.planReviewIconWrap}>
+                  <Ionicons name="document-text-outline" size={20} color={colors.brand} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.planReviewTitle}>Treatment Plan Proposed</Text>
+                  <Text style={styles.planReviewSub}>Review the details below and approve to proceed</Text>
+                </View>
+              </View>
+
+              {/* Key metrics row */}
+              {(b.sessions != null || b.amountPerSession != null || Number(b.totalAmount || 0) > 0) ? (
+                <View style={styles.planReviewGrid}>
+                  {b.sessions != null ? (
+                    <View style={styles.planReviewMetric}>
+                      <Text style={styles.planReviewMetricVal}>{b.sessions}</Text>
+                      <Text style={styles.planReviewMetricLbl}>Sessions</Text>
+                    </View>
+                  ) : null}
+                  {b.amountPerSession != null ? (
+                    <View style={styles.planReviewMetric}>
+                      <Text style={styles.planReviewMetricVal}>₹{b.amountPerSession}</Text>
+                      <Text style={styles.planReviewMetricLbl}>Per session</Text>
+                    </View>
+                  ) : null}
+                  {Number(b.totalAmount || 0) > 0 ? (
+                    <View style={styles.planReviewMetric}>
+                      <Text style={styles.planReviewMetricVal}>₹{Number(b.totalAmount).toFixed(0)}</Text>
+                      <Text style={styles.planReviewMetricLbl}>Total</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Payment mode */}
+              {b.homePlanPaymentMode ? (
+                <View style={styles.planReviewRow}>
+                  <Ionicons
+                    name={b.homePlanPaymentMode === 'online' ? 'card-outline' : 'cash-outline'}
+                    size={14}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={styles.planReviewRowTxt}>
+                    Payment: {b.homePlanPaymentMode === 'online' ? 'Online' : 'Offline (cash)'}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Discount badge */}
+              {b.discountPercent != null && b.discountPercent > 0 ? (
+                <View style={styles.planReviewRow}>
+                  <Ionicons name="pricetag-outline" size={14} color={colors.brand} />
+                  <Text style={[styles.planReviewRowTxt, { color: colors.brand, fontFamily: font.medium }]}>
+                    {b.discountPercent}% discount applied
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Schedule preview */}
+              {Array.isArray(b.schedule) && b.schedule.length > 0 ? (
+                <View style={styles.planReviewSchedule}>
+                  <Text style={styles.planReviewScheduleTitle}>Scheduled Sessions</Text>
+                  {b.schedule.slice(0, 3).map((s, i) => (
+                    <View key={i} style={styles.planReviewScheduleRow}>
+                      <View style={styles.planReviewScheduleDot} />
+                      <Text style={styles.planReviewScheduleTxt}>
+                        Session {i + 1} — {formatBookingDateAndSlot(s.date, s.time)}
+                      </Text>
+                    </View>
+                  ))}
+                  {b.schedule.length > 3 ? (
+                    <Text style={styles.planReviewScheduleMore}>+{b.schedule.length - 3} more sessions</Text>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Approve button */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.planReviewApproveBtn,
+                  pressed && { opacity: 0.88, transform: [{ scale: 0.98 }] },
+                ]}
                 onPress={approvePlan}
               >
-                <Text style={styles.bannerBtnTxt}>Approve</Text>
+                <Ionicons name="checkmark-circle-outline" size={18} color={colors.white} />
+                <Text style={styles.planReviewApproveBtnTxt}>Approve Plan</Text>
               </Pressable>
             </View>
           ) : null}
 
-          {/* Therapist Profile Card */}
-          {typeof b.physioId === 'object' ? (
-            <View style={styles.therapistCard}>
-              <View style={styles.therapistCardHeader}>
-                <View style={styles.therapistAvatarWrap}>
-                  <Ionicons name="medical" size={20} color={colors.brand} />
-                </View>
-                <View style={styles.therapistCardInfo}>
-                  <Text style={styles.therapistLabel}>Your Assigned Therapist</Text>
-                  <Text style={styles.therapistName}>{b.physioId?.name || 'Physiotherapist'}</Text>
-                  {b.physioId?.specialization ? (
-                    <Text style={styles.therapistSub}>{b.physioId.specialization}</Text>
-                  ) : null}
-                </View>
-              </View>
-              <View style={styles.therapistActionsRow}>
-                {b.physioId?.phone ? (
-                  <>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.therapistActionBtn,
-                        styles.therapistCallBtn,
-                        pressed && { transform: [{ scale: 0.95 }] }
+          {/* Session Progress */}
+          {rows.length > 0 ? (
+            <View style={styles.sectionCard}>
+              <SectionTitle icon="calendar-outline" title="Session Progress" />
+              <View style={styles.nestedSessionsList}>
+                {rows.map((r) => {
+                  const isCompleted = r.status === 'completed'
+                  const isNoShow = r.status === 'no_show'
+                  const needsConfirm = isCompleted && !r.patientConfirmed
+                  const isConfirmed = isCompleted && r.patientConfirmed
+                  const confirming = confirmingSessionId === String(r.sessionId)
+                  const paymentAmt = Number(r.paymentAtCompletion || 0)
+
+                  if (needsConfirm) {
+                    return (
+                      <View key={r.key} style={styles.sessionConfirmCard}>
+                        <Text style={styles.sessionConfirmTitle}>
+                          Session {r.n} — {formatBookingDateAndSlot(r.date, r.time)}
+                        </Text>
+                        <Text style={styles.sessionConfirmSub}>
+                          Completed by your physiotherapist.
+                        </Text>
+                        <Text style={styles.sessionConfirmPayLabel}>Payment for this session:</Text>
+                        <Text style={styles.sessionConfirmPayAmt}>
+                          {paymentAmt > 0
+                            ? `₹${paymentAmt.toFixed(2)} collected`
+                            : 'No payment recorded'}
+                        </Text>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.sessionConfirmBtn,
+                            (confirming || !r.sessionId) && styles.sessionConfirmBtnDisabled,
+                            pressed && !confirming && { opacity: 0.92 },
+                          ]}
+                          disabled={confirming || !r.sessionId}
+                          onPress={() => confirmSession(r.sessionId)}
+                        >
+                          {confirming ? (
+                            <ActivityIndicator size="small" color={colors.white} />
+                          ) : (
+                            <>
+                              <Ionicons name="checkmark-circle-outline" size={16} color={colors.white} />
+                              <Text style={styles.sessionConfirmBtnTxt}>Confirm session completed</Text>
+                            </>
+                          )}
+                        </Pressable>
+                      </View>
+                    )
+                  }
+
+                  return (
+                    <View
+                      key={r.key}
+                      style={[
+                        styles.nestedSessionRow,
+                        (isCompleted || isConfirmed) && styles.nestedSessionRowDone,
                       ]}
-                      onPress={() => callPhone(b.physioId.phone)}
                     >
-                      <Ionicons name="call" size={13} color={colors.brand} />
-                      <Text style={styles.therapistActionBtnTxt}>Call</Text>
-                    </Pressable>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.therapistActionBtn,
-                        styles.therapistWaBtn,
-                        pressed && { transform: [{ scale: 0.95 }] }
-                      ]}
-                      onPress={() => openWhatsApp(b.physioId.phone)}
-                    >
-                      <Ionicons name="logo-whatsapp" size={13} color="#25D366" />
-                      <Text style={[styles.therapistActionBtnTxt, { color: '#25D366' }]}>WhatsApp</Text>
-                    </Pressable>
-                  </>
-                ) : null}
-                {b.physioId?._id ? (
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.therapistActionBtn,
-                      styles.therapistProfileBtn,
-                      pressed && { transform: [{ scale: 0.95 }] }
-                    ]}
-                    onPress={() => navigation.navigate('PublicPhysician', { id: b.physioId._id })}
-                  >
-                    <Ionicons name="person" size={13} color={colors.white} />
-                    <Text style={[styles.therapistActionBtnTxt, { color: colors.white }]}>Profile</Text>
-                  </Pressable>
-                ) : null}
+                      <View
+                        style={[
+                          styles.nestedSessionIndicator,
+                          isCompleted ? styles.nestedSessionIndicatorDone : styles.nestedSessionIndicatorPending,
+                          isNoShow && { backgroundColor: colors.danger },
+                        ]}
+                      >
+                        {isCompleted ? (
+                          <Ionicons name="checkmark" size={10} color={colors.white} />
+                        ) : isNoShow ? (
+                          <Ionicons name="close" size={10} color={colors.white} />
+                        ) : (
+                          <Text style={styles.nestedSessionNumText}>{r.n}</Text>
+                        )}
+                      </View>
+                      <View style={styles.nestedSessionDetails}>
+                        <Text
+                          style={[
+                            styles.nestedSessionTitle,
+                            isCompleted && styles.nestedSessionTitleDone,
+                          ]}
+                        >
+                          Session {r.n}
+                        </Text>
+                        <Text style={styles.nestedSessionTime}>
+                          {formatBookingDateAndSlot(r.date, r.time)}
+                        </Text>
+                        {isNoShow && r.noShowReason ? (
+                          <Text style={styles.sessionNoShowReason}>{r.noShowReason}</Text>
+                        ) : null}
+                        {isConfirmed ? (
+                          <Text style={styles.sessionConfirmedLine}>
+                            Confirmed
+                            {paymentAmt > 0 ? ` · ₹${paymentAmt.toFixed(2)} paid` : ''}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View
+                        style={[
+                          styles.sessionStatusPill,
+                          isCompleted && styles.sessionStatusPillDone,
+                          isNoShow && styles.sessionStatusPillNoShow,
+                          !isCompleted && !isNoShow && styles.sessionStatusPillScheduled,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.sessionStatusPillTxt,
+                            isCompleted && styles.sessionStatusPillTxtDone,
+                            isNoShow && styles.sessionStatusPillTxtNoShow,
+                          ]}
+                        >
+                          {isCompleted
+                            ? isConfirmed
+                              ? 'Confirmed'
+                              : 'Completed'
+                            : isNoShow
+                              ? 'No-show'
+                              : 'Scheduled'}
+                        </Text>
+                      </View>
+                    </View>
+                  )
+                })}
               </View>
             </View>
-          ) : (
-            <View style={styles.noTherapistCard}>
-              <View style={styles.noTherapistIconWrap}>
-                <Ionicons name="person-add-outline" size={22} color={colors.slate400} />
-              </View>
-              <Text style={styles.noTherapistTxt}>Matching with a physiotherapist...</Text>
-              <Text style={styles.noTherapistSub}>We are assigning a top specialist for your care.</Text>
-            </View>
-          )}
-
-          {/* Care Context Card */}
-          <View style={styles.sectionCard}>
-            <SectionTitle icon="fitness-outline" title="Care Context" />
-            <KV k="Chief Complaint / Issue" v={b.issue || '—'} />
-            <KV k="Service Type" v={String(b.serviceType || 'home').charAt(0).toUpperCase() + String(b.serviceType || 'home').slice(1)} last />
-          </View>
-
-          {/* Patient Details */}
-          <View style={styles.sectionCard}>
-            <SectionTitle icon="people-outline" title="Participants" />
-            <KV k="Your Name" v={b.userId?.name || '—'} />
-            <KV k="Your Contact" v={b.userId?.phone || '—'} last />
-          </View>
+          ) : null}
 
           {/* Feedback Section */}
           {(overallReview || hasCompletedSession) ? (
@@ -812,34 +1025,6 @@ export default function UserBookingDetailScreen({ route, navigation }) {
               )}
             </View>
           ) : null}
-
-          {/* Booking Management Actions */}
-          <View style={styles.actionsCard}>
-            {b.serviceType === 'home' && b.planStatus === 'proposed' ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.actionBtn,
-                  styles.actionBtnPrimary,
-                  pressed && { transform: [{ scale: 0.98 }], opacity: 0.95 }
-                ]}
-                onPress={approvePlan}
-              >
-                <Ionicons name="checkmark-circle-outline" size={18} color={colors.white} />
-                <Text style={styles.actionBtnPrimaryTxt}>Approve proposed plan</Text>
-              </Pressable>
-            ) : null}
-            <Pressable
-              style={({ pressed }) => [
-                styles.actionBtn,
-                styles.actionBtnOutline,
-                pressed && { transform: [{ scale: 0.98 }], opacity: 0.95 }
-              ]}
-              onPress={() => setDisputeOpen(true)}
-            >
-              <Ionicons name="alert-circle-outline" size={18} color={colors.warning} />
-              <Text style={styles.actionBtnOutlineTxt}>Raise dispute</Text>
-            </Pressable>
-          </View>
         </View>
       )}
 
@@ -911,25 +1096,29 @@ export default function UserBookingDetailScreen({ route, navigation }) {
                     <Ionicons name="time-outline" size={14} color={colors.brand} />
                     <Text style={styles.milestoneHeaderTxt}>Payment Schedule</Text>
                   </View>
-                  {milestoneStatus.map((m) => (
-                    <View key={m.bySession} style={[styles.milestoneRow, m.met && styles.milestoneRowMet]}>
-                      <View style={[styles.milestoneDot, m.met && styles.milestoneDotMet]}>
-                        <Ionicons
-                          name={m.met ? 'checkmark' : 'ellipse'}
-                          size={8}
-                          color={m.met ? '#fff' : colors.amber800}
-                        />
+                  {milestoneStatus.map((m) => {
+                    const reqAmt = Math.ceil(m.requiredPct * totalAmount)
+                    const remainingToPay = Math.max(0, reqAmt - effectivePaid)
+                    return (
+                      <View key={m.bySession} style={[styles.milestoneRow, m.met && styles.milestoneRowMet]}>
+                        <View style={[styles.milestoneDot, m.met && styles.milestoneDotMet]}>
+                          <Ionicons
+                            name={m.met ? 'checkmark' : 'ellipse'}
+                            size={8}
+                            color={m.met ? '#fff' : colors.amber800}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.milestoneLbl, m.met && styles.milestoneLblMet]}>
+                            By session {m.bySession} — ₹{reqAmt.toLocaleString('en-IN')} of total
+                          </Text>
+                          <Text style={styles.milestoneSub}>
+                            {m.met ? 'Paid' : `Pending (You need to pay ₹${remainingToPay.toLocaleString('en-IN')})`}
+                          </Text>
+                        </View>
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.milestoneLbl, m.met && styles.milestoneLblMet]}>
-                          By session {m.bySession} — {Math.round(m.requiredPct * 100)}% of total
-                        </Text>
-                        <Text style={styles.milestoneSub}>
-                          {m.met ? 'Paid' : 'Pending'}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
+                    )
+                  })}
                 </View>
               ) : null}
 
@@ -1219,14 +1408,6 @@ function SectionTitle({ icon, title }) {
   )
 }
 
-function BandChip({ label }) {
-  return (
-    <View style={styles.bandChip}>
-      <Text style={styles.bandChipTxt}>{label}</Text>
-    </View>
-  )
-}
-
 function InfoRow({ icon, label, value, sub, onPress }) {
   const content = (
     <View style={styles.infoRow}>
@@ -1373,6 +1554,126 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brand,
   },
   bannerBtnTxt: { fontFamily: font.semiBold, fontSize: type.xs, color: colors.white },
+
+  // Plan review card (planStatus === 'proposed')
+  planReviewCard: {
+    borderRadius: 16,
+    backgroundColor: colors.teal50,
+    borderWidth: 1.5,
+    borderColor: colors.brand,
+    padding: 16,
+    gap: 14,
+  },
+  planReviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  planReviewIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  planReviewTitle: {
+    fontFamily: font.semiBold,
+    fontSize: type.base,
+    color: colors.teal800,
+    marginBottom: 2,
+  },
+  planReviewSub: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.teal800,
+    lineHeight: leading.xs,
+    opacity: 0.75,
+  },
+  planReviewGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  planReviewMetric: {
+    flex: 1,
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.brandSoft,
+  },
+  planReviewMetricVal: {
+    fontFamily: font.bold,
+    fontSize: type.md,
+    color: colors.textPrimary,
+  },
+  planReviewMetricLbl: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  planReviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  planReviewRowTxt: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+  },
+  planReviewSchedule: {
+    gap: 6,
+  },
+  planReviewScheduleTitle: {
+    fontFamily: font.semiBold,
+    fontSize: type.xs,
+    color: colors.teal800,
+    marginBottom: 2,
+  },
+  planReviewScheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  planReviewScheduleDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.brand,
+    flexShrink: 0,
+  },
+  planReviewScheduleTxt: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  planReviewScheduleMore: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textTertiary,
+    marginTop: 2,
+    paddingLeft: 14,
+  },
+  planReviewApproveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.brand,
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginTop: 2,
+  },
+  planReviewApproveBtnTxt: {
+    fontFamily: font.semiBold,
+    fontSize: type.sm,
+    color: colors.white,
+  },
 
   // Section cards
   sectionCard: {
@@ -1697,6 +1998,94 @@ const styles = StyleSheet.create({
     fontFamily: font.semiBold,
     fontSize: 9,
     color: colors.brand,
+  },
+  sessionConfirmCard: {
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.amber200,
+    backgroundColor: colors.amber50,
+  },
+  sessionConfirmTitle: {
+    fontFamily: font.semiBold,
+    fontSize: type.sm,
+    color: colors.slate900,
+  },
+  sessionConfirmSub: {
+    marginTop: 6,
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.slate600,
+    lineHeight: 18,
+  },
+  sessionConfirmPayLabel: {
+    marginTop: 12,
+    fontFamily: font.medium,
+    fontSize: type.xs,
+    color: colors.slate700,
+  },
+  sessionConfirmPayAmt: {
+    marginTop: 4,
+    fontFamily: font.bold,
+    fontSize: type.base,
+    color: colors.slate900,
+  },
+  sessionConfirmBtn: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: colors.brand,
+  },
+  sessionConfirmBtnDisabled: {
+    opacity: 0.7,
+  },
+  sessionConfirmBtnTxt: {
+    fontFamily: font.semiBold,
+    fontSize: type.sm,
+    color: colors.white,
+  },
+  sessionConfirmedLine: {
+    marginTop: 4,
+    fontFamily: font.semiBold,
+    fontSize: 10,
+    color: colors.success,
+  },
+  sessionNoShowReason: {
+    marginTop: 4,
+    fontFamily: font.regular,
+    fontSize: 10,
+    color: colors.danger,
+  },
+  sessionStatusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: colors.slate100,
+  },
+  sessionStatusPillScheduled: {
+    backgroundColor: colors.slate100,
+  },
+  sessionStatusPillDone: {
+    backgroundColor: colors.teal50,
+  },
+  sessionStatusPillNoShow: {
+    backgroundColor: '#fef2f2',
+  },
+  sessionStatusPillTxt: {
+    fontFamily: font.semiBold,
+    fontSize: 9,
+    color: colors.slate600,
+  },
+  sessionStatusPillTxtDone: {
+    color: colors.brand,
+  },
+  sessionStatusPillTxtNoShow: {
+    color: colors.danger,
   },
   nestedRateBtnMuted: {
     borderColor: colors.borderSubtle,
@@ -2442,9 +2831,9 @@ const styles = StyleSheet.create({
   segmentedContainer: {
     flexDirection: 'row',
     backgroundColor: '#f1f5f9',
-    borderRadius: 14,
-    padding: 3,
-    marginVertical: 10,
+    borderRadius: 12,
+    padding: 2,
+    marginVertical: 4,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
@@ -2454,8 +2843,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    paddingVertical: 8,
-    borderRadius: 11,
+    paddingVertical: 6,
+    borderRadius: 10,
     position: 'relative',
   },
   segmentedTabActive: {
@@ -2548,7 +2937,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    marginBottom: 16,
+    marginBottom: 8,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -2558,23 +2947,37 @@ const styles = StyleSheet.create({
   },
   headerTopSection: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.slate50,
+  },
+  headerIssue: {
+    flexShrink: 1,
+    maxWidth: '38%',
+    fontFamily: font.bold,
+    fontSize: type.md,
+    color: colors.textPrimary,
+    letterSpacing: -0.2,
+  },
+  headerDateCompact: {
+    flex: 1,
+    textAlign: 'right',
+    fontFamily: font.bold,
+    fontSize: type.md,
+    lineHeight: leading.md,
+    color: colors.textPrimary,
+    letterSpacing: -0.2,
   },
   headerServiceType: {
     fontFamily: font.bold,
     fontSize: 9,
     letterSpacing: 1.2,
     color: colors.textSecondary,
-  },
-  headerPillRow: {
-    flexDirection: 'row',
-    gap: 6,
   },
   headerMiddleSection: {
     paddingHorizontal: 16,
@@ -2595,19 +2998,52 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     letterSpacing: -0.3,
   },
+  headerRescheduledBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.slate50,
+  },
   headerRescheduledRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 6,
+    marginTop: 4,
   },
   headerRescheduledTxt: {
     fontFamily: font.medium,
     fontSize: type.xs,
     color: colors.textSecondary,
   },
+  headerMetaRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+  },
+  headerMetaItem: { flex: 1 },
+  headerMetaLabel: {
+    fontFamily: font.bold,
+    fontSize: 8,
+    letterSpacing: 0.8,
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+  },
+  headerMetaValue: {
+    marginTop: 3,
+    fontFamily: font.semiBold,
+    fontSize: type.sm,
+    color: colors.textPrimary,
+  },
   headerBottomSection: {
-    padding: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     backgroundColor: colors.white,
   },
   headerPhysioSection: {
@@ -2654,6 +3090,34 @@ const styles = StyleSheet.create({
   headerSessionBadgeTxt: {
     fontFamily: font.bold,
     fontSize: 9,
+  },
+  headerPhysioBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  headerPhysioActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  headerPhysioActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  headerMatchingTxt: {
+    marginTop: 10,
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+    lineHeight: 17,
   },
 
   headerActionStrip: {

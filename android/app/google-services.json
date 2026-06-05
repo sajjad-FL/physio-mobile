@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "957658616561",
+    "project_id": "hysiokhom",
+    "storage_bucket": "hysiokhom.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:957658616561:android:717c3a9b35a7ce76b2cf50",
+        "android_client_info": {
+          "package_name": "com.physiokhom.patient"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBF3sdPSJvxrPD8oYW2pxEZI9u4ZB8luY0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

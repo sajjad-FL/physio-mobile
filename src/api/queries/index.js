@@ -133,3 +133,11 @@ export function usePhysioBookingDetail(id, opts = {}) {
     ...opts,
   })
 }
+
+export function useWalletSummary(opts = {}) {
+  return useQuery({
+    queryKey: ['walletSummary'],
+    queryFn: async () => (await api.get('/profile/wallet-summary')).data || {},
+    ...opts,
+  })
+}

@@ -10,18 +10,22 @@ export function todayYmd() {
 
 export function normalizeSessionRows(b) {
   if (Array.isArray(b.schedule) && b.schedule.length > 0) {
-    return b.schedule.map((s, i) => ({
-      key: `${b._id}-s-${i}`,
-      sessionId: s._id != null ? String(s._id) : null,
-      date: s.date,
-      time: s.time,
-      n: i + 1,
-      notes: s.notes || null,
-      status: s.status || 'scheduled',
-      completedAt: s.completedAt || null,
-      noShowReason: s.noShowReason || '',
-      perSession: true,
-    }))
+    return b.schedule
+      .map((s, i) => ({
+        key: `${b._id}-s-${i}`,
+        sessionId: s._id != null ? String(s._id) : null,
+        date: s.date,
+        time: s.time,
+        n: i + 1,
+        notes: s.notes || null,
+        status: s.status || 'scheduled',
+        completedAt: s.completedAt || null,
+        noShowReason: s.noShowReason || '',
+        patientConfirmed: Boolean(s.patientConfirmed),
+        paymentAtCompletion: Number(s.paymentAtCompletion || 0),
+        perSession: true,
+      }))
+      .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
   }
   return [
     {
@@ -34,6 +38,8 @@ export function normalizeSessionRows(b) {
       status: b.sessionStatus === 'completed' ? 'completed' : 'scheduled',
       completedAt: null,
       noShowReason: '',
+      patientConfirmed: false,
+      paymentAtCompletion: 0,
       perSession: false,
     },
   ]

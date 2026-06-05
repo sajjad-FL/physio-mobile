@@ -23,6 +23,7 @@ function Screen({
   contentStyle,
   style,
   iosHeaderOffset,
+  refreshControl,
 }) {
   const { padBottom, scrollViewProps, keyboardAvoidingViewProps } = useKeyboardAwareScroll({
     extraBottomPadding: 24,
@@ -34,6 +35,7 @@ function Screen({
   const inner = scroll ? (
     <ScrollView
       {...scrollViewProps}
+      refreshControl={refreshControl}
       contentContainerStyle={[
         padded && styles.padded,
         { paddingBottom: padBottom },
