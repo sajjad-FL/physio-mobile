@@ -32,6 +32,56 @@ export function useProfile(opts = {}) {
   })
 }
 
+export function useShopProducts(params = { page: 1, limit: 50 }, opts = {}) {
+  return useQuery({
+    queryKey: ['shopProducts', params],
+    queryFn: async () => {
+      const res = await api.get('/shop/products', { params })
+      return { rows: listData(res), totalPages: Math.max(1, Number(res.data?.totalPages) || 1) }
+    },
+    ...opts,
+  })
+}
+
+export function useShopProduct(id, opts = {}) {
+  return useQuery({
+    queryKey: ['shopProduct', id],
+    enabled: Boolean(id),
+    queryFn: async () => (await api.get(`/shop/products/${id}`)).data || {},
+    ...opts,
+  })
+}
+
+export function useShopCart(opts = {}) {
+  return useQuery({
+    queryKey: ['shopCart'],
+    queryFn: async () => (await api.get('/shop/cart')).data || { items: [], itemCount: 0, subtotal: 0 },
+    staleTime: 0,
+    refetchOnMount: 'always',
+    ...opts,
+  })
+}
+
+export function useShopOrders(params = { page: 1, limit: 10 }, opts = {}) {
+  return useQuery({
+    queryKey: ['shopOrders', params],
+    queryFn: async () => {
+      const res = await api.get('/shop/orders', { params })
+      return { rows: listData(res), totalPages: Math.max(1, Number(res.data?.totalPages) || 1) }
+    },
+    ...opts,
+  })
+}
+
+export function useShopOrder(id, opts = {}) {
+  return useQuery({
+    queryKey: ['shopOrder', id],
+    enabled: Boolean(id),
+    queryFn: async () => (await api.get(`/shop/orders/${id}`)).data || {},
+    ...opts,
+  })
+}
+
 export function usePhysioBookings(params = { page: 1, limit: 100 }, opts = {}) {
   return useQuery({
     queryKey: ['physioBookings', params],
@@ -112,6 +162,56 @@ export function useReferralStats(opts = {}) {
       const res = await api.get('/referral/stats')
       return Array.isArray(res.data?.referrals) ? res.data.referrals : []
     },
+    ...opts,
+  })
+}
+
+export const FALLBACK_PRICING_SETTINGS = {
+  defaultBookingAmountRupees: 500,
+  platformCommissionPercent: 20,
+  distanceSurchargeBaseKm: 5,
+  distanceSurchargePerKmRupees: 5,
+  homePlanMaxDiscountPercent: 15,
+  defaultPhysioPricePerSession: 500,
+  allowedPlanSessionCounts: [7, 15, 30],
+  planTiers: [
+    {
+      sessions: 7,
+      defaultDiscountPercent: 0,
+      label: '7-Day Plan',
+      badge: 'STARTER',
+      description: '7 daily home sessions. Pay 1 session upfront, 100% by session 5.',
+    },
+    {
+      sessions: 15,
+      defaultDiscountPercent: 3.33,
+      label: '15-Day Plan',
+      badge: 'MOST POPULAR',
+      description: '15 sessions. Pay 50% by session 5, 100% by session 12.',
+    },
+    {
+      sessions: 30,
+      defaultDiscountPercent: 4.67,
+      label: '30-Day Plan',
+      badge: 'BEST VALUE',
+      description: '30 sessions. Pay 50% by session 10, 75% by session 20, 100% by session 25.',
+    },
+  ],
+  planMilestones: {},
+}
+
+export function usePricingSettings(opts = {}) {
+  return useQuery({
+    queryKey: ['pricingSettings'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/platform/pricing-settings')
+        return res.data && typeof res.data === 'object' ? res.data : FALLBACK_PRICING_SETTINGS
+      } catch {
+        return FALLBACK_PRICING_SETTINGS
+      }
+    },
+    staleTime: 60_000,
     ...opts,
   })
 }

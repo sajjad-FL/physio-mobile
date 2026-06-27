@@ -34,3 +34,66 @@ export const leading = {
   '2xl': 27,
   '3xl': 29,
 }
+
+/** Micro label (9px) — web dashboard stat labels. */
+export const typeMicro = 9
+
+/**
+ * Semantic text presets mirroring web mobile `type-*` utilities (index.css, max-width 639px).
+ * Spread into StyleSheet entries: { ...textStyles.pageTitle }
+ */
+export const textStyles = {
+  pageTitle: {
+    fontFamily: font.bold,
+    fontSize: type.xl,
+    lineHeight: leading.xl,
+    letterSpacing: -0.3,
+  },
+  stat: {
+    fontFamily: font.bold,
+    fontSize: type['2xl'],
+    lineHeight: leading['2xl'],
+  },
+  body: {
+    fontFamily: font.regular,
+    fontSize: type.base,
+    lineHeight: leading.base,
+  },
+  caption: {
+    fontFamily: font.regular,
+    fontSize: type.sm,
+    lineHeight: leading.sm,
+  },
+  label: {
+    fontFamily: font.medium,
+    fontSize: type.base,
+    lineHeight: leading.base,
+  },
+  button: {
+    fontFamily: font.semiBold,
+    fontSize: type.md,
+    lineHeight: leading.md,
+  },
+  micro: {
+    fontFamily: font.bold,
+    fontSize: typeMicro,
+    lineHeight: 12,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  sectionTitle: {
+    fontFamily: font.bold,
+    fontSize: type.sm,
+    lineHeight: leading.sm,
+  },
+  productName: {
+    fontFamily: font.semiBold,
+    fontSize: type.md,
+    lineHeight: leading.md,
+  },
+  productCta: {
+    fontFamily: font.semiBold,
+    fontSize: type.sm,
+    lineHeight: leading.sm,
+  },
+}

@@ -1,4 +1,5 @@
 import { colors } from './colors'
+import { r } from './radius'
 
 /** Subtle elevation for white cards on the canvas background. */
 export const surfaceCardShadow = {
@@ -20,20 +21,20 @@ export const surfaceCardBase = {
 /** Standalone list/item card (bookings, disputes, stats). */
 export const surfaceCard = {
   ...surfaceCardBase,
-  borderRadius: 14,
+  borderRadius: r['2xl'],
   ...surfaceCardShadow,
 }
 
 /** Grouped list shell (activity feed, wallet transactions). */
 export const surfaceListShell = {
   ...surfaceCardBase,
-  borderRadius: 16,
+  borderRadius: r['2xl'],
   ...surfaceCardShadow,
 }
 
 /** Larger section/form card. */
 export const surfaceSectionCard = {
   ...surfaceCardBase,
-  borderRadius: 16,
+  borderRadius: r['2xl'],
   ...surfaceCardShadow,
 }

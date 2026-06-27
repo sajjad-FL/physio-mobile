@@ -1,10 +1,14 @@
 import { memo, useCallback, useMemo } from 'react'
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { AttachStep } from 'react-native-spotlight-tour'
 import { Ionicons } from '@expo/vector-icons'
 import { useMyBookings, useMyDisputes, useProfile } from '../api/queries'
-import { formatBookingDateAndSlot } from '../utils/date'
+import { usePatientAppTour } from '../tour/usePatientAppTour'
+import { formatBookingDateAndSlot, formatBookingTimeSlot } from '../utils/date'
 import { bookingStatusBadge } from '../utils/dashboardUtils'
+import { pickNextSession, todayYmd } from '../utils/physioBookingHelpers'
 import Chip from '../components/ui/Chip'
+import ServicesSection from '../components/ServicesSection'
 import { formatInr } from '../utils/currency'
 import { colors } from '../theme/colors'
 import { figmaTokens } from '../theme/figmaTokens'
@@ -34,11 +38,6 @@ export default function DashboardHomeScreen({ navigation }) {
     return raw ? raw.split(/\s+/)[0] : null
   }, [profile])
 
-  const avatarInitial = useMemo(
-    () => firstName?.[0]?.toUpperCase() ?? profile?.name?.[0]?.toUpperCase() ?? '?',
-    [firstName, profile],
-  )
-
   const todayStr = useMemo(
     () => new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' }),
     [],
@@ -49,10 +48,9 @@ export default function DashboardHomeScreen({ navigation }) {
     [disputesData],
   )
 
-  const nextBooking = useMemo(() => {
-    const list = bookings || []
-    return list.find((b) => b.sessionStatus !== 'completed') || null
-  }, [bookings])
+  const today = useMemo(() => todayYmd(), [])
+  const nextSession = useMemo(() => pickNextSession(bookings || [], today), [bookings, today])
+  const isToday = nextSession && String(nextSession.row.date) === today
 
   const totalSessions = useMemo(() => (bookings || []).length, [bookings])
 
@@ -74,6 +72,8 @@ export default function DashboardHomeScreen({ navigation }) {
         .slice(0, 5),
     [bookings],
   )
+
+  usePatientAppTour({ hasUpcomingBooking: Boolean(nextSession) })
 
   if (loading) {
     return (
@@ -101,19 +101,16 @@ export default function DashboardHomeScreen({ navigation }) {
       <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
 
       {/* ── Personalized Dashboard Header Section ────────────────── */}
-      <View style={styles.headerSection}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.headerGreeting}>
-            Hi, {firstName ? firstName.toUpperCase() : 'THERE'}
-          </Text>
-          <Text style={styles.headerTitle}>{todayStr}</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <View style={styles.profileAvatarCircle}>
-            <Text style={styles.profileAvatarText}>{avatarInitial}</Text>
+      <AttachStep index={0}>
+        <View style={styles.headerSection}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerGreeting}>
+              Hi, {firstName ? firstName.toUpperCase() : 'THERE'}
+            </Text>
+            <Text style={styles.headerTitle}>{todayStr}</Text>
           </View>
         </View>
-      </View>
+      </AttachStep>
 
       {/* ── Banners ──────────────────────────────── */}
       {needsProfile && (
@@ -146,14 +143,18 @@ export default function DashboardHomeScreen({ navigation }) {
       )}
 
       {/* ── Next session (hero card) ──────────────── */}
-      {nextBooking ? (
-        <View style={styles.nextCardContainer}>
-          <Pressable
-            style={({ pressed }) => [styles.nextCard, pressed && styles.nextCardDim]}
-            onPress={() =>
-              navigation.navigate('Bookings', { screen: 'BookingDetail', params: { id: nextBooking._id } })
-            }
-          >
+      {nextSession ? (
+        <AttachStep index={1} fill>
+          <View style={styles.nextCardContainer}>
+            <Pressable
+              style={({ pressed }) => [styles.nextCard, pressed && styles.nextCardDim]}
+              onPress={() =>
+                navigation.navigate('Bookings', {
+                  screen: 'BookingDetail',
+                  params: { id: nextSession.booking._id },
+                })
+              }
+            >
             {/* Ambient inner glow bubbles */}
             <View style={styles.cardGlowBubble1} />
             <View style={styles.cardGlowBubble2} />
@@ -164,13 +165,15 @@ export default function DashboardHomeScreen({ navigation }) {
                   <Ionicons name="pulse" size={10} color="#fff" style={{ marginRight: 4 }} />
                   <Text style={styles.nextBadge}>UPCOMING SESSION</Text>
                 </View>
-                <Text style={styles.nextDate}>{formatBookingDateAndSlot(nextBooking.date, nextBooking.timeSlot)}</Text>
+                <Text style={styles.nextDate}>
+                  {isToday
+                    ? formatBookingTimeSlot(nextSession.row.time)
+                    : formatBookingDateAndSlot(nextSession.row.date, nextSession.row.time)}
+                </Text>
               </View>
               <View style={styles.nextStatusIndicator}>
                 <View style={styles.nextStatusDot} />
-                <Text style={styles.nextStatusText}>
-                  {nextBooking.status === 'paid' ? 'Secured' : 'Scheduled'}
-                </Text>
+                <Text style={styles.nextStatusText}>{isToday ? 'Today' : 'Scheduled'}</Text>
               </View>
             </View>
             {/* Doctor Details Box */}
@@ -179,28 +182,32 @@ export default function DashboardHomeScreen({ navigation }) {
                 <Ionicons name="person" size={16} color={figmaTokens.primary} />
               </View>
               <View style={styles.nextDocInfo}>
-                <Text style={styles.nextDocName}>{nextBooking.physioId?.name || 'Physio TBD'}</Text>
+                <Text style={styles.nextDocName}>{nextSession.booking.physioId?.name || 'Physio TBD'}</Text>
                 <Text style={styles.nextDocSub}>
-                  {nextBooking.physioId?.specialization || 'Verified Physiotherapist'} · At Home
+                  {nextSession.booking.physioId?.specialization || 'Verified Physiotherapist'} ·{' '}
+                  {nextSession.booking.serviceType === 'online' ? 'Online' : 'At Home'}
                 </Text>
               </View>
             </View>
           </Pressable>
-        </View>
+          </View>
+        </AttachStep>
       ) : (
-        <Pressable
-          style={({ pressed }) => [styles.bookCta, pressed && styles.dimmed]}
-          onPress={() => navigation.navigate('PhysioList')}
-        >
+        <AttachStep index={1} fill>
+          <Pressable
+            style={({ pressed }) => [styles.bookCta, pressed && styles.dimmed]}
+            onPress={() => navigation.navigate('PhysioList')}
+          >
           <View style={styles.bookCtaIconWrap}>
             <Ionicons name="add-circle-outline" size={24} color={figmaTokens.primary} />
           </View>
           <View style={styles.bookCtaBody}>
             <Text style={styles.bookCtaTitle}>Book a session</Text>
-            <Text style={styles.bookCtaSub}>Find a physio near you</Text>
+            <Text style={styles.bookCtaSub}>Find a verified physio near you</Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={figmaTokens.primary} />
         </Pressable>
+        </AttachStep>
       )}
 
       {/* ── Stats ────────────────────────────────── */}
@@ -227,6 +234,9 @@ export default function DashboardHomeScreen({ navigation }) {
           <Text style={styles.statSub}>all time</Text>
         </View>
       </View>
+
+      {/* ── Book by Need — services section ─────── */}
+      <ServicesSection navigation={navigation} />
 
       {/* ── Recent activity ───────────────────────── */}
       <View style={styles.sectionHeaderRow}>
@@ -348,30 +358,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     letterSpacing: -0.5,
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  profileAvatarCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: figmaTokens.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.white,
-    shadowColor: figmaTokens.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.22,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  profileAvatarText: {
-    fontFamily: font.bold,
-    fontSize: type.sm,
-    color: colors.white,
-  },
 
   // ── Banners
   infoBanner: {
@@ -435,6 +421,7 @@ const styles = StyleSheet.create({
 
   // ── Next session hero card (matching hubCard in HomeScreen.js)
   nextCardContainer: {
+    alignSelf: 'stretch',
     marginHorizontal: 16,
     marginBottom: 16,
     borderRadius: 20,
@@ -446,6 +433,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   nextCard: {
+    width: '100%',
     borderRadius: 20,
     backgroundColor: figmaTokens.primary, // Brand teal color
     paddingVertical: 18,
@@ -480,6 +468,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 14,
     zIndex: 2,
+  },
+  nextContent: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
   },
   nextBadgeContainer: {
     flexDirection: 'row',
@@ -563,7 +556,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 12,
     padding: 10,
-    marginBottom: 14,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.05)',
     zIndex: 2,
@@ -622,6 +614,7 @@ const styles = StyleSheet.create({
 
   // ── Book CTA (no upcoming session)
   bookCta: {
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,

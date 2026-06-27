@@ -46,7 +46,7 @@ function SignupProfileStep({
           variant="login"
           style={styles.passwordField}
           label="Create password"
-          description="PASSWORD (MIN 8 CHARACTERS)"
+          description="PASSWORD (MIN 6 CHARACTERS)"
           placeholder="Enter password"
           secureTextEntry
           value={password}

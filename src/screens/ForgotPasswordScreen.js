@@ -10,12 +10,11 @@ import KeyboardAwareScrollView from '../components/ui/KeyboardAwareScrollView'
 import { colors } from '../theme/colors'
 import { authFormCard } from '../theme/authFormCard'
 import { font, type, leading } from '../theme/typography'
-import { sendFirebaseOtp, confirmFirebaseOtp, toE164India, friendlyFirebaseError } from '../utils/firebasePhoneAuth'
 
 const STEPS = [
   { key: 'phone', n: 1, icon: 'phone-portrait-outline', title: 'Enter your mobile', sub: 'We\'ll send a verification code to your registered number.' },
-  { key: 'otp', n: 2, icon: 'keypad-outline', title: 'Enter the code', sub: 'Check your SMS for the 6-digit verification code.' },
-  { key: 'password', n: 3, icon: 'lock-closed-outline', title: 'New password', sub: 'Choose a strong password with at least 8 characters.' },
+  { key: 'otp', n: 2, icon: 'keypad-outline', title: 'Enter the code', sub: 'Check your SMS for the 4-digit verification code.' },
+  { key: 'password', n: 3, icon: 'lock-closed-outline', title: 'New password', sub: 'Choose a strong password with at least 6 characters.' },
 ]
 
 export default function ForgotPasswordScreen({ navigation }) {
@@ -26,7 +25,6 @@ export default function ForgotPasswordScreen({ navigation }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
-  const [confirmation, setConfirmation] = useState(null)
 
   const stepMeta = STEPS.find((s) => s.key === step) || STEPS[0]
 
@@ -37,12 +35,10 @@ export default function ForgotPasswordScreen({ navigation }) {
     setLoading(true)
     try {
       await api.post('/auth/forgot-password', { phone: pv.normalized })
-      const conf = await sendFirebaseOtp(toE164India(phone))
-      setConfirmation(conf)
       Toast.show({ type: 'success', text1: 'Verification code sent' })
       setStep('otp')
     } catch (err) {
-      setError(friendlyFirebaseError(err) || err.response?.data?.message || err.message || 'Could not send code')
+      setError(err.response?.data?.message || err.message || 'Could not send code')
     } finally {
       setLoading(false)
     }
@@ -56,12 +52,11 @@ export default function ForgotPasswordScreen({ navigation }) {
     if (oe) { setFieldErrors({ otp: oe }); return }
     setLoading(true)
     try {
-      const idToken = await confirmFirebaseOtp(confirmation, otp)
-      await api.post('/auth/verify-otp', { firebaseIdToken: idToken })
+      await api.post('/auth/verify-otp', { phone: pv.normalized, otp })
       Toast.show({ type: 'success', text1: 'Code verified' })
       setStep('password')
     } catch (err) {
-      setError(friendlyFirebaseError(err) || err.response?.data?.message || err.message || 'Invalid code')
+      setError(err.response?.data?.message || err.message || 'Invalid code')
     } finally {
       setLoading(false)
     }
@@ -168,7 +163,7 @@ export default function ForgotPasswordScreen({ navigation }) {
               value={phone}
               onChangeText={(v) => { setPhone(v); setFieldErrors((f) => ({ ...f, phone: '' })) }}
               error={fieldErrors.phone}
-              placeholder="+91 XXXXXXXXXX"
+              placeholder="Enter mobile number"
             />
           ) : null}
 
@@ -183,7 +178,7 @@ export default function ForgotPasswordScreen({ navigation }) {
                 value={otp}
                 onChangeText={(v) => { setOtp(v); setFieldErrors((f) => ({ ...f, otp: '' })) }}
                 error={fieldErrors.otp}
-                placeholder="6-digit code"
+                placeholder="4-digit code"
               />
               <Pressable onPress={sendCode} style={styles.resendRow} hitSlop={8}>
                 <Text style={styles.resendTxt}>Didn't receive it? </Text>
@@ -203,7 +198,7 @@ export default function ForgotPasswordScreen({ navigation }) {
               value={newPassword}
               onChangeText={(v) => { setNewPassword(v); setFieldErrors((f) => ({ ...f, newPassword: '' })) }}
               error={fieldErrors.newPassword}
-              placeholder="Min. 8 characters"
+              placeholder="Min. 6 characters"
             />
           ) : null}
 

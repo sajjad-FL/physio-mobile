@@ -17,7 +17,6 @@ import { openWebLoginInBrowser } from '../utils/webApp'
 import { useReferralPublicSettings } from '../api/queries'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
-import { sendFirebaseOtp, confirmFirebaseOtp, toE164India, friendlyFirebaseError } from '../utils/firebasePhoneAuth'
 
 const STEPS = { PHONE: 1, OTP: 2, PROFILE: 3 }
 const TOTAL_STEPS = 3
@@ -61,7 +60,6 @@ export default function RegisterScreen({ navigation, route }) {
   const [sendingOtp, setSendingOtp] = useState(false)
   const [loading, setLoading] = useState(false)
   const [fieldErrors, setFieldErrors] = useState({})
-  const [confirmation, setConfirmation] = useState(null)
   const [referralCode, setReferralCode] = useState(() =>
     String(route?.params?.ref || '')
       .trim()
@@ -99,15 +97,15 @@ export default function RegisterScreen({ navigation, route }) {
     setSendingOtp(true)
     setDevOtpHint('')
     try {
-      const conf = await sendFirebaseOtp(toE164India(phone))
-      setConfirmation(conf)
+      const res = await api.post('/auth/signup-otp', { phone: pv.normalized })
+      if (res.data?.otp) setDevOtpHint(res.data.otp)
       Toast.show({ type: 'success', text1: 'Verification code sent.' })
       setOtp('')
       setStep(STEPS.OTP)
     } catch (err) {
       Toast.show({
         type: 'error',
-        text1: friendlyFirebaseError(err),
+        text1: err.response?.data?.message || err.message || 'Could not send code',
       })
     } finally {
       setSendingOtp(false)
@@ -151,11 +149,11 @@ export default function RegisterScreen({ navigation, route }) {
 
     setLoading(true)
     try {
-      const idToken = await confirmFirebaseOtp(confirmation, otp)
       const body = {
+        phone: pv.normalized,
+        otp: String(otp).replace(/\D/g, ''),
         name: name.trim(),
         password,
-        firebaseIdToken: idToken,
         ...(referralCode ? { referralCode } : {}),
       }
       const res = await api.post('/auth/register', body)
@@ -197,7 +195,7 @@ export default function RegisterScreen({ navigation, route }) {
     } catch (err) {
       Toast.show({
         type: 'error',
-        text1: friendlyFirebaseError(err) || err.response?.data?.message || err.message || 'Registration failed',
+        text1: err.response?.data?.message || err.message || 'Registration failed',
       })
     } finally {
       setLoading(false)

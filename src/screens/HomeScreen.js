@@ -9,6 +9,8 @@ import { colors } from '../theme/colors'
 import { font, type } from '../theme/typography'
 import { figmaTokens } from '../theme/figmaTokens'
 import { api } from '../api/client'
+import { usePricingSettings } from '../api/queries'
+import { buildMobilePlanTierCards, FALLBACK_PLAN_TIER_CARDS } from '../utils/planTierDisplay'
 
 const DEFAULT_SERVICE_AREA = {
   label: 'Kokrajhar',
@@ -109,48 +111,6 @@ const TECHNIQUES = [
   { id: 'Cupping',        title: 'Cupping Therapy', image: require('../../assets/images/technique_cupping.png'),   bg: '#fff7ed', color: '#c2410c' },
   { id: 'Dry Needling',   title: 'Dry Needling',    image: require('../../assets/images/technique_needling.png'),  bg: '#f5f3ff', color: '#6d28d9' },
   { id: 'Kinesio Taping', title: 'Kinesio Taping',  image: require('../../assets/images/technique_kinesio.png'),   bg: '#e6f4f3', color: '#0d6b6b' },
-]
-
-const PLAN_TIER_CARDS = [
-  {
-    label: '7-Day Plan',
-    sessions: 7,
-    discountPercent: 0,
-    badge: 'STARTER',
-    saveCallout: null,
-    desc: '7 daily home sessions. Pay 1 session upfront, 100% by session 5.',
-    icon: 'calendar-outline',
-    bg: '#ffffff',
-    border: '#e2e8f0',
-    color: '#0d6b6b',
-    titleColor: '#0f172a',
-  },
-  {
-    label: '15-Day Plan',
-    sessions: 15,
-    discountPercent: 3.33,
-    badge: 'MOST POPULAR',
-    saveCallout: 'SAVE 3.33%',
-    desc: '15 sessions. Pay 50% by session 5, 100% by session 12.',
-    icon: 'pulse-outline',
-    bg: '#f4fbf7',
-    border: '#a7f3d0',
-    color: '#059669',
-    titleColor: '#064e3b',
-  },
-  {
-    label: '30-Day Plan',
-    sessions: 30,
-    discountPercent: 4.67,
-    badge: 'BEST VALUE',
-    saveCallout: 'SAVE 4.67%',
-    desc: '30 sessions. Pay 50% by session 10, 75% by session 20, 100% by session 25.',
-    icon: 'shield-checkmark-outline',
-    bg: '#f0f9ff',
-    border: '#bae6fd',
-    color: '#0284c7',
-    titleColor: '#0c4a6e',
-  },
 ]
 
 const TESTIMONIALS = [
@@ -491,6 +451,11 @@ const BACK_SPOTS = [
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets()
   const { token } = useAuth()
+  const { data: pricingSettings } = usePricingSettings()
+  const planTierCards = useMemo(() => {
+    const cards = buildMobilePlanTierCards(pricingSettings?.planTiers)
+    return cards.length > 0 ? cards : FALLBACK_PLAN_TIER_CARDS
+  }, [pricingSettings?.planTiers])
   
   const [userName, setUserName] = useState('')
   const [featuredPhysios, setFeaturedPhysios] = useState([])
@@ -1319,7 +1284,7 @@ export default function HomeScreen({ navigation }) {
           contentContainerStyle={styles.promoCarousel}
           decelerationRate="fast"
         >
-          {PLAN_TIER_CARDS.map((plan, idx) => (
+          {planTierCards.map((plan, idx) => (
             <PromoCard
               key={idx}
               title={plan.label}

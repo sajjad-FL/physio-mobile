@@ -2,7 +2,7 @@
   "expo": {
     "name": "PhysiOkhom",
     "slug": "physiokhom",
-    "version": "1.0.0",
+    "version": "1.0.02",
     "icon": "./assets/images/icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",

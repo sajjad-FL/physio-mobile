@@ -4,13 +4,13 @@ import { validateIndianMobile } from './phoneIndia'
 export function validateLoginPassword(value) {
   const str = value == null ? '' : String(value)
   if (!str) return 'Password is required'
-  return str.length < 8 ? 'Password must be at least 8 characters' : ''
+  return str.length < 6 ? 'Password must be at least 6 characters' : ''
 }
 
 export function validateOtp(value) {
   const d = String(value).replace(/\D/g, '')
   if (!d) return 'Enter the code'
-  if (d.length !== 6) return 'Enter the 6-digit code'
+  if (d.length !== 4) return 'Enter the 4-digit code'
   return ''
 }
 

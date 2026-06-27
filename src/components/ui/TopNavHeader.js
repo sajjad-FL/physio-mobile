@@ -1,5 +1,6 @@
 import { memo, useMemo, useState } from 'react'
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { AttachStep } from 'react-native-spotlight-tour'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../../theme/colors'
@@ -32,6 +33,7 @@ function TopNavHeader({
   onNavigate,
   onLogout,
   showBookCta = false,
+  headerAccessory = null,
 }) {
   const insets = useSafeAreaInsets()
   const { height } = useWindowDimensions()
@@ -53,15 +55,17 @@ function TopNavHeader({
     <View style={[styles.wrap, { paddingTop: topPad }]}>
       <View style={styles.inner}>
         {/* Brand menu button */}
-        <Pressable
-          style={styles.brandBtn}
-          onPress={() => setSideOpen((v) => !v)}
-          hitSlop={4}
-          accessibilityRole="button"
-          accessibilityLabel="Menu"
-        >
-          <Ionicons name="menu" size={18} color={colors.white} />
-        </Pressable>
+        <AttachStep index={3}>
+          <Pressable
+            style={styles.brandBtn}
+            onPress={() => setSideOpen((v) => !v)}
+            hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel="Menu"
+          >
+            <Ionicons name="menu" size={18} color={colors.white} />
+          </Pressable>
+        </AttachStep>
 
         {/* Title area */}
         <View style={styles.titleArea}>
@@ -71,11 +75,14 @@ function TopNavHeader({
 
         {/* Right actions */}
         <View style={styles.rightGroup}>
+          {headerAccessory}
           {showBookCta ? (
-            <Pressable style={styles.bookBtn} onPress={() => nav('PhysioList')}>
-              <Ionicons name="add" size={14} color={colors.white} />
-              <Text style={styles.bookTxt}>Book</Text>
-            </Pressable>
+            <AttachStep index={4}>
+              <Pressable style={styles.bookBtn} onPress={() => nav('PhysioList')}>
+                <Ionicons name="add" size={14} color={colors.white} />
+                <Text style={styles.bookTxt}>Book</Text>
+              </Pressable>
+            </AttachStep>
           ) : null}
           <Pressable
             style={styles.avatarWrap}

@@ -11,11 +11,12 @@ const SIDE_ITEMS = [
   { label: 'Home', route: 'DashboardHome' },
   { label: 'Bookings', route: 'Bookings' },
   { label: 'Wallet', route: 'Wallet' },
+  { label: 'Shop', route: 'Shop' },
   { label: 'Profile', route: 'Profile' },
   { label: 'Disputes', route: 'Disputes' },
 ]
 
-export default function UserTopNavHeader({ navigation, title = 'Session' }) {
+export default function UserTopNavHeader({ navigation, title = 'Session', headerAccessory = null }) {
   const { logout } = useAuth()
   const onNavigate = (route) => {
     if (route === 'Profile') return navigation.navigate('Profile')
@@ -28,8 +29,9 @@ export default function UserTopNavHeader({ navigation, title = 'Session' }) {
       }
       return navigation.navigate('Bookings', { screen: 'BookingsList' })
     }
+    if (route === 'Shop') return navigation.navigate('Shop', { screen: 'ShopHome' })
     return navigation.navigate(route)
   }
-  return <TopNavHeader title={title} showBookCta menuItems={MENU_ITEMS} sideItems={SIDE_ITEMS} onNavigate={onNavigate} onLogout={() => logout(navigation)} />
+  return <TopNavHeader title={title} showBookCta menuItems={MENU_ITEMS} sideItems={SIDE_ITEMS} onNavigate={onNavigate} onLogout={() => logout(navigation)} headerAccessory={headerAccessory} />
 }
 

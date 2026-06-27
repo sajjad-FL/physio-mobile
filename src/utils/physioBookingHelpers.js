@@ -84,3 +84,24 @@ export function buildSessionDateSet(bookings) {
   }
   return set
 }
+
+/** Earliest upcoming session row on or after today, or null. */
+export function pickNextSession(bookings, today = todayYmd()) {
+  const items = []
+  for (const b of bookings || []) {
+    if (b.sessionStatus === 'completed' || b.status === 'completed') continue
+    for (const r of normalizeSessionRows(b)) {
+      if (r.status === 'completed' || r.status === 'no_show') continue
+      const d = String(r.date || '')
+      if (d >= today) {
+        items.push({ booking: b, row: r })
+      }
+    }
+  }
+  items.sort(
+    (a, b) =>
+      String(a.row.date).localeCompare(String(b.row.date)) ||
+      String(a.row.time || '').localeCompare(String(b.row.time || '')),
+  )
+  return items[0] || null
+}

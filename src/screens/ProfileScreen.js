@@ -6,6 +6,7 @@ import * as WebBrowser from 'expo-web-browser'
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Modal,
   Platform,
@@ -20,7 +21,7 @@ import {
 import Toast from 'react-native-toast-message'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { api } from '../api/client'
-import { getTokenSync } from '../auth/tokenStore'
+import { getTokenSync, clearSession } from '../auth/tokenStore'
 import {
   DEFAULT_REFERRAL_REWARD_AMOUNT,
   DEFAULT_REFERRAL_SIGNUP_BONUS_AMOUNT,
@@ -486,6 +487,26 @@ export default function ProfileScreen({ navigation }) {
     }
   }
 
+  function handleDeleteAccount() {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all associated data. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete('/profile')
+            } catch (_) {}
+            await clearSession()
+          },
+        },
+      ],
+    )
+  }
+
   const profileSubtitle = useMemo(
     () =>
       isPhysio
@@ -918,6 +939,18 @@ export default function ProfileScreen({ navigation }) {
         <Pressable
           accessibilityRole="button"
           style={({ pressed }) => [
+            styles.deleteAccountBtn,
+            pressed && { opacity: 0.7 }
+          ]}
+          onPress={handleDeleteAccount}
+        >
+          <Ionicons name="trash-outline" size={13} color={colors.red500 ?? '#ef4444'} />
+          <Text style={styles.deleteAccountTxt}>Delete Account</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          style={({ pressed }) => [
             styles.privacyLink,
             pressed && { opacity: 0.7 }
           ]}
@@ -1003,12 +1036,26 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: figmaTokens.canvas, position: 'relative' },
   pad: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, zIndex: 2 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: figmaTokens.canvas },
+  deleteAccountBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 8,
+    gap: 6,
+  },
+  deleteAccountTxt: {
+    fontFamily: font.bold,
+    fontSize: type.xs,
+    color: colors.red500,
+    textDecorationLine: 'underline',
+  },
   privacyLink: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
-    marginTop: 16,
+    marginTop: 4,
     gap: 6,
   },
   privacyLinkTxt: {

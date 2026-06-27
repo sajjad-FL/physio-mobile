@@ -26,13 +26,13 @@ function SignupOtpStep({
         totalSteps={totalSteps}
         kickerLabel="CREATE ACCOUNT"
         title="Verify your number"
-        subtitle="Enter the 6-digit code we sent to your phone."
+        subtitle="Enter the 4-digit code we sent to your phone."
       />
       <View style={authFormCard}>
         <Input
           variant="login"
-          label="6-digit OTP"
-          placeholder="Enter the 6-digit code"
+          label="4-digit OTP"
+          placeholder="Enter the 4-digit code"
           keyboardType="number-pad"
           value={otp}
           onChangeText={onChangeOtp}

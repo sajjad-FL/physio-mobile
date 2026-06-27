@@ -10,9 +10,11 @@ import DashboardBookingsScreen from '../screens/DashboardBookingsScreen'
 import UserBookingDetailScreen from '../screens/UserBookingDetailScreen'
 import DashboardWalletScreen from '../screens/DashboardWalletScreen'
 import DashboardDisputesScreen from '../screens/DashboardDisputesScreen'
+import ShopStackNavigator from './ShopStackNavigator'
 import ProfileScreen from '../screens/ProfileScreen'
 import UserTopNavHeader from '../components/UserTopNavHeader'
 import CustomTabBar from './CustomTabBar'
+import PatientAppTourProvider from '../tour/PatientAppTourProvider'
 import { defaultNativeStackScreenOptions, defaultTabScreenOptions } from './navLayout'
 
 const Tab = createBottomTabNavigator()
@@ -48,7 +50,8 @@ export default function UserTabNavigator() {
   }, [navigation, authEpoch])
 
   return (
-    <Tab.Navigator
+    <PatientAppTourProvider>
+      <Tab.Navigator
       detachInactiveScreens
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
@@ -96,6 +99,23 @@ export default function UserTabNavigator() {
         }}
       />
       <Tab.Screen
+        name="Shop"
+        component={ShopStackNavigator}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault()
+            navigation.navigate('Shop', { screen: 'ShopHome' })
+          },
+        })}
+        options={{
+          tabBarLabel: 'Shop',
+          headerShown: false,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'bag' : 'bag-outline'} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
         name="Profile"
         component={ProfileScreen}
         options={{
@@ -118,5 +138,6 @@ export default function UserTabNavigator() {
         }}
       />
     </Tab.Navigator>
+    </PatientAppTourProvider>
   )
 }
