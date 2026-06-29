@@ -49,7 +49,7 @@ function PatientTourTooltip({ title, body, ...renderProps }) {
 }
 
 function step1Title() {
-  return step1HasUpcomingBooking ? 'Your upcoming session' : 'Book a session'
+  return step1HasUpcomingBooking ? 'Your upcoming session' : 'Book an appointment'
 }
 
 function step1Body() {
@@ -67,7 +67,7 @@ export function buildPatientTourSteps() {
         <PatientTourTooltip
           {...props}
           title="Welcome to PhysiOkhom"
-          body="Your home for physiotherapy at home — book sessions, track care, and manage payments."
+          body="Your home for physiotherapy at home — book appointments, track care, and manage payments."
         />
       ),
     },

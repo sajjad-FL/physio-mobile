@@ -91,7 +91,7 @@ export default function DashboardWalletScreen({ navigation }) {
           onPress={() => navigation.navigate('PhysioList')}
         >
           <Ionicons name="add-circle-outline" size={16} color={figmaTokens.primary} />
-          <Text style={styles.bookBtnTxt}>Book a session</Text>
+          <Text style={styles.bookBtnTxt}>Book an appointment</Text>
         </Pressable>
       </View>
       </View>

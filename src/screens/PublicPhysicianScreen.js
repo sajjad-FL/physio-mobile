@@ -391,7 +391,7 @@ export default function PublicPhysicianScreen({ route, navigation }) {
 
           {/* Direct CTA action to start booking flow */}
           <Button
-            title="Book Session Now"
+            title="Book Appointment Now"
             icon="calendar"
             onPress={() => navigation.navigate('PhysioList', { issue: physio.specialization || '' })}
             style={styles.bookCtaBtn}

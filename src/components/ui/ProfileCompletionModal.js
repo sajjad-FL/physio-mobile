@@ -155,7 +155,7 @@ export default function ProfileCompletionModal({ visible, onDismiss, profile, mi
             </View>
 
             <Text style={styles.sub}>
-              Add the details below so you can book sessions and use your dashboard. This reminder appears about once a
+              Add the details below so you can book appointments and use your dashboard. This reminder appears about once a
               minute until your profile is complete.
             </Text>
 

@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 
 const MENU_ITEMS = [
   { label: 'Home', route: 'DashboardHome' },
-  { label: 'Book a session', route: 'PhysioList' },
+  { label: 'Book an appointment', route: 'PhysioList' },
   { label: 'Profile', route: 'Profile' },
 ]
 

@@ -889,7 +889,7 @@ export default function PhysioListScreen({ navigation, route }) {
         <View style={styles.unauthIconWrap}>
           <Ionicons name="calendar-outline" size={36} color={colors.white} />
         </View>
-        <Text style={styles.unauthTitle}>Book a session</Text>
+        <Text style={styles.unauthTitle}>Book an appointment</Text>
         <Text style={styles.unauthSub}>Sign in to book a verified physiotherapy home visit in Assam.</Text>
         <Pressable
           style={({ pressed }) => [styles.unauthBtn, pressed && { opacity: 0.9 }]}
@@ -918,7 +918,7 @@ export default function PhysioListScreen({ navigation, route }) {
         {/* ── Page header ──────────────────────────── */}
         <View style={styles.pageHeader}>
           <View style={styles.pageHeaderLeft}>
-            <Text style={styles.pageTitle}>Book a session</Text>
+            <Text style={styles.pageTitle}>Book an appointment</Text>
             <Text style={styles.pageSub}>Choose when and where — we'll find the best physio for you.</Text>
           </View>
           <Pressable style={styles.myBookingsBtn} onPress={openMyBookings}>

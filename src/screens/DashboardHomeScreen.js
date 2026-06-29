@@ -123,7 +123,7 @@ export default function DashboardHomeScreen({ navigation }) {
           </View>
           <View style={styles.bannerBody}>
             <Text style={styles.bannerTitle}>Complete your profile</Text>
-            <Text style={styles.bannerText}>Add date of birth, gender, and address to book sessions.</Text>
+            <Text style={styles.bannerText}>Add date of birth, gender, and address to book appointments.</Text>
           </View>
           <Ionicons name="chevron-forward" size={15} color={figmaTokens.primary} />
         </Pressable>
@@ -202,7 +202,7 @@ export default function DashboardHomeScreen({ navigation }) {
             <Ionicons name="add-circle-outline" size={24} color={figmaTokens.primary} />
           </View>
           <View style={styles.bookCtaBody}>
-            <Text style={styles.bookCtaTitle}>Book a session</Text>
+            <Text style={styles.bookCtaTitle}>Book an appointment</Text>
             <Text style={styles.bookCtaSub}>Find a verified physio near you</Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={figmaTokens.primary} />

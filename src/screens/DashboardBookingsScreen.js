@@ -71,10 +71,10 @@ export default function DashboardBookingsScreen({ navigation }) {
         ListEmptyComponent={
           <EmptyState
             title={rows.length === 0 ? 'No bookings yet' : 'No bookings match this filter'}
-            message={rows.length === 0 ? 'Book a session to see it here.' : 'Try a different filter.'}
+            message={rows.length === 0 ? 'Book an appointment to see it here.' : 'Try a different filter.'}
             secondaryCta={rows.length > 0 ? { title: 'Show all', onPress: () => setFilter('all') } : undefined}
             primaryCta={{
-              title: rows.length === 0 ? 'Book your first session' : 'Book session',
+              title: rows.length === 0 ? 'Book your first appointment' : 'Book appointment',
               onPress: () => navigation.navigate('PhysioList'),
             }}
           />

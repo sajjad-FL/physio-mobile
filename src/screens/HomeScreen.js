@@ -72,7 +72,7 @@ const FAQ_CATEGORIES = ['All', 'Booking', 'Therapists', 'Payments']
 
 const FAQ_ITEMS = [
   {
-    q: 'How do I book a session?',
+    q: 'How do I book an appointment?',
     a: 'Choose your condition, select a preferred date and time, complete the booking details, and pay securely online.',
     cat: 'Booking',
   },
@@ -248,7 +248,7 @@ const HealthHubCard = memo(function HealthHubCard({ token, navigation, openWhats
               style={styles.hubActionBtnPri}
               onPress={() => navigation.navigate('PhysioList')}
             >
-              <Text style={styles.hubActionTextPri}>Book a Session</Text>
+              <Text style={styles.hubActionTextPri}>Book an Appointment</Text>
               <Ionicons name="chevron-forward" size={12} color={colors.white} />
             </TouchableOpacity>
           </View>
