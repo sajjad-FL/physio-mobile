@@ -33,6 +33,7 @@ import { font, type, leading } from '../theme/typography'
 import { figmaTokens, figmaShadowCard, figmaShadowGlow } from '../theme/figmaTokens'
 import { assetUrl } from '../utils/assetUrl'
 import { validateProfileLiveField } from '../utils/profileLiveValidation'
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_SIZE_LABEL } from '../constants/uploadLimits'
 
 const GENDERS = [
   { value: 'male', label: 'Male', icon: 'male' },
@@ -372,8 +373,8 @@ export default function ProfileScreen({ navigation }) {
     })
     if (result.canceled || !result.assets?.[0]) return
     const asset = result.assets[0]
-    if (asset.fileSize != null && asset.fileSize > 2 * 1024 * 1024) {
-      Toast.show({ type: 'error', text1: 'Image must be 2MB or smaller' })
+    if (asset.fileSize != null && asset.fileSize > MAX_UPLOAD_BYTES) {
+      Toast.show({ type: 'error', text1: `Image must be ${MAX_UPLOAD_SIZE_LABEL} or smaller` })
       return
     }
     const uri = asset.uri

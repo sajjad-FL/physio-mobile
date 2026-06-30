@@ -78,3 +78,13 @@ api.interceptors.response.use(
     return Promise.reject(error)
   },
 )
+
+/** Multipart POST — bypass axios JSON transforms so RN/Web file parts stay intact. */
+export function postFormData(path, formData, config = {}) {
+  return api.post(path, formData, {
+    ...config,
+    transformRequest: (data) => data,
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
+  })
+}

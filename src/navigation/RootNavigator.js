@@ -13,6 +13,12 @@ import PhysioListScreen from '../screens/PhysioListScreen'
 import ReferEarnScreen from '../screens/ReferEarnScreen'
 import PublicPhysicianScreen from '../screens/PublicPhysicianScreen'
 import UserTabNavigator from './UserTabNavigator'
+import PhysioTabNavigator from './PhysioTabNavigator'
+import PhysioAvailabilityScreen from '../screens/PhysioAvailabilityScreen'
+import PhysioNotesScreen from '../screens/PhysioNotesScreen'
+import PhysioDisputesScreen from '../screens/PhysioDisputesScreen'
+import PhysioOnboardingScreen from '../screens/PhysioOnboardingScreen'
+import PhysioVerificationRedirectScreen from '../screens/PhysioVerificationRedirectScreen'
 import { defaultNativeStackScreenOptions } from './navLayout'
 
 const Stack = createNativeStackNavigator()
@@ -46,7 +52,13 @@ export default function RootNavigator() {
       <Stack.Screen name="Unauthorized" component={UnauthorizedScreen} options={{ title: 'Unauthorized' }} />
       <Stack.Screen name="PublicPhysician" component={PublicPhysicianScreen} options={{ title: 'Physician' }} />
       <Stack.Screen name="UserTabs" component={UserTabNavigator} options={{ headerShown: false }} />
+      <Stack.Screen name="PhysioTabs" component={PhysioTabNavigator} options={{ headerShown: false }} />
       <Stack.Screen name="ProfileGlobal" component={ProfileScreen} options={{ title: 'Profile' }} />
+      <Stack.Screen name="PhysioAvailability" component={PhysioAvailabilityScreen} options={{ title: 'Availability' }} />
+      <Stack.Screen name="PhysioNotes" component={PhysioNotesScreen} options={{ title: 'Clinical notes' }} />
+      <Stack.Screen name="PhysioDisputes" component={PhysioDisputesScreen} options={{ title: 'Disputes' }} />
+      <Stack.Screen name="PhysioOnboarding" component={PhysioOnboardingScreen} options={{ title: 'Onboarding' }} />
+      <Stack.Screen name="PhysioVerification" component={PhysioVerificationRedirectScreen} options={{ headerShown: false }} />
       <Stack.Screen name="PhysioList" component={PhysioListScreen} options={{ title: 'Book' }} />
       <Stack.Screen name="ReferEarn" component={ReferEarnScreen} options={{ title: 'Refer & Earn' }} />
       <Stack.Screen name="MapView" component={PlaceholderScreen} options={{ title: 'Map' }} />

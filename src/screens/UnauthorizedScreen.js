@@ -38,14 +38,14 @@ export default function UnauthorizedScreen({ navigation }) {
   if (isPhysio) {
     return (
       <View style={styles.wrap}>
-        <Text style={styles.title}>Use the provider app</Text>
+        <Text style={styles.title}>Wrong account type</Text>
         <Text style={styles.sub}>
-          Physiotherapist accounts sign in through the PhysiOkhom Provider app, not this patient app. Install the
-          provider app and sign in with the same phone number.
+          This screen appears when a physiotherapist account tried to open the patient area. Use the workspace tabs
+          below after signing in, or log out and sign in again.
         </Text>
-        <Button title="Log out" onPress={() => logout(navigation)} />
+        <Button title="Open workspace" onPress={() => navigation.replace('PhysioTabs')} />
         <View style={styles.btnGap} />
-        <Button title="Go home" variant="outline" onPress={() => navigation.replace('Home')} />
+        <Button title="Log out" variant="outline" onPress={() => logout(navigation)} />
       </View>
     )
   }

@@ -44,7 +44,13 @@ export function marketplacePaymentStatusLabel(status) {
 }
 
 export function sessionStatusLabel(b) {
-  if (b.sessionStatus === 'completed') return 'Completed'
+  if (b.sessionStatus === 'completed' || b.status === 'completed') return 'Completed'
+  if (b.status === 'assigned') {
+    if (b.planStatus === 'proposed') return 'Awaiting Approval'
+    if (b.planStatus === 'approved') return 'Awaiting Acceptance'
+    return 'Propose Plan'
+  }
+  if (b.status === 'pending' || b.planStatus === 'requested') return 'Propose Plan'
   if (b.rescheduled) return 'Rescheduled'
   return 'Scheduled'
 }
