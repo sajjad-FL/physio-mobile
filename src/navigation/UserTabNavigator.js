@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { CommonActions, useNavigation } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
+import { View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../context/AuthContext'
 import { getTokenSync, getRoleSync } from '../auth/tokenStore'
@@ -15,6 +16,7 @@ import ProfileScreen from '../screens/ProfileScreen'
 import UserTopNavHeader from '../components/UserTopNavHeader'
 import CustomTabBar from './CustomTabBar'
 import PatientAppTourProvider from '../tour/PatientAppTourProvider'
+import WhatsAppSupportFab from '../components/WhatsAppSupportFab'
 import { defaultNativeStackScreenOptions, defaultTabScreenOptions } from './navLayout'
 
 const Tab = createBottomTabNavigator()
@@ -51,6 +53,7 @@ export default function UserTabNavigator() {
 
   return (
     <PatientAppTourProvider>
+      <View style={{ flex: 1 }}>
       <Tab.Navigator
       detachInactiveScreens
       tabBar={(props) => <CustomTabBar {...props} />}
@@ -138,6 +141,8 @@ export default function UserTabNavigator() {
         }}
       />
     </Tab.Navigator>
+    <WhatsAppSupportFab />
+    </View>
     </PatientAppTourProvider>
   )
 }

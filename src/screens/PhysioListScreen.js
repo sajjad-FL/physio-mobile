@@ -26,9 +26,11 @@ import { useReferralMyCode } from '../api/queries'
 import { useAuth } from '../context/AuthContext'
 import { ISSUE_OPTIONS, ISSUE_OTHER_VALUE } from '../constants/issues'
 import { formatBookingDateAndSlot, formatBookingTimeSlot } from '../utils/date'
+import { extractPincode } from '../utils/pincode'
 import { assetUrl } from '../utils/assetUrl'
 import MapPickerModal from '../components/booking/MapPickerModal'
 import DropdownField from '../components/ui/DropdownField'
+import WhatsAppSupportFab from '../components/WhatsAppSupportFab'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 
@@ -675,12 +677,14 @@ export default function PhysioListScreen({ navigation, route }) {
         ...(Number.isFinite(addressLat) && { lat: addressLat }),
         ...(Number.isFinite(addressLng) && { lng: addressLng }),
       }
+      const pincode = extractPincode(location.trim())
+      if (pincode) body.pincode = pincode
 
       if (serviceType === 'home') {
         const bookingRes = await api.post('/bookings/request-home', body)
         const newBookingId = bookingRes.data?._id
         setSuccessServiceType('home')
-        setSuccessMessage("Your request has been received. We'll notify you once a physiotherapist is assigned.")
+        setSuccessMessage("Your request has been received. A care manager will contact you and prepare your treatment plan.")
         setSuccessBookingId(newBookingId || 'new')
         return
       }
@@ -1335,13 +1339,13 @@ export default function PhysioListScreen({ navigation, route }) {
                     <View style={[styles.howItWorksIcon, { backgroundColor: colors.blue50 }]}>
                       <Ionicons name="people-outline" size={16} color={colors.blue600} />
                     </View>
-                    <Text style={styles.howItWorksTxt}>Our admin team picks a verified physiotherapist for your slot.</Text>
+                    <Text style={styles.howItWorksTxt}>A care manager visits, creates your plan, and assigns your physiotherapist.</Text>
                   </View>
                   <View style={[styles.howItWorksRow, { marginBottom: 0 }]}>
                     <View style={[styles.howItWorksIcon, { backgroundColor: colors.violet50 }]}>
                       <Ionicons name="notifications-outline" size={16} color={colors.violet800} />
                     </View>
-                    <Text style={styles.howItWorksTxt}>You'll see their name and contact once matched.</Text>
+                    <Text style={styles.howItWorksTxt}>You&apos;ll consent to the plan in the app, then sessions begin.</Text>
                   </View>
                 </View>
               )}
@@ -1661,6 +1665,7 @@ export default function PhysioListScreen({ navigation, route }) {
           </View>
         </View>
       </Modal>
+      <WhatsAppSupportFab bottomExtra={20} />
     </View>
   )
 }

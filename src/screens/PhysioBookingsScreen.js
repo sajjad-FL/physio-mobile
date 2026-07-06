@@ -20,19 +20,13 @@ import { usePhysioBookings } from '../api/queries'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { formatBookingDateAndSlot } from '../utils/date'
+import { physioListStatusLabel } from '../utils/bookingDisplay'
 import { normalizeIndianPhone } from '../utils/phoneIndia'
 import { matchesFilters } from '../utils/physioBookingHelpers'
+import { isAwaitingPatientConsent, isPlanLive, isManagerOwnedBooking } from '../utils/planStatus'
 
 function listStatusLabel(b) {
-  if (b.sessionStatus === 'completed' || b.status === 'completed') return 'Completed'
-  if (b.status === 'assigned') {
-    if (b.planStatus === 'proposed') return 'Awaiting Approval'
-    if (b.planStatus === 'approved') return 'Awaiting Acceptance'
-    return 'Propose Plan'
-  }
-  if (b.status === 'pending' || b.planStatus === 'requested') return 'Propose Plan'
-  if (b.rescheduled) return 'Rescheduled'
-  return 'Scheduled'
+  return physioListStatusLabel(b)
 }
 
 function patientInitial(name) {
@@ -42,12 +36,10 @@ function patientInitial(name) {
 
 function statusAccent(b) {
   if (b.sessionStatus === 'completed' || b.status === 'completed') return colors.success
-  if (b.status === 'assigned') {
-    if (b.planStatus === 'proposed') return colors.blue600
-    if (b.planStatus === 'approved') return colors.warning
-    return colors.warning
-  }
-  if (b.status === 'pending' || b.planStatus === 'requested') return colors.warning
+  if (isManagerOwnedBooking(b)) return colors.brand
+  if (isAwaitingPatientConsent(b.planStatus)) return colors.blue600
+  if (isPlanLive(b.planStatus)) return colors.success
+  if (b.status === 'assigned' || b.status === 'pending' || b.planStatus === 'requested') return colors.warning
   if (b.rescheduled) return colors.warning
   return colors.brand
 }
@@ -56,16 +48,16 @@ function statusChipColors(b) {
   if (b.sessionStatus === 'completed' || b.status === 'completed') {
     return { bg: colors.successBg, fg: colors.emerald700, border: '#a7f3d0' }
   }
-  if (b.status === 'assigned') {
-    if (b.planStatus === 'proposed') {
-      return { bg: colors.blue50, fg: colors.blue800, border: '#bfdbfe' }
-    }
-    if (b.planStatus === 'approved') {
-      return { bg: '#fff7ed', fg: '#c2410c', border: '#ffedd5' }
-    }
-    return { bg: colors.amber50, fg: colors.amber800, border: '#fde68a' }
+  if (isManagerOwnedBooking(b)) {
+    return { bg: colors.teal50, fg: colors.teal800, border: colors.brandSoft }
   }
-  if (b.status === 'pending' || b.planStatus === 'requested') {
+  if (isAwaitingPatientConsent(b.planStatus)) {
+    return { bg: colors.blue50, fg: colors.blue800, border: '#bfdbfe' }
+  }
+  if (isPlanLive(b.planStatus)) {
+    return { bg: colors.successBg, fg: colors.emerald700, border: '#a7f3d0' }
+  }
+  if (b.status === 'assigned' || b.status === 'pending' || b.planStatus === 'requested') {
     return { bg: colors.amber50, fg: colors.amber800, border: '#fde68a' }
   }
   if (b.rescheduled) {

@@ -77,10 +77,10 @@ export function getTokenSync() {
   return memoryToken
 }
 
-/** @returns {'user'|'physio'|'admin'} */
+/** @returns {'user'|'physio'|'admin'|'care_manager'} */
 export function getRoleSync() {
   if (memoryRole === 'patient') return 'user'
-  if (memoryRole === 'user' || memoryRole === 'physio' || memoryRole === 'admin') return memoryRole
+  if (memoryRole === 'user' || memoryRole === 'physio' || memoryRole === 'admin' || memoryRole === 'care_manager') return memoryRole
   return 'user'
 }
 
@@ -102,7 +102,7 @@ export async function hydrateFromStorage() {
       storageGetItem(PROFILE_COMPLETE_KEY),
     ])
     memoryToken = t || null
-    memoryRole = r === 'physio' || r === 'admin' || r === 'user' ? r : r === 'patient' ? 'user' : 'user'
+    memoryRole = r === 'physio' || r === 'admin' || r === 'care_manager' || r === 'user' ? r : r === 'patient' ? 'user' : 'user'
     memoryProfileComplete = pc === '1' ? true : pc === '0' ? false : null
   } catch {
     memoryToken = null
@@ -119,7 +119,11 @@ export async function hydrateFromStorage() {
  */
 export async function setSession(token, role, isProfileComplete) {
   const norm =
-    role === 'physio' || role === 'admin' ? role : role === 'patient' || role === 'user' ? 'user' : 'user'
+    role === 'physio' || role === 'admin' || role === 'care_manager'
+      ? role
+      : role === 'patient' || role === 'user'
+        ? 'user'
+        : 'user'
   memoryToken = token
   memoryRole = norm
   if (typeof isProfileComplete === 'boolean') {

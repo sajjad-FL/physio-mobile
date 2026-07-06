@@ -4,17 +4,18 @@ import Button from '../components/ui/Button'
 import { clearSession, getRoleSync } from '../auth/tokenStore'
 import { useAuth } from '../context/AuthContext'
 import { colors } from '../theme/colors'
-import { getWebLoginUrl, openWebLoginInBrowser } from '../utils/webApp'
+import { getWebLoginUrl, openWebLoginInBrowser, openWebManagerInBrowser } from '../utils/webApp'
 
 export default function UnauthorizedScreen({ navigation }) {
   const { logout } = useAuth()
   const [envHint, setEnvHint] = useState('')
   const role = getRoleSync()
   const isAdmin = role === 'admin'
+  const isCareManager = role === 'care_manager'
   const isPhysio = role === 'physio'
 
   useEffect(() => {
-    if (!isAdmin) return
+    if (!isAdmin && !isCareManager) return
     const url = getWebLoginUrl()
     if (!url) {
       setEnvHint('Set EXPO_PUBLIC_SITE_URL in .env to your web app base URL (e.g. https://your-domain.com).')
@@ -23,7 +24,11 @@ export default function UnauthorizedScreen({ navigation }) {
     let cancelled = false
     const t = setTimeout(() => {
       ;(async () => {
-        await openWebLoginInBrowser()
+        if (isCareManager) {
+          await openWebManagerInBrowser()
+        } else {
+          await openWebLoginInBrowser()
+        }
         if (cancelled) return
         await clearSession()
         navigation.replace('Home')
@@ -33,7 +38,7 @@ export default function UnauthorizedScreen({ navigation }) {
       cancelled = true
       clearTimeout(t)
     }
-  }, [navigation, isAdmin])
+  }, [navigation, isAdmin, isCareManager])
 
   if (isPhysio) {
     return (
@@ -50,12 +55,28 @@ export default function UnauthorizedScreen({ navigation }) {
     )
   }
 
-  if (!isAdmin) {
+  if (!isAdmin && !isCareManager) {
     return (
       <View style={styles.wrap}>
         <Text style={styles.title}>Unauthorized</Text>
         <Text style={styles.sub}>You don&apos;t have access to that area.</Text>
         <Button title="Go home" onPress={() => navigation.replace('Home')} />
+      </View>
+    )
+  }
+
+  if (isCareManager) {
+    return (
+      <View style={styles.wrap}>
+        <Text style={styles.title}>Use the web app</Text>
+        <Text style={styles.sub}>
+          Care manager tools aren&apos;t available in this mobile app. We&apos;re opening your browser to the manager
+          dashboard — use the same account there to manage visits, plans, and collections.
+        </Text>
+        {envHint ? <Text style={styles.hint}>{envHint}</Text> : null}
+        <Button title="Open manager dashboard" variant="primary" onPress={() => openWebManagerInBrowser()} />
+        <View style={{ height: 10 }} />
+        <Button title="Go home" variant="outline" onPress={() => navigation.replace('Home')} />
       </View>
     )
   }

@@ -22,6 +22,7 @@ import {
 import { formatBookingDateAndSlot, formatBookingTimeSlot } from '../utils/date'
 import { openGoogleMapsDestination } from '../utils/googleMaps'
 import { normalizeSessionRows } from '../utils/physioBookingHelpers'
+import { isAwaitingPatientConsent, isPlanLive, isManagerOwnedBooking } from '../utils/planStatus'
 import DropdownField from '../components/ui/DropdownField'
 
 const ScrollView = Platform.OS === 'web' ? RNScrollView : GHScrollView
@@ -317,6 +318,7 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
 
   const showCreatePlan = useMemo(() => {
     if (!booking) return false
+    if (booking.managerId) return false
     return (
       booking.serviceType === 'home' &&
       (booking.planStatus === 'requested' || booking.planStatus === 'rejected' || booking.planStatus == null)
@@ -343,7 +345,7 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
   const paidPercent = totalAmount > 0 ? Math.min(100, (effectivePaid / totalAmount) * 100) : 0
   const milestoneStatus = paymentSummary?.milestoneStatus ?? null
   const showInstallments =
-    booking?.planStatus === 'approved' || booking?.serviceType === 'online' || paymentsList.length > 0
+    isPlanLive(booking?.planStatus) || booking?.serviceType === 'online' || paymentsList.length > 0
 
   const hasPaymentForSession = useCallback(
     (sessionId) => {
@@ -400,7 +402,7 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
 
   const showPlanPending = useMemo(() => {
     if (!booking) return false
-    return booking.serviceType === 'home' && booking.planStatus === 'proposed'
+    return booking.serviceType === 'home' && isAwaitingPatientConsent(booking.planStatus)
   }, [booking])
 
   async function completeSession(bookingId) {
@@ -610,11 +612,8 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
 
   const b = booking
   const busy = busyId === b._id
-  // isAssigned drives the Accept/Decline gate.
-  // If planStatus is already 'proposed', the physio already engaged with the booking —
-  // treat it as accepted regardless of the stored status to avoid locking into the
-  // assignment-pending view if the status update was delayed.
-  const isAssigned = b.status === 'assigned' && b.planStatus !== 'proposed' && b.planStatus !== 'approved'
+  const managerOwned = isManagerOwnedBooking(b)
+  const isAssigned = false
   const canStartNavigation = Boolean(b.userId?.coordinates || String(b.userId?.location || '').trim())
   const hasPhone = Boolean(b.userId?.phone)
   const scrollBottomPad = 14 + insets.bottom + 14
@@ -791,7 +790,11 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
             {showPlanPending ? (
               <View style={styles.bannerMint}>
                 <Ionicons name="time-outline" size={14} color={colors.teal800} />
-                <Text style={styles.bannerMintTxt}>Awaiting patient approval on the proposed plan.</Text>
+                <Text style={styles.bannerMintTxt}>
+                  {managerOwned
+                    ? 'Awaiting patient consent on the care plan.'
+                    : 'Awaiting patient consent on the proposed plan.'}
+                </Text>
               </View>
             ) : null}
 
@@ -856,7 +859,9 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                   
                   // Check if a payment milestone blocks this specific session
                   const sessionMilestoneBlocked = Boolean(
-                    milestoneStatus?.some((m) => m.bySession <= r.n && !m.met)
+                    b.serviceType !== 'home' &&
+                      !b.managerId &&
+                      milestoneStatus?.some((m) => m.bySession <= r.n && !m.met)
                   )
                   const milestoneNeeded = sessionMilestoneBlocked
                     ? milestoneStatus.find((m) => m.bySession <= r.n && !m.met)
@@ -872,7 +877,7 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                     ? 'Accept the assignment first'
                     : isUpcoming
                     ? 'Available on the scheduled day'
-                    : !paymentSummary
+                    : !paymentSummary && b.serviceType !== 'home' && !b.managerId
                     ? 'Payment must be secured before completion'
                     : sessionMilestoneBlocked
                     ? milestoneMsg
@@ -1171,9 +1176,9 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                       <Ionicons name="hourglass-outline" size={26} color={colors.warning} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.planPendingTitle}>Awaiting approval</Text>
+                      <Text style={styles.planPendingTitle}>Awaiting consent</Text>
                       <Text style={styles.planPendingBody}>
-                        Patient reviewing your {b.sessions}-session plan
+                        Patient reviewing the {b.sessions}-session care plan
                       </Text>
                     </View>
                   </View>
@@ -1184,15 +1189,15 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                     <PlanKV label="Total" value={paymentAmountLabel(b)} highlight />
                   </View>
                 </View>
-              ) : b.planStatus === 'approved' ? (
+              ) : isPlanLive(b.planStatus) ? (
                 <View style={styles.planApprovedCard}>
                   <View style={styles.planApprovedHead}>
                     <View style={styles.planApprovedIconWrap}>
                       <Ionicons name="checkmark-circle" size={22} color={colors.success} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.planApprovedTitle}>Plan approved</Text>
-                      <Text style={styles.planApprovedSub}>Patient accepted the plan. Sessions are active.</Text>
+                      <Text style={styles.planApprovedTitle}>Plan active</Text>
+                      <Text style={styles.planApprovedSub}>Patient consented. Sessions are active.</Text>
                     </View>
                   </View>
                   <View style={styles.planPendingKVs}>
@@ -1223,7 +1228,7 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                 payments={paymentsList}
                 emptyMessage={isOfflinePlan ? 'No collections recorded yet.' : 'No online installments yet.'}
               >
-                {isOfflinePlan && outstanding > 0.009 && b.planStatus === 'approved' ? (
+                {isOfflinePlan && outstanding > 0.009 && isPlanLive(b.planStatus) && !b.managerId ? (
                   <Pressable
                     style={styles.recordCollectionBtn}
                     onPress={() => {

@@ -11,6 +11,7 @@ import { figmaTokens } from '../theme/figmaTokens'
 import { api } from '../api/client'
 import { usePricingSettings } from '../api/queries'
 import { buildMobilePlanTierCards, FALLBACK_PLAN_TIER_CARDS } from '../utils/planTierDisplay'
+import { isAwaitingPatientConsent, isPlanLive } from '../utils/planStatus'
 
 const DEFAULT_SERVICE_AREA = {
   label: 'Kokrajhar',
@@ -38,8 +39,8 @@ function extractAreaLabel(location, fallback = DEFAULT_SERVICE_AREA.label) {
 
 function countActionableBookings(bookings) {
   return (Array.isArray(bookings) ? bookings : []).filter((b) => {
-    if (b?.planStatus === 'proposed') return true
-    if (b?.planStatus === 'approved' && b?.paymentStatus === 'pending') return true
+    if (isAwaitingPatientConsent(b?.planStatus)) return true
+    if (isPlanLive(b?.planStatus) && b?.paymentStatus === 'pending') return true
     return false
   }).length
 }
@@ -277,9 +278,9 @@ const HealthHubCard = memo(function HealthHubCard({ token, navigation, openWhats
         : 'To be scheduled'
 
     const planTitle = activeBooking.issue || 'Home Visit Plan'
-    const badgeLabel = activeBooking.planStatus === 'proposed'
-      ? 'Plan Pending Approval'
-      : activeBooking.planStatus === 'approved'
+    const badgeLabel = isAwaitingPatientConsent(activeBooking.planStatus)
+      ? 'Consent needed'
+      : isPlanLive(activeBooking.planStatus)
         ? 'Active Recovery Plan'
         : 'Booking Confirmed'
 

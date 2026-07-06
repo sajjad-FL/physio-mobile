@@ -12,7 +12,9 @@ import {
   paymentStatusLabel,
   sessionStatusLabel,
 } from '../utils/bookingDisplay'
+import { isAwaitingPatientConsent, isPlanLive } from '../utils/planStatus'
 import { normalizeSessionRows } from '../utils/physioBookingHelpers'
+import { openSupportWhatsApp } from '../utils/supportContact'
 import InstallmentsPhysioCard from '../components/physio/InstallmentsPhysioCard'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
@@ -173,6 +175,12 @@ function PendingBookingView({ booking: b, navigation, refreshing, onRefresh }) {
 
   const serviceLabel = b.serviceType === 'online' ? 'Online Consultation' : 'Home Visit'
   const bookingRef = b._id ? `#${String(b._id).slice(-6).toUpperCase()}` : '—'
+  const managerName =
+    b.managerId && typeof b.managerId === 'object' ? b.managerId.name : null
+  const heading = managerName ? 'Your Care Manager is on it' : 'We received your booking'
+  const subcopy = managerName
+    ? `${managerName} will visit, prepare your plan, and coordinate your physiotherapist.`
+    : 'Our team is assigning a care manager for your home visit. You will be notified when your plan is ready.'
 
   return (
     <View style={styles.pendingRoot}>
@@ -213,10 +221,8 @@ function PendingBookingView({ booking: b, navigation, refreshing, onRefresh }) {
         </View>
 
         {/* Headline */}
-        <Text style={styles.pendingHeadline}>Finding Your Physiotherapist</Text>
-        <Text style={styles.pendingSubMsg}>
-          We're assigning the best specialist for your condition.{'\n'}You'll be notified once confirmed.
-        </Text>
+        <Text style={styles.pendingHeadline}>{heading}</Text>
+        <Text style={styles.pendingSubMsg}>{subcopy}</Text>
 
         {/* Booking summary card */}
         <View style={styles.pendingSummaryCard}>
@@ -224,6 +230,12 @@ function PendingBookingView({ booking: b, navigation, refreshing, onRefresh }) {
             <Text style={styles.pendingKvLabel}>Date & Time</Text>
             <Text style={styles.pendingKvValue}>{formatBookingDateAndSlot(b.date, b.timeSlot) || '—'}</Text>
           </View>
+          {managerName ? (
+            <View style={[styles.pendingKvRow]}>
+              <Text style={styles.pendingKvLabel}>Care Manager</Text>
+              <Text style={styles.pendingKvValue}>{managerName}</Text>
+            </View>
+          ) : null}
           <View style={[styles.pendingKvRow]}>
             <Text style={styles.pendingKvLabel}>Service</Text>
             <Text style={styles.pendingKvValue}>{serviceLabel}</Text>
@@ -250,11 +262,11 @@ function PendingBookingView({ booking: b, navigation, refreshing, onRefresh }) {
 
         {/* Contact support */}
         <Pressable
-          style={styles.pendingSupportBtn}
-          onPress={() => Linking.openURL('tel:+918453580556').catch(() => {})}
+          style={[styles.pendingSupportBtn, { borderColor: 'rgba(37,211,102,0.35)', backgroundColor: 'rgba(37,211,102,0.08)' }]}
+          onPress={openSupportWhatsApp}
         >
-          <Ionicons name="call-outline" size={15} color={colors.brand} />
-          <Text style={styles.pendingSupportTxt}>Contact Support</Text>
+          <Ionicons name="logo-whatsapp" size={16} color="#25D366" />
+          <Text style={[styles.pendingSupportTxt, { color: '#128C7E' }]}>Chat on WhatsApp</Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -511,14 +523,14 @@ export default function UserBookingDetailScreen({ route, navigation }) {
 
   useEffect(() => { load() }, [load])
 
-  const approvePlan = useCallback(async () => {
+  const consentToPlan = useCallback(async () => {
     if (!b?._id) return
     try {
-      await api.patch(`/bookings/${b._id}/approve`)
-      Toast.show({ type: 'success', text1: 'Plan approved. You can proceed with payment.' })
+      await api.post(`/bookings/${b._id}/consent-plan`)
+      Toast.show({ type: 'success', text1: 'Plan is live. Your care team will proceed.' })
       load()
     } catch (e) {
-      Toast.show({ type: 'error', text1: e.response?.data?.message || 'Could not approve plan' })
+      Toast.show({ type: 'error', text1: e.response?.data?.message || 'Could not submit consent' })
     }
   }, [b?._id, load])
 
@@ -606,10 +618,11 @@ export default function UserBookingDetailScreen({ route, navigation }) {
   // Show waiting screen only while assignment is pending (physio hasn't accepted).
   // planStatus === 'proposed' means the physio already engaged with the booking —
   // never send the patient back to the waiting screen at that stage.
-  const planProposed = b.serviceType === 'home' && b.planStatus === 'proposed'
-  const planApproved = b.serviceType === 'home' && b.planStatus === 'approved'
+  const planAwaitingConsent =
+    b.serviceType === 'home' && isAwaitingPatientConsent(b.planStatus)
+  const planLive = b.serviceType === 'home' && isPlanLive(b.planStatus)
 
-  if ((b.status === 'pending' || b.status === 'assigned') && !planProposed && !planApproved) {
+  if ((b.status === 'pending' || b.status === 'assigned') && !planAwaitingConsent && !planLive) {
     return <PendingBookingView booking={b} navigation={navigation} refreshing={refreshing} onRefresh={onRefresh} />
   }
 
@@ -626,7 +639,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
   const totalPaid = Number(paymentSummary?.totalPaid ?? b.totalPaid ?? 0)
   const totalCollected = Number(paymentSummary?.totalCollected ?? 0)
   const effectivePaid = totalPaid + totalCollected
-  const planReady = b.serviceType === 'online' || b.planStatus === 'approved'
+  const planReady = b.serviceType === 'online' || isPlanLive(b.planStatus)
   const showInstallments = planReady && (sessionsCount > 1 || isOnlineBooking) && (Number(b.totalAmount || 0) > 0 || paymentsList.length > 0)
   const showLegacyPay = b.paymentStatus === 'pending' && planReady && !(b.serviceType === 'home' && b.homePlanPaymentMode === 'offline')
   const reviewedSessionIds = new Set(reviews.map((r) => (r.sessionId ? String(r.sessionId) : 'booking')))
@@ -762,7 +775,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
         onChange={setActiveTab}
         tabs={BASE_TABS}
         badges={{
-          overview: planProposed,
+          overview: planAwaitingConsent,
           payments: b.paymentStatus === 'pending' && planReady && !(b.serviceType === 'home' && b.homePlanPaymentMode === 'offline')
         }}
       />
@@ -771,7 +784,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
       {activeTab === 'overview' && (
         <View style={styles.tabPanel}>
           {/* Plan review card — shown when physio has proposed a plan */}
-          {planProposed ? (
+          {planAwaitingConsent ? (
             <View style={styles.planReviewCard}>
               {/* Header */}
               <View style={styles.planReviewHeader}>
@@ -779,8 +792,8 @@ export default function UserBookingDetailScreen({ route, navigation }) {
                   <Ionicons name="document-text-outline" size={20} color={colors.brand} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.planReviewTitle}>Treatment Plan Proposed</Text>
-                  <Text style={styles.planReviewSub}>Review the details below and approve to proceed</Text>
+                  <Text style={styles.planReviewTitle}>Your Care Plan</Text>
+                  <Text style={styles.planReviewSub}>Review the details below and consent to proceed</Text>
                 </View>
               </View>
 
@@ -856,10 +869,10 @@ export default function UserBookingDetailScreen({ route, navigation }) {
                   styles.planReviewApproveBtn,
                   pressed && { opacity: 0.88, transform: [{ scale: 0.98 }] },
                 ]}
-                onPress={approvePlan}
+                onPress={consentToPlan}
               >
                 <Ionicons name="checkmark-circle-outline" size={18} color={colors.white} />
-                <Text style={styles.planReviewApproveBtnTxt}>Approve Plan</Text>
+                <Text style={styles.planReviewApproveBtnTxt}>I consent to this plan</Text>
               </Pressable>
             </View>
           ) : null}

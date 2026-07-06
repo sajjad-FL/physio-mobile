@@ -1,4 +1,5 @@
 import { formatBookingDateAndSlot } from './date'
+import { isPlanLive, isAwaitingPatientConsent, isManagerOwnedBooking } from './planStatus'
 
 export function paymentAmountLabel(b) {
   if (b.totalAmount != null && Number(b.totalAmount) > 0) {
@@ -36,21 +37,48 @@ export function marketplacePaymentStatusLabel(status) {
   const m = {
     pending: 'Awaiting payment',
     paid: 'Paid (online)',
-    collected: 'Collected (pending admin)',
-    verified: 'Verified (offline)',
+    collected: 'Collected',
+    verified: 'Verified',
     refunded: 'Refunded',
   }
   return m[status] || status || '—'
 }
 
+/** Patient-facing session / booking step label. */
 export function sessionStatusLabel(b) {
   if (b.sessionStatus === 'completed' || b.status === 'completed') return 'Completed'
-  if (b.status === 'assigned') {
-    if (b.planStatus === 'proposed') return 'Awaiting Approval'
-    if (b.planStatus === 'approved') return 'Awaiting Acceptance'
-    return 'Propose Plan'
+
+  if (isManagerOwnedBooking(b) && b.serviceType === 'home') {
+    if (isAwaitingPatientConsent(b.planStatus)) return 'Awaiting consent'
+    if (isPlanLive(b.planStatus)) return 'Plan active'
+    return 'Care manager assigned'
   }
-  if (b.status === 'pending' || b.planStatus === 'requested') return 'Propose Plan'
+
+  if (isAwaitingPatientConsent(b.planStatus)) return 'Awaiting consent'
+  if (isPlanLive(b.planStatus)) return 'Plan active'
+
+  if (b.status === 'assigned' || b.status === 'accepted') return 'Scheduled'
+  if (b.status === 'pending') return 'Awaiting care team'
+  if (b.rescheduled) return 'Rescheduled'
+  return 'Scheduled'
+}
+
+/** Physio bookings list chip label. */
+export function physioListStatusLabel(b) {
+  if (b.sessionStatus === 'completed' || b.status === 'completed') return 'Completed'
+
+  if (isManagerOwnedBooking(b)) {
+    if (isPlanLive(b.planStatus)) return 'Treat patient'
+    if (isAwaitingPatientConsent(b.planStatus)) return 'Awaiting consent'
+    return 'Care manager case'
+  }
+
+  if (b.status === 'assigned') {
+    if (isAwaitingPatientConsent(b.planStatus)) return 'Awaiting consent'
+    if (isPlanLive(b.planStatus)) return 'Treat patient'
+    return 'Create plan'
+  }
+  if (b.status === 'pending' || b.planStatus === 'requested') return 'Create plan'
   if (b.rescheduled) return 'Rescheduled'
   return 'Scheduled'
 }
