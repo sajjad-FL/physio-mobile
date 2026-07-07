@@ -8,6 +8,7 @@ import { font, type } from '../../theme/typography'
 import { formatBookingTimeSlot } from '../../utils/date'
 import { paymentAmountLabel } from '../../utils/bookingDisplay'
 import DropdownField from '../ui/DropdownField'
+import { usePricingSettings } from '../../api/queries'
 
 function round2(n) {
   return Math.round((Number(n) + Number.EPSILON) * 100) / 100
@@ -168,6 +169,16 @@ function CardHeader({ icon, title, badge, right }) {
 }
 
 export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
+  const { data: pricingSettings } = usePricingSettings()
+  const maxDiscountPercent = Number(pricingSettings?.homePlanMaxDiscountPercent) || 15
+  const tierBySessions = useMemo(() => {
+    const map = new Map()
+    for (const tier of pricingSettings?.planTiers || PLAN_TIERS) {
+      map.set(Number(tier.sessions), tier)
+    }
+    return map
+  }, [pricingSettings?.planTiers])
+
   const physio = booking?.physioId
   const feeLo = Number(physio?.pricePerSession)
   const fixedFee = Number.isFinite(feeLo) && feeLo > 0
@@ -178,10 +189,17 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
   const [selectedTierValue, setSelectedTierValue] = useState(PLAN_TIERS[0].value)
   const selectedTier = PLAN_TIERS.find((t) => t.value === selectedTierValue) ?? PLAN_TIERS[0]
   const sessions = selectedTier.sessions
-  const discountPercent = selectedTier.discountPercent
+
+  const [billingType, setBillingType] = useState('installment')
+  const discountPercent = useMemo(() => {
+    if (billingType !== 'full') return 0
+    const tier = tierBySessions.get(sessions)
+    const raw = Number(tier?.defaultDiscountPercent ?? 0)
+    return Math.min(maxDiscountPercent, Math.max(0, raw))
+  }, [billingType, sessions, tierBySessions, maxDiscountPercent])
 
   const [sessionTime, setSessionTime] = useState(defaultSlot)
-  const [paymentMode, setPaymentMode] = useState('online')
+  const [paymentMode, setPaymentMode] = useState('offline')
   const [selectedDates, setSelectedDates] = useState(() => (defaultPrimaryDate ? [defaultPrimaryDate] : []))
 
   useEffect(() => {
@@ -239,6 +257,7 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
       sessions,
       amountPerSession: sessionFee,
       discountPercent,
+      billingType,
       paymentMode,
       schedule: sorted.map((d) => ({ date: toYMD(d), time: sessionTime })),
     })
@@ -307,11 +326,52 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
         ) : null}
       </View>
 
-      {/* ── 2. Payment mode ───────────────────────── */}
+      {/* ── 2. Payment type ───────────────────────── */}
+      <View style={styles.card}>
+        <CardHeader icon="wallet-outline" title="Payment type" />
+        <View style={styles.modeRow}>
+          {[
+            { id: 'full', label: 'Full payment', sub: 'Entire plan upfront — admin discount applies' },
+            { id: 'installment', label: 'Installment', sub: 'Pay over milestones — no discount' },
+          ].map(({ id, label, sub }) => {
+            const on = billingType === id
+            return (
+              <Pressable
+                key={id}
+                style={[styles.modeCard, on && styles.modeCardOn]}
+                onPress={() => setBillingType(id)}
+              >
+                <View style={[styles.modeIconWrap, on && styles.modeIconWrapOn]}>
+                  <Ionicons
+                    name={id === 'full' ? 'cash-outline' : 'calendar-outline'}
+                    size={18}
+                    color={on ? colors.white : colors.slate400}
+                  />
+                </View>
+                <Text style={[styles.modeTxt, on && styles.modeTxtOn]}>{label}</Text>
+                <Text style={[styles.modeSubTxt, on && styles.modeSubTxtOn]}>{sub}</Text>
+                {on ? (
+                  <View style={styles.modeCheckWrap}>
+                    <Ionicons name="checkmark-circle" size={16} color={colors.brand} />
+                  </View>
+                ) : null}
+              </Pressable>
+            )
+          })}
+        </View>
+        <View style={styles.fixedRateNote}>
+          <Ionicons name="information-circle-outline" size={11} color={colors.brand} />
+          <Text style={styles.fixedRateNoteTxt}>
+            Discount: {discountPercent}% ({billingType === 'full' ? 'admin full-payment rate' : 'installment — none'})
+          </Text>
+        </View>
+      </View>
+
+      {/* ── 3. Payment mode ───────────────────────── */}
       <View style={styles.card}>
         <CardHeader icon="card-outline" title="Payment mode" />
         <View style={styles.modeRow}>
-          {['online', 'offline'].map((mode) => {
+          {['offline', 'online'].map((mode) => {
             const on = paymentMode === mode
             return (
               <Pressable
@@ -339,7 +399,7 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
         </View>
       </View>
 
-      {/* ── 3. Session dates — inline multi-select calendar ── */}
+      {/* ── 4. Session dates — inline multi-select calendar ── */}
       <View style={styles.card}>
         <CardHeader
           icon="calendar-outline"

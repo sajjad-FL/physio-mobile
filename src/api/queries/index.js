@@ -168,6 +168,7 @@ export function useReferralStats(opts = {}) {
 
 export const FALLBACK_PRICING_SETTINGS = {
   defaultBookingAmountRupees: 500,
+  platformCommissionPerSessionRupees: 100,
   platformCommissionPercent: 20,
   distanceSurchargeBaseKm: 5,
   distanceSurchargePerKmRupees: 5,
