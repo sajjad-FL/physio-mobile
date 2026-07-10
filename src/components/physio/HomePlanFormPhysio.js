@@ -194,9 +194,10 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
   const discountPercent = useMemo(() => {
     if (billingType !== 'full') return 0
     const tier = tierBySessions.get(sessions)
-    const raw = Number(tier?.defaultDiscountPercent ?? 0)
-    return Math.min(maxDiscountPercent, Math.max(0, raw))
-  }, [billingType, sessions, tierBySessions, maxDiscountPercent])
+    const raw = Number(tier?.defaultDiscountPercent)
+    if (!Number.isFinite(raw) || raw < 0) return 0
+    return Math.round(raw * 100) / 100
+  }, [billingType, sessions, tierBySessions])
 
   const [sessionTime, setSessionTime] = useState(defaultSlot)
   const [paymentMode, setPaymentMode] = useState('offline')
