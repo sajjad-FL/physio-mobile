@@ -174,6 +174,12 @@ export const FALLBACK_PRICING_SETTINGS = {
   distanceSurchargePerKmRupees: 5,
   homePlanMaxDiscountPercent: 15,
   defaultPhysioPricePerSession: 500,
+  techniquePrices: {
+    'Cupping Therapy': 800,
+    'Dry Needling': 1000,
+    'Kinesio Taping': 700,
+    IASTM: 900,
+  },
   allowedPlanSessionCounts: [7, 15, 30],
   planTiers: [
     {

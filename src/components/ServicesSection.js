@@ -2,10 +2,12 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { colors } from '../theme/colors'
 import { figmaTokens } from '../theme/figmaTokens'
 import { font, type } from '../theme/typography'
+import { getTechniqueByIssue } from '../constants/techniques'
 
 const imgCupping    = require('../../assets/images/technique_cupping.png')
 const imgNeedling   = require('../../assets/images/technique_needling.png')
 const imgKinesio    = require('../../assets/images/technique_kinesio.png')
+const imgIastm      = require('../../assets/images/technique_iastm.png')
 const imgOrthopedic = require('../../assets/images/specialty_orthopedic.png')
 const imgNeuro      = require('../../assets/images/specialty_neuro.png')
 const imgPediatric  = require('../../assets/images/illustration_pediatric.png')
@@ -22,6 +24,7 @@ const TECHNIQUES = [
   { label: 'Cupping Therapy', issue: 'Cupping Therapy', image: imgCupping,  color: '#ea580c', ring: '#fed7aa', bg: '#fff7ed' },
   { label: 'Dry Needling',    issue: 'Dry Needling',    image: imgNeedling, color: '#7c3aed', ring: '#ddd6fe', bg: '#f5f3ff' },
   { label: 'Kinesio Taping',  issue: 'Kinesio Taping',  image: imgKinesio,  color: '#0d9488', ring: '#99f6e4', bg: '#f0fdfa' },
+  { label: 'IASTM',           issue: 'IASTM',           image: imgIastm,    color: '#0369a1', ring: '#bae6fd', bg: '#f0f9ff', imgScale: 1.22 },
 ]
 
 const SPECIALTIES = [
@@ -49,7 +52,11 @@ function TechniqueChip({ item, onPress }) {
     >
       <View style={[styles.techRing, { backgroundColor: item.ring }]}>
         <View style={[styles.techInner, { backgroundColor: item.bg }]}>
-          <Image source={item.image} style={styles.techImg} resizeMode="contain" />
+          <Image
+            source={item.image}
+            style={[styles.techImg, item.imgScale ? { transform: [{ scale: item.imgScale }] } : null]}
+            resizeMode="contain"
+          />
         </View>
       </View>
       <Text style={[styles.techLabel, { color: item.color }]} numberOfLines={2}>{item.label}</Text>
@@ -115,7 +122,15 @@ export default function ServicesSection({ navigation }) {
         <Text style={styles.subLabel}>Treatment Techniques</Text>
         <View style={styles.techRow}>
           {TECHNIQUES.map((t) => (
-            <TechniqueChip key={t.label} item={t} onPress={() => goBook(t.issue)} />
+            <TechniqueChip
+              key={t.label}
+              item={t}
+              onPress={() => {
+                const tech = getTechniqueByIssue(t.issue)
+                if (tech) navigation.navigate('TechniqueDetail', { slug: tech.slug })
+                else goBook(t.issue)
+              }}
+            />
           ))}
         </View>
       </View>

@@ -11,6 +11,7 @@ export const ISSUE_OPTIONS = [
   'Cupping Therapy',
   'Dry Needling',
   'Kinesio Taping',
+  'IASTM',
 ]
 
 export const ISSUE_OTHER_VALUE = '__other__'

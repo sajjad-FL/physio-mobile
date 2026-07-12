@@ -10,6 +10,8 @@ import UnauthorizedScreen from '../screens/UnauthorizedScreen'
 import ProfileScreen from '../screens/ProfileScreen'
 import PlaceholderScreen from '../screens/PlaceholderScreen'
 import PhysioListScreen from '../screens/PhysioListScreen'
+import TechniqueDetailScreen from '../screens/TechniqueDetailScreen'
+import TechniqueBookScreen from '../screens/TechniqueBookScreen'
 import ReferEarnScreen from '../screens/ReferEarnScreen'
 import PublicPhysicianScreen from '../screens/PublicPhysicianScreen'
 import UserTabNavigator from './UserTabNavigator'
@@ -60,6 +62,8 @@ export default function RootNavigator() {
       <Stack.Screen name="PhysioOnboarding" component={PhysioOnboardingScreen} options={{ title: 'Onboarding' }} />
       <Stack.Screen name="PhysioVerification" component={PhysioVerificationRedirectScreen} options={{ headerShown: false }} />
       <Stack.Screen name="PhysioList" component={PhysioListScreen} options={{ title: 'Book' }} />
+      <Stack.Screen name="TechniqueDetail" component={TechniqueDetailScreen} options={{ title: 'Technique' }} />
+      <Stack.Screen name="TechniqueBook" component={TechniqueBookScreen} options={{ title: 'Book technique' }} />
       <Stack.Screen name="ReferEarn" component={ReferEarnScreen} options={{ title: 'Refer & Earn' }} />
       <Stack.Screen name="MapView" component={PlaceholderScreen} options={{ title: 'Map' }} />
       <Stack.Screen name="BookingLegacy" component={PlaceholderScreen} options={{ title: 'Book (legacy)' }} />

@@ -109,9 +109,10 @@ const SPECIALTIES = [
 ]
 
 const TECHNIQUES = [
-  { id: 'Cupping',        title: 'Cupping Therapy', image: require('../../assets/images/technique_cupping.png'),   bg: '#fff7ed', color: '#c2410c' },
-  { id: 'Dry Needling',   title: 'Dry Needling',    image: require('../../assets/images/technique_needling.png'),  bg: '#f5f3ff', color: '#6d28d9' },
-  { id: 'Kinesio Taping', title: 'Kinesio Taping',  image: require('../../assets/images/technique_kinesio.png'),   bg: '#e6f4f3', color: '#0d6b6b' },
+  { id: 'Cupping Therapy', slug: 'cupping-therapy', title: 'Cupping Therapy', image: require('../../assets/images/technique_cupping.png'),   bg: '#fff7ed', color: '#c2410c' },
+  { id: 'Dry Needling', slug: 'dry-needling', title: 'Dry Needling', image: require('../../assets/images/technique_needling.png'), bg: '#f5f3ff', color: '#6d28d9' },
+  { id: 'Kinesio Taping', slug: 'kinesio-taping', title: 'Kinesio Taping', image: require('../../assets/images/technique_kinesio.png'), bg: '#e6f4f3', color: '#0d6b6b' },
+  { id: 'IASTM', slug: 'iastm', title: 'IASTM', image: require('../../assets/images/technique_iastm.png'), bg: '#f0f9ff', color: '#0369a1' },
 ]
 
 const TESTIMONIALS = [
@@ -896,7 +897,7 @@ export default function HomeScreen({ navigation }) {
               image={tech.image}
               bg={tech.bg}
               color={tech.color}
-              onPress={() => navigation.navigate('PhysioList', { issue: tech.id })}
+              onPress={() => navigation.navigate('TechniqueDetail', { slug: tech.slug })}
             />
           ))}
         </ScrollView>
