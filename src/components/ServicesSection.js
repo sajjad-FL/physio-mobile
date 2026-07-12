@@ -101,23 +101,27 @@ function ConditionCard({ item, onPress }) {
   )
 }
 
-export default function ServicesSection({ navigation }) {
+export default function ServicesSection({
+  navigation,
+  title = 'Book by Need',
+  intro = null,
+}) {
   function goBook(issue) {
     navigation.navigate('PhysioList', issue ? { issue } : {})
   }
 
   return (
     <View style={styles.section}>
-
-      {/* ── Header */}
-      <View style={styles.heading}>
-        <View style={styles.headingIcon}>
-          <Text style={styles.headingIconText}>✦</Text>
+      <View style={styles.headingBlock}>
+        <View style={styles.heading}>
+          <View style={styles.headingIcon}>
+            <Text style={styles.headingIconText}>✦</Text>
+          </View>
+          <Text style={styles.headingText}>{title}</Text>
         </View>
-        <Text style={styles.headingText}>Book by Need</Text>
+        {intro ? <Text style={styles.intro}>{intro}</Text> : null}
       </View>
 
-      {/* ── Treatment Techniques (highlighted box) */}
       <View style={styles.techBox}>
         <Text style={styles.subLabel}>Treatment Techniques</Text>
         <View style={styles.techRow}>
@@ -135,7 +139,6 @@ export default function ServicesSection({ navigation }) {
         </View>
       </View>
 
-      {/* ── Conditions — single horizontal scroll row */}
       <View>
         <Text style={styles.subLabel}>Conditions We Treat</Text>
         <ScrollView
@@ -149,7 +152,6 @@ export default function ServicesSection({ navigation }) {
         </ScrollView>
       </View>
 
-      {/* ── Care Specialties */}
       <View>
         <Text style={styles.subLabel}>Care Specialties</Text>
         <ScrollView
@@ -162,7 +164,6 @@ export default function ServicesSection({ navigation }) {
           ))}
         </ScrollView>
       </View>
-
     </View>
   )
 }
@@ -177,6 +178,9 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
 
   // ── Header
+  headingBlock: {
+    gap: 4,
+  },
   heading: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -198,6 +202,13 @@ const styles = StyleSheet.create({
     fontFamily: font.bold,
     fontSize: type.sm,
     color: colors.textPrimary,
+  },
+  intro: {
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+    lineHeight: 16,
+    paddingLeft: 32,
   },
 
   // ── Sub-label

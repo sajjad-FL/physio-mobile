@@ -87,11 +87,18 @@ export function buildSessionDateSet(bookings) {
 
 /** Earliest upcoming session row on or after today, or null. */
 export function pickNextSession(bookings, today = todayYmd()) {
+  const items = listUpcomingSessions(bookings, today)
+  return items[0] || null
+}
+
+/** All upcoming session rows on or after today, soonest first. */
+export function listUpcomingSessions(bookings, today = todayYmd()) {
   const items = []
   for (const b of bookings || []) {
     if (b.sessionStatus === 'completed' || b.status === 'completed') continue
     for (const r of normalizeSessionRows(b)) {
       if (r.status === 'completed' || r.status === 'no_show') continue
+      if (r.complimentary) continue
       const d = String(r.date || '')
       if (d >= today) {
         items.push({ booking: b, row: r })
@@ -103,5 +110,17 @@ export function pickNextSession(bookings, today = todayYmd()) {
       String(a.row.date).localeCompare(String(b.row.date)) ||
       String(a.row.time || '').localeCompare(String(b.row.time || '')),
   )
-  return items[0] || null
+  return items
+}
+
+/** Other visits on the same calendar day as the primary upcoming session. */
+export function listSameDaySiblings(bookings, primary, today = todayYmd()) {
+  if (!primary?.row?.date) return []
+  const day = String(primary.row.date)
+  const primaryKey = `${primary.booking?._id}:${primary.row?.sessionId || primary.row?.key || primary.row?.n}`
+  return listUpcomingSessions(bookings, today).filter((item) => {
+    if (String(item.row.date) !== day) return false
+    const key = `${item.booking?._id}:${item.row?.sessionId || item.row?.key || item.row?.n}`
+    return key !== primaryKey
+  })
 }
