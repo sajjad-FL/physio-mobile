@@ -11,6 +11,7 @@ import {
   paymentModeLabel,
   paymentStatusLabel,
   sessionStatusLabel,
+  bookingCodeBadge,
 } from '../utils/bookingDisplay'
 import { isAwaitingPatientConsent, isPlanLive } from '../utils/planStatus'
 import { normalizeSessionRows } from '../utils/physioBookingHelpers'
@@ -174,7 +175,7 @@ function PendingBookingView({ booking: b, navigation, refreshing, onRefresh }) {
   const ringOpacity = ringAnim.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0.5, 0.1, 0] })
 
   const serviceLabel = b.serviceType === 'online' ? 'Online Consultation' : 'Home Visit'
-  const bookingRef = b._id ? `#${String(b._id).slice(-6).toUpperCase()}` : '—'
+  const bookingRef = bookingCodeBadge(b) || '—'
   const managerName =
     b.managerId && typeof b.managerId === 'object' ? b.managerId.name : null
   const heading = managerName ? 'Your Care Manager is on it' : 'We received your booking'
@@ -251,7 +252,7 @@ function PendingBookingView({ booking: b, navigation, refreshing, onRefresh }) {
         {/* Booking ID chip */}
         <View style={styles.pendingIdChip}>
           <Ionicons name="receipt-outline" size={11} color={colors.textTertiary} />
-          <Text style={styles.pendingIdTxt}>Booking Ref {bookingRef}</Text>
+          <Text style={styles.pendingIdTxt}>Booking ID {bookingRef}</Text>
         </View>
 
         {/* Status indicator row */}
@@ -669,6 +670,11 @@ export default function UserBookingDetailScreen({ route, navigation }) {
           <Text style={styles.headerIssue} numberOfLines={1}>
             {b.issue || '—'}
           </Text>
+          {bookingCodeBadge(b) ? (
+            <Text style={styles.headerDateCompact} numberOfLines={1}>
+              {bookingCodeBadge(b)}
+            </Text>
+          ) : null}
           <Text style={styles.headerDateCompact} numberOfLines={1}>
             {formatBookingDateAndSlot(b.date, b.timeSlot)}
           </Text>

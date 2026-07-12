@@ -2,6 +2,7 @@ import { memo, useState } from 'react'
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { formatBookingDateAndSlot } from '../utils/date'
+import { bookingCodeBadge } from '../utils/bookingDisplay'
 import Chip from '../components/ui/Chip'
 import PaginationBar from '../components/ui/PaginationBar'
 import { colors } from '../theme/colors'
@@ -79,7 +80,7 @@ export default function DashboardDisputesScreen() {
 const DisputeCard = memo(function DisputeCard({ item }) {
   const chip = disputeStatusBadge(item.status)
   const accent = statusAccent(item.status)
-  const bookingRef = item.bookingId?._id ? `#${String(item.bookingId._id).slice(-6)}` : ''
+  const bookingRef = bookingCodeBadge(item.bookingId) || ''
   const bookingDate = formatBookingDateAndSlot(item.bookingId?.date, item.bookingId?.timeSlot)
 
   return (

@@ -8,6 +8,7 @@ import PaginationBar from '../components/ui/PaginationBar'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { formatBookingDateAndSlot } from '../utils/date'
+import { bookingCodeBadge } from '../utils/bookingDisplay'
 import { disputeStatusBadge } from '../utils/dashboardUtils'
 
 function statusAccent(status) {
@@ -103,7 +104,7 @@ const DisputeCard = memo(function DisputeCard({ item }) {
   const chip = disputeStatusBadge(item.status)
   const accent = statusAccent(item.status)
   const b = item.bookingId
-  const bookingRef = b?._id ? `#${String(b._id).slice(-6)}` : ''
+  const bookingRef = bookingCodeBadge(b) || ''
   const bookingDate = formatBookingDateAndSlot(b?.date, b?.timeSlot)
   const raisedByTxt = item.raisedBy === 'physio' ? 'You raised' : 'Patient raised'
 

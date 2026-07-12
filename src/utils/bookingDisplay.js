@@ -14,6 +14,19 @@ export function paymentAmountLabel(b) {
   return '—'
 }
 
+/** Human-readable booking ID e.g. `2026-101`, or null if not assigned yet. */
+export function formatBookingCode(b) {
+  const code = typeof b === 'string' ? b : b?.bookingCode
+  const trimmed = String(code || '').trim()
+  return trimmed || null
+}
+
+/** Compact label for cards: `#2026-101` or empty string. */
+export function bookingCodeBadge(b) {
+  const code = formatBookingCode(b)
+  return code ? `#${code}` : ''
+}
+
 export function paymentModeLabel(b) {
   if (b.serviceType === 'home') {
     if (b.homePlanPaymentMode === 'offline') return 'Offline (cash / UPI)'
