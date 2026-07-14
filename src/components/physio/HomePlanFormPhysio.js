@@ -8,6 +8,7 @@ import { font, type } from '../../theme/typography'
 import { formatBookingTimeSlot } from '../../utils/date'
 import { paymentAmountLabel } from '../../utils/bookingDisplay'
 import DropdownField from '../ui/DropdownField'
+import RequiredMark from '../ui/RequiredMark'
 import { usePricingSettings } from '../../api/queries'
 
 function round2(n) {
@@ -155,13 +156,16 @@ function MultiDateCalendar({ selectedDates, maxDates, minDate, onChange }) {
   )
 }
 
-function CardHeader({ icon, title, badge, right }) {
+function CardHeader({ icon, title, badge, right, required = false }) {
   return (
     <View style={styles.cardTitleRow}>
       <View style={styles.cardIconBadge}>
         <Ionicons name={icon} size={13} color={colors.brand} />
       </View>
-      <Text style={styles.cardTitle}>{title}</Text>
+      <Text style={styles.cardTitle}>
+        {title}
+        {required ? <RequiredMark /> : null}
+      </Text>
       {badge ? <View style={styles.fixedBadge}><Text style={styles.fixedBadgeTxt}>{badge}</Text></View> : null}
       {right ?? null}
     </View>
@@ -269,7 +273,7 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
 
       {/* ── 1. Plan selector ─────────────────────── */}
       <View style={styles.card}>
-        <CardHeader icon="layers-outline" title="Select plan" />
+        <CardHeader icon="layers-outline" title="Select plan" required />
         <DropdownField
           label={null}
           value={selectedTierValue}
@@ -277,6 +281,7 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
           options={PLAN_TIER_OPTIONS}
           onSelect={(v) => setSelectedTierValue(Number(v))}
           variant="inline"
+          required
         />
 
         <View style={styles.planSummaryBox}>
@@ -405,6 +410,7 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
         <CardHeader
           icon="calendar-outline"
           title="Session dates"
+          required
           right={
             <View style={[styles.dateCountBadge, allDatesFilled && styles.dateCountBadgeFull]}>
               <Text style={[styles.dateCountTxt, allDatesFilled && styles.dateCountTxtFull]}>
@@ -452,7 +458,7 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
 
       {/* ── 4. Session time slot ──────────────────── */}
       <View style={styles.card}>
-        <CardHeader icon="time-outline" title="Session time slot" />
+        <CardHeader icon="time-outline" title="Session time slot" required />
         <DropdownField
           label={null}
           value={sessionTime}
@@ -460,6 +466,7 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
           options={SESSION_TIME_OPTIONS}
           onSelect={setSessionTime}
           variant="inline"
+          required
         />
         <Text style={styles.timeSlotHint}>All {sessions} sessions will use this time slot.</Text>
       </View>

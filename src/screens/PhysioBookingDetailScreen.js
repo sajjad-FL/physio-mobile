@@ -24,6 +24,7 @@ import { openGoogleMapsDestination } from '../utils/googleMaps'
 import { normalizeSessionRows } from '../utils/physioBookingHelpers'
 import { isAwaitingPatientConsent, isPlanLive, isManagerOwnedBooking } from '../utils/planStatus'
 import DropdownField from '../components/ui/DropdownField'
+import RequiredMark from '../components/ui/RequiredMark'
 
 const ScrollView = Platform.OS === 'web' ? RNScrollView : GHScrollView
 
@@ -1345,7 +1346,7 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                   </Text>
                 </View>
               </View>
-              <Text style={styles.inputLabel}>For session</Text>
+              <Text style={styles.inputLabel}>For session<RequiredMark /></Text>
               <DropdownField
                 label={null}
                 value={recordSessionId}
@@ -1353,8 +1354,9 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                 options={collectionSessionOptions}
                 onSelect={setRecordSessionId}
                 variant="inline"
+                required
               />
-              <Text style={[styles.inputLabel, { marginTop: 12 }]}>Amount (₹)</Text>
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>Amount (₹)<RequiredMark /></Text>
               <TextInput
                 style={[styles.inp, recordAmountFocused && styles.inpFocused]}
                 onFocus={() => setRecordAmountFocused(true)}
@@ -1442,7 +1444,7 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                 </View>
               ) : null}
 
-              <Text style={styles.rescheduleLabel}>New date</Text>
+              <Text style={styles.rescheduleLabel}>New date<RequiredMark /></Text>
               {Platform.OS === 'ios' && iosSupportsCompactDate() ? (
                 <View style={styles.rescheduleIosDateWrap}>
                   <DateTimePicker
@@ -1500,7 +1502,7 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                 </>
               )}
 
-              <Text style={[styles.rescheduleLabel, { marginTop: 18 }]}>New time slot</Text>
+              <Text style={[styles.rescheduleLabel, { marginTop: 18 }]}>New time slot<RequiredMark /></Text>
               <DropdownField
                 label={null}
                 value={rescheduleSlot}
@@ -1508,6 +1510,7 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                 options={RESCHEDULE_SLOT_OPTIONS}
                 onSelect={setRescheduleSlot}
                 variant="inline"
+                required
               />
 
               <View style={styles.modalActions}>

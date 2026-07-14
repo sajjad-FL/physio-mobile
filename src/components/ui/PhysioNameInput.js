@@ -24,6 +24,7 @@ const PhysioNameInput = forwardRef(function PhysioNameInput(
     onSubmitEditing,
     blurOnSubmit,
     editable = true,
+    required = false,
   },
   ref,
 ) {
@@ -34,7 +35,12 @@ const PhysioNameInput = forwardRef(function PhysioNameInput(
 
   return (
     <View style={[styles.wrap, style]} collapsable={false}>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
+      {label ? (
+        <Text style={styles.label}>
+          {label}
+          {required ? <Text style={styles.req}> *</Text> : null}
+        </Text>
+      ) : null}
       <View
         style={[styles.fieldShell, focused && styles.fieldShellFocused, error ? styles.fieldShellErr : null]}
         collapsable={false}
@@ -83,6 +89,7 @@ const styles = StyleSheet.create({
     fontSize: type.sm,
     color: colors.slate700,
   },
+  req: { color: colors.danger || '#ef4444' },
   fieldShell: {
     position: 'relative',
     minHeight: 46,

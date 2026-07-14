@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons'
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import DropdownField from '../ui/DropdownField'
+import RequiredMark from '../ui/RequiredMark'
 import { ID_PROOF_TYPE_OPTIONS } from '../../constants/idProofTypes'
 import { colors } from '../../theme/colors'
 import { font, type } from '../../theme/typography'
@@ -62,10 +63,11 @@ export default function GovtIdDocumentSection({
           options={ID_PROOF_TYPE_OPTIONS}
           onSelect={onSelectIdType}
           variant="inline"
+          required
         />
       ) : (
         <Pressable style={styles.optionRow} onPress={onPressIdType}>
-          <Text style={styles.optionLabel}>GOVT ID Type</Text>
+          <Text style={styles.optionLabel}>GOVT ID Type<RequiredMark /></Text>
           <Text style={[styles.optionValue, !idTypeLabel && styles.optionPlaceholder]}>
             {idTypeLabel || 'Select GOVT ID type'}
           </Text>

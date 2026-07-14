@@ -2,6 +2,7 @@ import { memo, useState } from 'react'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
 import SignupHero from '../molecules/SignupHero'
 import SignupContinueButton from '../molecules/SignupContinueButton'
+import RequiredMark from '../../ui/RequiredMark'
 import { authFormCard } from '../../../theme/authFormCard'
 import { colors } from '../../../theme/colors'
 import { font, type } from '../../../theme/typography'
@@ -33,7 +34,7 @@ function SignupPhoneStep({
         subtitle="We will text a one-time code to verify this number."
       />
       <View style={authFormCard}>
-        <Text style={styles.fieldLabel}>Mobile number</Text>
+        <Text style={styles.fieldLabel}>Mobile number<RequiredMark /></Text>
         <View
           style={[
             styles.mobileField,

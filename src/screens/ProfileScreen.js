@@ -34,6 +34,7 @@ import { figmaTokens, figmaShadowCard, figmaShadowGlow } from '../theme/figmaTok
 import { assetUrl } from '../utils/assetUrl'
 import { validateProfileLiveField } from '../utils/profileLiveValidation'
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_SIZE_LABEL } from '../constants/uploadLimits'
+import RequiredMark from '../components/ui/RequiredMark'
 
 const GENDERS = [
   { value: 'male', label: 'Male', icon: 'male' },
@@ -438,7 +439,6 @@ export default function ProfileScreen({ navigation }) {
     if (physio) {
       nextErrors.specialization = validateProfileLiveField('specialization', specialization, { isPhysio: true })
       nextErrors.profileExperience = validateProfileLiveField('profileExperience', experience)
-      nextErrors.profileFees = validateProfileLiveField('profileFees', fees)
     }
     setFieldErrors(nextErrors)
     if (Object.values(nextErrors).some(Boolean)) {
@@ -462,7 +462,6 @@ export default function ProfileScreen({ navigation }) {
           ? {
               specialization: specialization.trim(),
               experience: experience === '' ? 0 : Number(experience),
-              fees: fees === '' ? 0 : Number(fees),
             }
           : {}),
       })
@@ -666,7 +665,7 @@ export default function ProfileScreen({ navigation }) {
           </View>
 
           <PremiumInput
-            label="Full Name"
+            label={<>Full Name<RequiredMark /></>}
             icon="person-outline"
             value={name}
             onChangeText={(v) => { setName(v); patchField('name', v) }}
@@ -773,7 +772,7 @@ export default function ProfileScreen({ navigation }) {
           </View>
 
           <PremiumInput
-            label="Street Address Details"
+            label={<>Street Address Details<RequiredMark /></>}
             icon="home-outline"
             value={addressText}
             onChangeText={(v) => { setAddressText(v); patchField('address', v) }}
@@ -794,7 +793,7 @@ export default function ProfileScreen({ navigation }) {
           </View>
 
           <PremiumDateInput
-            label="Date of Birth"
+            label={<>Date of Birth<RequiredMark /></>}
             value={dob}
             onPress={() => setDobShow(true)}
             error={fieldErrors.dob}
@@ -839,7 +838,7 @@ export default function ProfileScreen({ navigation }) {
 
           <View style={styles.fieldGap} />
 
-          <Text style={styles.inputLabel}>Gender Profile</Text>
+          <Text style={styles.inputLabel}>Gender Profile<RequiredMark /></Text>
           <View style={styles.genderPillsRow}>
             {GENDERS.map((g) => {
               const on = gender === g.value
@@ -876,7 +875,7 @@ export default function ProfileScreen({ navigation }) {
             </View>
 
             <PremiumInput
-              label="Medical Specialization"
+              label={<>Medical Specialization<RequiredMark /></>}
               icon="ribbon-outline"
               value={specialization}
               onChangeText={(v) => { setSpecialization(v); patchField('specialization', v) }}
@@ -902,15 +901,15 @@ export default function ProfileScreen({ navigation }) {
               </View>
               <View style={styles.twoColItem}>
                 <PremiumInput
-                  label="Fees / Session"
+                  label="Fees / Session (admin)"
                   icon="card-outline"
                   value={fees}
-                  onChangeText={(v) => { setFees(v); patchField('profileFees', v) }}
+                  editable={false}
                   keyboardType="decimal-pad"
                   placeholder="₹0"
                   placeholderTextColor={colors.slate400}
-                  error={fieldErrors.profileFees}
                 />
+                <Text style={styles.hintMuted}>Set by admin only</Text>
               </View>
             </View>
           </View>
@@ -1577,6 +1576,12 @@ const styles = StyleSheet.create({
   },
   twoColItem: {
     flex: 1,
+  },
+  hintMuted: {
+    marginTop: 4,
+    fontFamily: font.medium,
+    fontSize: type.xs,
+    color: colors.slate400,
   },
 
   // Bottom Save Changes CTA

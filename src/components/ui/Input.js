@@ -17,6 +17,7 @@ function Input({
   inputStyle,
   variant = 'default',
   signupMutedBg = false,
+  required = false,
   ...props
 }) {
   const isPasswordField = props.secureTextEntry === true
@@ -46,6 +47,7 @@ function Input({
           ]}
         >
           {label}
+          {required ? <Text style={styles.req}> *</Text> : null}
         </Text>
       ) : null}
       {description && isSignup ? <Text style={styles.descriptionSignup}>{description}</Text> : null}
@@ -96,6 +98,7 @@ const styles = StyleSheet.create({
     fontSize: type.sm,
     color: colors.slate700,
   },
+  req: { color: colors.danger || '#ef4444' },
   labelSignup: {
     marginBottom: 6,
     fontFamily: font.medium,

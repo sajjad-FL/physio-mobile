@@ -10,9 +10,24 @@ import { r } from '../../theme/radius'
  * Props: label, value, placeholder, options ([{ value, label }]), onSelect
  * variant: 'modal' (default) — centered sheet; 'inline' — list expands below control (no second modal).
  */
-function DropdownField({ label, value, placeholder = 'Select…', options, onSelect, variant = 'modal' }) {
+function DropdownField({
+  label,
+  value,
+  placeholder = 'Select…',
+  options,
+  onSelect,
+  variant = 'modal',
+  required = false,
+}) {
   const [open, setOpen] = useState(false)
   const selected = options?.find((o) => o.value === value)
+
+  const labelNode = label ? (
+    <Text style={styles.label}>
+      {label}
+      {required ? <Text style={styles.req}> *</Text> : null}
+    </Text>
+  ) : null
 
   const optionList = (options || []).map((opt) => {
     const active = value === opt.value
@@ -34,7 +49,7 @@ function DropdownField({ label, value, placeholder = 'Select…', options, onSel
   if (variant === 'inline') {
     return (
       <View>
-        {label ? <Text style={styles.label}>{label}</Text> : null}
+        {labelNode}
         <Pressable
           style={styles.btn}
           onPress={() => setOpen((o) => !o)}
@@ -60,7 +75,7 @@ function DropdownField({ label, value, placeholder = 'Select…', options, onSel
 
   return (
     <View>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
+      {labelNode}
       <Pressable
         style={styles.btn}
         onPress={() => setOpen(true)}
@@ -77,7 +92,12 @@ function DropdownField({ label, value, placeholder = 'Select…', options, onSel
         <View style={styles.overlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
           <View style={styles.sheet}>
-            {label ? <Text style={styles.sheetTitle}>{label}</Text> : null}
+            {label ? (
+              <Text style={styles.sheetTitle}>
+                {label}
+                {required ? <Text style={styles.req}> *</Text> : null}
+              </Text>
+            ) : null}
             <ScrollView bounces={false} keyboardShouldPersistTaps="handled">
               {optionList}
             </ScrollView>
@@ -90,6 +110,7 @@ function DropdownField({ label, value, placeholder = 'Select…', options, onSel
 
 const styles = StyleSheet.create({
   label: { marginBottom: 6, fontFamily: font.semiBold, fontSize: type.sm, color: colors.slate700 },
+  req: { color: colors.danger || '#ef4444' },
   btn: {
     minHeight: 40,
     borderWidth: 1,

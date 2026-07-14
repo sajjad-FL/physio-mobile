@@ -17,6 +17,7 @@ import { isAwaitingPatientConsent, isPlanLive } from '../utils/planStatus'
 import { normalizeSessionRows } from '../utils/physioBookingHelpers'
 import { openSupportWhatsApp } from '../utils/supportContact'
 import InstallmentsPhysioCard from '../components/physio/InstallmentsPhysioCard'
+import RequiredMark from '../components/ui/RequiredMark'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 
@@ -1228,7 +1229,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
               </Pressable>
             </View>
             <View style={styles.modalDivider} />
-            <Text style={styles.inputLabel}>Reason</Text>
+            <Text style={styles.inputLabel}>Reason<RequiredMark /></Text>
             <TextInput
               value={disputeReason}
               onChangeText={setDisputeReason}
@@ -1236,7 +1237,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
               placeholder="Short reason for the dispute"
               placeholderTextColor={colors.slate300}
             />
-            <Text style={[styles.inputLabel, { marginTop: 12 }]}>Description</Text>
+            <Text style={[styles.inputLabel, { marginTop: 12 }]}>Description<RequiredMark /></Text>
             <TextInput
               value={disputeDescription}
               onChangeText={setDisputeDescription}
@@ -1299,7 +1300,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
               </Pressable>
             </View>
             <View style={styles.modalDivider} />
-            <Text style={styles.inputLabel}>Rating</Text>
+            <Text style={styles.inputLabel}>Rating<RequiredMark /></Text>
             <View style={styles.starPicker}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <Pressable key={n} onPress={() => setReviewRating(n)} hitSlop={6}>
@@ -1366,7 +1367,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
             </View>
             <View style={styles.modalDivider} />
 
-            <Text style={styles.inputLabel}>Payment Amount (₹)</Text>
+            <Text style={styles.inputLabel}>Payment Amount (₹)<RequiredMark /></Text>
             <TextInput
               value={installmentAmount}
               onChangeText={setInstallmentAmount}

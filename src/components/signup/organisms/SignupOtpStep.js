@@ -32,6 +32,7 @@ function SignupOtpStep({
         <Input
           variant="login"
           label="4-digit OTP"
+          required
           placeholder="Enter the 4-digit code"
           keyboardType="number-pad"
           value={otp}

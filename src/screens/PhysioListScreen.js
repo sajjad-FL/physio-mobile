@@ -25,11 +25,13 @@ import { api } from '../api/client'
 import { useReferralMyCode } from '../api/queries'
 import { useAuth } from '../context/AuthContext'
 import { ISSUE_OPTIONS, ISSUE_OTHER_VALUE } from '../constants/issues'
+import { todayISO, defaultBookableDate, filterSelectableSlots } from '../constants/slots'
 import { formatBookingDateAndSlot, formatBookingTimeSlot } from '../utils/date'
 import { extractPincode } from '../utils/pincode'
 import { assetUrl } from '../utils/assetUrl'
 import MapPickerModal from '../components/booking/MapPickerModal'
 import DropdownField from '../components/ui/DropdownField'
+import RequiredMark from '../components/ui/RequiredMark'
 import WhatsAppSupportFab from '../components/WhatsAppSupportFab'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
@@ -76,21 +78,6 @@ function cleanRazorpayPrefill(prefill) {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-function todayISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-/** Returns true when a "HH:MM-HH:MM" slot is in the past or within 2 h from now (client-local). */
-function isSlotUnavailableOnClient(timeSlot) {
-  const m = /^(\d{2}):(\d{2})/.exec(String(timeSlot || '').trim())
-  if (!m) return false
-  const now = new Date()
-  const slotStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(m[1]), Number(m[2]), 0)
-  // past OR within 2-hour lead-time window
-  return (slotStart.getTime() - now.getTime()) < 2 * 60 * 60 * 1000
-}
 
 function chunkSlotRows(items, columns = 2) {
   const rows = []
@@ -417,7 +404,7 @@ export default function PhysioListScreen({ navigation, route }) {
   const [mapPin, setMapPin] = useState({ lat: 26.14, lng: 91.74 })
 
   // Booking fields
-  const [date, setDate] = useState(todayISO())
+  const [date, setDate] = useState(defaultBookableDate)
   const [slots, setSlots] = useState([])
   const [timeSlot, setTimeSlot] = useState('')
   const [issue, setIssue] = useState(route?.params?.issue || '')
@@ -603,15 +590,7 @@ export default function PhysioListScreen({ navigation, route }) {
   const loadSlots = useCallback(async () => {
     try {
       const res = await api.get('/slots', { params: { date } })
-      const isToday = date === todayISO()
-      setSlots(
-        (res.data?.slots || []).filter((s) => {
-          if (!s.available) return false
-          // Client-side guard: hide past/too-soon slots for today (covers server timezone drift)
-          if (isToday && isSlotUnavailableOnClient(s.timeSlot)) return false
-          return true
-        })
-      )
+      setSlots(filterSelectableSlots(res.data?.slots || [], date))
       setTimeSlot('')
     } catch {
       setSlots([])
@@ -1013,6 +992,7 @@ export default function PhysioListScreen({ navigation, route }) {
                 </View>
               ) : (
                 <View style={styles.locationContent}>
+                  <Text style={styles.fieldLabel}>Location<RequiredMark /></Text>
                   {/* Location display card */}
                   <View style={styles.locationCard}>
                     <View style={styles.locationCardLeft}>
@@ -1047,7 +1027,7 @@ export default function PhysioListScreen({ navigation, route }) {
 
                   {/* Name field */}
                   <View style={styles.fieldWrap}>
-                    <Text style={styles.fieldLabel}>Your name</Text>
+                    <Text style={styles.fieldLabel}>Your name<RequiredMark /></Text>
                     <TextInput
                       style={[
                         styles.textInput,
@@ -1124,7 +1104,7 @@ export default function PhysioListScreen({ navigation, route }) {
               </View>
 
               {/* Date Picker Ribbon */}
-              <Text style={styles.fieldLabel}>Select Date</Text>
+              <Text style={styles.fieldLabel}>Select Date<RequiredMark /></Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -1159,7 +1139,7 @@ export default function PhysioListScreen({ navigation, route }) {
 
               {/* Time slot chips grid */}
               <View style={styles.slotSection}>
-                <Text style={styles.fieldLabel}>Available Slots</Text>
+                <Text style={styles.fieldLabel}>Available Slots<RequiredMark /></Text>
                 {slots.length === 0 ? (
                   <View style={styles.noSlotsBox}>
                     <Ionicons name="time-outline" size={16} color={colors.textTertiary} />
@@ -1228,11 +1208,12 @@ export default function PhysioListScreen({ navigation, route }) {
                   }
                 }}
                 variant="inline"
+                required
               />
 
               {issue === ISSUE_OTHER_VALUE ? (
                 <View style={[styles.fieldWrap, { marginTop: 12 }]}>
-                  <Text style={styles.fieldLabel}>Describe your condition</Text>
+                  <Text style={styles.fieldLabel}>Describe your condition<RequiredMark /></Text>
                   <TextInput
                     style={[
                       styles.textInput,
@@ -1407,7 +1388,7 @@ export default function PhysioListScreen({ navigation, route }) {
             <View style={styles.locationModalDivider} />
 
             {/* Search input */}
-            <Text style={styles.fieldLabel}>Address</Text>
+            <Text style={styles.fieldLabel}>Address<RequiredMark /></Text>
             <View style={[
               styles.locationSearchField,
               isSearchFocused && styles.locationSearchFieldFocused

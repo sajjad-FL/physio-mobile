@@ -29,6 +29,7 @@ import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { useAuth } from '../context/AuthContext'
 import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll'
+import RequiredMark from '../components/ui/RequiredMark'
 
 function digitsOnly(text, maxLen) {
   const d = String(text || '').replace(/\D/g, '')
@@ -201,7 +202,7 @@ export default function LoginScreen({ navigation }) {
             {/* Mobile field */}
             <View style={styles.fieldBlock}>
               <Pressable onPress={() => phoneRef.current?.focus()} accessibilityRole="none">
-                <Text style={styles.fieldLabel}>Mobile number</Text>
+                <Text style={styles.fieldLabel}>Mobile number<RequiredMark /></Text>
               </Pressable>
               <View style={[
                 styles.mobileField,
@@ -247,7 +248,7 @@ export default function LoginScreen({ navigation }) {
                 }}
                 accessibilityRole="none"
               >
-                <Text style={styles.fieldLabel}>Password</Text>
+                <Text style={styles.fieldLabel}>Password<RequiredMark /></Text>
               </Pressable>
               <View style={[
                 styles.passField,

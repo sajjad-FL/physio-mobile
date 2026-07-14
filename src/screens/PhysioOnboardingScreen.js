@@ -26,6 +26,7 @@ import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import Input from '../components/ui/Input'
 import PhysioNameInput from '../components/ui/PhysioNameInput'
+import RequiredMark from '../components/ui/RequiredMark'
 import { ID_PROOF_TYPE_OPTIONS } from '../constants/idProofTypes'
 import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll'
 import { PHYSIO_DEGREE_OPTIONS } from '../constants/physioQualification'
@@ -98,10 +99,13 @@ function ErrorBanner({ formError, fieldErrors }) {
   )
 }
 
-function OptionPickRow({ label, valueLabel, error, onPress }) {
+function OptionPickRow({ label, valueLabel, error, onPress, required = false }) {
   return (
     <View style={{ marginBottom: 12 }}>
-      <Text style={styles.pickLabel}>{label}</Text>
+      <Text style={styles.pickLabel}>
+        {label}
+        {required ? <RequiredMark /> : null}
+      </Text>
       <Pressable
         onPress={onPress}
         style={[styles.pickField, error ? styles.pickFieldErr : null]}
@@ -119,7 +123,7 @@ function DocRow({ title, subtitle, asset, existingUrl, error, onPick, isOptional
     <View style={styles.docRow}>
       <Text style={styles.docTitle}>
         {title}
-        {isOptional ? ' (optional)' : ''}
+        {isOptional ? ' (optional)' : <RequiredMark />}
       </Text>
       {subtitle ? <Text style={styles.docSub}>{subtitle}</Text> : null}
       {existingUrl ? (
@@ -729,7 +733,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
           <Card style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Basic info</Text>
             <View style={{ height: 14 }} />
-            <PhysioNameInput value={name} onChangeText={setName} error={fieldErrors.name} placeholder="Your name" />
+            <PhysioNameInput value={name} onChangeText={setName} error={fieldErrors.name} placeholder="Your name" required />
             <View style={{ height: 12 }} />
             <Input
               label="Email"
@@ -738,11 +742,12 @@ export default function PhysioOnboardingScreen({ navigation }) {
               value={email}
               onChangeText={setEmail}
               error={fieldErrors.email}
+              required
             />
             <View style={{ height: 12 }} />
             {Platform.OS !== 'web' ? (
               <View>
-                <Text style={styles.pickLabel}>Date of birth</Text>
+                <Text style={styles.pickLabel}>Date of birth<RequiredMark /></Text>
                 <Pressable
                   onPress={openDobPicker}
                   style={[styles.pickField, fieldErrors.dob ? styles.pickFieldErr : null]}
@@ -754,7 +759,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
                 {fieldErrors.dob ? <Text style={styles.fieldErr}>{fieldErrors.dob}</Text> : null}
               </View>
             ) : (
-              <Input label="Date of birth (YYYY-MM-DD)" value={dob} onChangeText={setDob} error={fieldErrors.dob} />
+              <Input label="Date of birth (YYYY-MM-DD)" value={dob} onChangeText={setDob} error={fieldErrors.dob} required />
             )}
             <View style={{ height: 12 }} />
             <OptionPickRow
@@ -762,6 +767,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
               valueLabel={gender ? genderLabel() : ''}
               error={fieldErrors.gender}
               onPress={() => setPickModal('genderAll')}
+              required
             />
             <View style={{ height: 4 }} />
             <Text style={styles.pickLabel}>Address</Text>
@@ -783,7 +789,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
             <View style={{ height: 12 }} />
             <Text style={styles.pickLabel}>Coverage / location</Text>
             <Text style={styles.help}>Label patients see when booking (matches web onboarding).</Text>
-            <Input label="Coverage label (area)" value={location} onChangeText={setLocation} error={fieldErrors.location} />
+            <Input label="Coverage label (area)" value={location} onChangeText={setLocation} error={fieldErrors.location} required />
 
             <View style={{ height: 16 }} />
             <Text style={styles.pickLabel}>Profile photo (optional)</Text>
@@ -802,11 +808,11 @@ export default function PhysioOnboardingScreen({ navigation }) {
           <Card style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Qualification</Text>
             <View style={{ height: 14 }} />
-            <OptionPickRow label="Degree" valueLabel={degreeLabel()} error={fieldErrors.degree} onPress={() => setPickModal('degree')} />
+            <OptionPickRow label="Degree" valueLabel={degreeLabel()} error={fieldErrors.degree} onPress={() => setPickModal('degree')} required />
             <View style={{ height: 12 }} />
-            <Input label="University" value={university} onChangeText={setUniversity} error={fieldErrors.university} />
+            <Input label="University" value={university} onChangeText={setUniversity} error={fieldErrors.university} required />
             <View style={{ height: 12 }} />
-            <Input label="Passing year" keyboardType="number-pad" value={year} onChangeText={setYear} error={fieldErrors.year} />
+            <Input label="Passing year" keyboardType="number-pad" value={year} onChangeText={setYear} error={fieldErrors.year} required />
             <View style={{ height: 12 }} />
             <Input
               label="NCAHP/IAP registration no. (optional)"
@@ -822,15 +828,16 @@ export default function PhysioOnboardingScreen({ navigation }) {
           <Card style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Practice details</Text>
             <View style={{ height: 14 }} />
-            <Input label="Experience (years)" keyboardType="decimal-pad" value={experience} onChangeText={setExperience} error={fieldErrors.experience} />
+            <Input label="Experience (years)" keyboardType="decimal-pad" value={experience} onChangeText={setExperience} error={fieldErrors.experience} required />
             <View style={{ height: 12 }} />
-            <Input label="Specialization" value={specialization} onChangeText={setSpecialization} error={fieldErrors.specialization} />
+            <Input label="Specialization" value={specialization} onChangeText={setSpecialization} error={fieldErrors.specialization} required />
             <View style={{ height: 12 }} />
             <OptionPickRow
               label="Service type"
               valueLabel={SERVICE_TYPE_OPTIONS.find((o) => o.value === serviceType)?.label || ''}
               error={fieldErrors.serviceType}
               onPress={() => setPickModal('service')}
+              required
             />
             <View style={{ height: 12 }} />
             <Input
@@ -839,6 +846,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
               onChangeText={setAreas}
               placeholder="e.g. Guwahati, Beltola"
               error={fieldErrors.areas}
+              required
             />
             <EarningsEstimatorWidget sessionFee={adminSessionFee} />
           </Card>
@@ -904,7 +912,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
               <View style={[styles.checkBox, qualificationAgreed ? styles.checkBoxOn : null]}>
                 {qualificationAgreed ? <Text style={styles.checkMark}>✓</Text> : null}
               </View>
-              <Text style={styles.checkLabel}>I have read and agree to the declaration above.</Text>
+              <Text style={styles.checkLabel}>I have read and agree to the declaration above.<RequiredMark /></Text>
             </Pressable>
             {fieldErrors.qualificationDeclaration ? (
               <Text style={styles.fieldErr}>{fieldErrors.qualificationDeclaration}</Text>

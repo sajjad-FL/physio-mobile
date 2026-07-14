@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons'
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
+import RequiredMark from '../ui/RequiredMark'
 import { colors } from '../../theme/colors'
 import { font, type } from '../../theme/typography'
 
@@ -42,7 +43,7 @@ export default function MultiInternshipDocRow({
     <View style={[styles.card, error ? styles.cardError : null]}>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Internship certificate</Text>
+          <Text style={styles.title}>Internship certificate<RequiredMark /></Text>
           <Text style={styles.subtitle}>Upload one or more internship certificates.</Text>
         </View>
         <View style={styles.badgeRequired}>

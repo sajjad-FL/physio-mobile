@@ -155,6 +155,7 @@ export default function ForgotPasswordScreen({ navigation }) {
           {step === 'phone' ? (
             <Input
               label="Mobile number"
+              required
               keyboardType="phone-pad"
               textContentType="telephoneNumber"
               autoComplete="tel"
@@ -171,6 +172,7 @@ export default function ForgotPasswordScreen({ navigation }) {
             <>
               <Input
                 label="Verification code"
+                required
                 keyboardType="number-pad"
                 textContentType="oneTimeCode"
                 autoComplete="one-time-code"
@@ -190,6 +192,7 @@ export default function ForgotPasswordScreen({ navigation }) {
           {step === 'password' ? (
             <Input
               label="New password"
+              required
               secureTextEntry
               textContentType="newPassword"
               autoComplete="password-new"

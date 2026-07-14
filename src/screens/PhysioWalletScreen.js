@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
 import PaginationBar from '../components/ui/PaginationBar'
+import RequiredMark from '../components/ui/RequiredMark'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { formatInr } from '../utils/currency'
@@ -347,7 +348,7 @@ export default function PhysioWalletScreen() {
             <Text style={styles.modalSub}>
               Max: {formatInr(w?.availableBalance)} · Minimum ₹1 · One request at a time
             </Text>
-            <Text style={styles.modalLabel}>Amount (INR)</Text>
+            <Text style={styles.modalLabel}>Amount (INR)<RequiredMark /></Text>
             <TextInput
               style={[
                 styles.modalInput,

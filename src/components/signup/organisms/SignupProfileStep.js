@@ -37,6 +37,7 @@ function SignupProfileStep({
         <Input
           variant="login"
           label="Full name"
+          required
           placeholder="Enter your full name"
           value={name}
           onChangeText={onChangeName}
@@ -46,6 +47,7 @@ function SignupProfileStep({
           variant="login"
           style={styles.passwordField}
           label="Create password"
+          required
           description="PASSWORD (MIN 6 CHARACTERS)"
           placeholder="Enter password"
           secureTextEntry

@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../../api/client'
 import { useProfile, useShopCart } from '../../api/queries'
 import { formatInr } from '../../utils/shopDisplay'
+import RequiredMark from '../../components/ui/RequiredMark'
 import { colors } from '../../theme/colors'
 import { font, type } from '../../theme/typography'
 
@@ -53,7 +54,7 @@ export default function ShopCheckoutScreen({ navigation }) {
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Delivery address</Text>
+        <Text style={styles.sectionTitle}>Delivery address<RequiredMark /></Text>
         <TextInput
           value={address}
           onChangeText={setAddress}
