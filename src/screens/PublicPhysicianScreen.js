@@ -110,6 +110,7 @@ export default function PublicPhysicianScreen({ route, navigation }) {
   const [reviews, setReviews] = useState([])
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [reviewsTotal, setReviewsTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [reviewsLoading, setReviewsLoading] = useState(true)
@@ -130,6 +131,7 @@ export default function PublicPhysicianScreen({ route, navigation }) {
       setPhysio(physioRes.data)
       setReviews(reviewsRes.data?.data || [])
       setTotalPages(reviewsRes.data?.totalPages || 1)
+      setReviewsTotal(Number(reviewsRes.data?.total) || 0)
     } catch (e) {
       setError(e.response?.data?.message || 'Could not load profile')
       setPhysio(null)
@@ -158,6 +160,7 @@ export default function PublicPhysicianScreen({ route, navigation }) {
       const res = await api.get(`/physios/${id}/reviews`, { params: { page: targetPage, limit: 8 } })
       setReviews(res.data?.data || [])
       setTotalPages(res.data?.totalPages || 1)
+      setReviewsTotal(Number(res.data?.total) || 0)
     } catch (e) {
       Toast.show({ type: 'error', text1: 'Could not load reviews' })
       setReviews([])
@@ -480,6 +483,8 @@ export default function PublicPhysicianScreen({ route, navigation }) {
               <PaginationBar
                 page={page}
                 totalPages={totalPages}
+                total={reviewsTotal}
+                pageSize={8}
                 onPrev={handlePrevPage}
                 onNext={handleNextPage}
               />

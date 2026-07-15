@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { AttachStep } from 'react-native-spotlight-tour'
 import { Ionicons } from '@expo/vector-icons'
 import { useMyBookings, useMyDisputes, useProfile } from '../api/queries'
@@ -10,6 +10,7 @@ import { pickNextSession, todayYmd, normalizeSessionRows, listSameDaySiblings } 
 import { getTechniqueByIssue } from '../constants/techniques'
 import Chip from '../components/ui/Chip'
 import ServicesSection from '../components/ServicesSection'
+import { DetailSkeleton } from '../components/ui/skeletons'
 import { formatInr } from '../utils/currency'
 import { colors } from '../theme/colors'
 import { figmaTokens } from '../theme/figmaTokens'
@@ -176,8 +177,12 @@ export default function DashboardHomeScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.brand} />
+      <View style={[styles.center, { justifyContent: 'flex-start' }]}>
+        <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+        <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
+        <View style={{ flex: 1, padding: 16, width: '100%' }}>
+          <DetailSkeleton />
+        </View>
       </View>
     )
   }

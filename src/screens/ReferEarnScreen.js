@@ -1,6 +1,5 @@
 import { useCallback } from 'react'
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -16,6 +15,7 @@ import {
   useReferralMyCode,
   useReferralStats,
 } from '../api/queries'
+import { DetailSkeleton, ListSkeleton } from '../components/ui/skeletons'
 import { colors } from '../theme/colors'
 import { surfaceCardShadow, surfaceSectionCard } from '../theme/surfaceCard'
 import { font, type, leading } from '../theme/typography'
@@ -93,7 +93,7 @@ export default function ReferEarnScreen() {
 
         <View style={styles.card}>
           {codeLoading ? (
-            <ActivityIndicator color={colors.brand} />
+            <DetailSkeleton />
           ) : (
             <>
               <Text style={styles.label}>Your referral code</Text>
@@ -136,7 +136,9 @@ export default function ReferEarnScreen() {
             </Pressable>
           </View>
           {loading ? (
-            <ActivityIndicator color={colors.brand} style={{ marginTop: 12 }} />
+            <View style={{ marginTop: 12 }}>
+              <ListSkeleton count={3} />
+            </View>
           ) : referrals.length === 0 ? (
             <Text style={styles.empty}>No referrals yet. Share your code to get started.</Text>
           ) : (

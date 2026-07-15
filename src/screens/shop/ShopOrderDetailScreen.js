@@ -1,5 +1,6 @@
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useShopOrder } from '../../api/queries'
+import { DetailSkeleton } from '../../components/ui/skeletons'
 import { assetUrl } from '../../utils/assetUrl'
 import { formatInr, shopOrderStatusColor, shopOrderStatusLabel } from '../../utils/shopDisplay'
 import { colors } from '../../theme/colors'
@@ -11,7 +12,13 @@ export default function ShopOrderDetailScreen({ route, navigation }) {
   const { id } = route.params || {}
   const { data: order, isLoading } = useShopOrder(id)
 
-  if (isLoading) return <ActivityIndicator color={colors.brand} style={{ marginTop: 24 }} />
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, padding: 16 }}>
+        <DetailSkeleton />
+      </View>
+    )
+  }
   if (!order?._id) {
     return (
       <View style={styles.center}>

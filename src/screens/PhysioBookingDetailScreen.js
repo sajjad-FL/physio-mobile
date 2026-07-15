@@ -25,6 +25,7 @@ import { normalizeSessionRows } from '../utils/physioBookingHelpers'
 import { isAwaitingPatientConsent, isPlanLive, isManagerOwnedBooking } from '../utils/planStatus'
 import DropdownField from '../components/ui/DropdownField'
 import RequiredMark from '../components/ui/RequiredMark'
+import { DetailSkeleton } from '../components/ui/skeletons'
 
 const ScrollView = Platform.OS === 'web' ? RNScrollView : GHScrollView
 
@@ -588,8 +589,8 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
   if (loading) {
     return (
       <BookingDetailChrome navigation={navigation} insetsTop={insets.top}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.brand} />
+        <View style={{ flex: 1, padding: 16 }}>
+          <DetailSkeleton />
         </View>
       </BookingDetailChrome>
     )

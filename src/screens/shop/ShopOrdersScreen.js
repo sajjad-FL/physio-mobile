@@ -1,9 +1,10 @@
-import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { useCallback, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { useShopOrders } from '../../api/queries'
 import { ShopContinueShoppingButton } from '../../components/shop/ShopNavButtons'
+import { ListSkeleton } from '../../components/ui/skeletons'
 import { assetUrl } from '../../utils/assetUrl'
 import { formatInr, shopOrderStatusColor, shopOrderStatusLabel } from '../../utils/shopDisplay'
 import { colors } from '../../theme/colors'
@@ -124,7 +125,13 @@ export default function ShopOrdersScreen({ navigation }) {
 
   const rows = data?.rows || []
 
-  if (isLoading) return <ActivityIndicator color={colors.brand} style={{ marginTop: 24 }} />
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, padding: 16 }}>
+        <ListSkeleton count={5} />
+      </View>
+    )
+  }
 
   return (
     <FlatList

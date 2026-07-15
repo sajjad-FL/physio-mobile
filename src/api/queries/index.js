@@ -18,7 +18,11 @@ export function useMyDisputes(params = { page: 1, limit: 8 }, opts = {}) {
     queryKey: ['myDisputes', params],
     queryFn: async () => {
       const res = await api.get('/disputes/my', { params })
-      return { rows: listData(res), totalPages: Math.max(1, Number(res.data?.totalPages) || 1) }
+      return {
+        rows: listData(res),
+        totalPages: Math.max(1, Number(res.data?.totalPages) || 1),
+        total: Number(res.data?.total) || 0,
+      }
     },
     ...opts,
   })

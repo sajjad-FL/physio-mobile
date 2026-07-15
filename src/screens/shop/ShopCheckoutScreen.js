@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../../api/client'
 import { useProfile, useShopCart } from '../../api/queries'
 import { formatInr } from '../../utils/shopDisplay'
 import RequiredMark from '../../components/ui/RequiredMark'
+import { DetailSkeleton } from '../../components/ui/skeletons'
 import { colors } from '../../theme/colors'
 import { font, type } from '../../theme/typography'
 
@@ -49,7 +50,13 @@ export default function ShopCheckoutScreen({ navigation }) {
     }
   }
 
-  if (isLoading) return <ActivityIndicator color={colors.brand} style={{ marginTop: 24 }} />
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, padding: 16 }}>
+        <DetailSkeleton />
+      </View>
+    )
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.scroll}>

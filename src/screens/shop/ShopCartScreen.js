@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../../api/client'
 import { useShopCart } from '../../api/queries'
 import { ShopContinueShoppingButton } from '../../components/shop/ShopNavButtons'
+import { DetailSkeleton } from '../../components/ui/skeletons'
 import { assetUrl } from '../../utils/assetUrl'
 import { formatInr } from '../../utils/shopDisplay'
 import { colors } from '../../theme/colors'
@@ -27,7 +28,13 @@ export default function ShopCartScreen({ navigation }) {
     }
   }
 
-  if (isLoading) return <ActivityIndicator color={colors.brand} style={{ marginTop: 24 }} />
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, padding: 16 }}>
+        <DetailSkeleton />
+      </View>
+    )
+  }
 
   if (!cart?.items?.length) {
     return (

@@ -3,8 +3,8 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { Ionicons } from '@expo/vector-icons'
 import { formatBookingDateAndSlot } from '../utils/date'
 import EmptyState from '../components/ui/EmptyState'
-import LoadingScreen from '../components/ui/LoadingScreen'
 import Chip from '../components/ui/Chip'
+import { DetailSkeleton } from '../components/ui/skeletons'
 import { colors } from '../theme/colors'
 import { figmaTokens } from '../theme/figmaTokens'
 import { surfaceListShell } from '../theme/surfaceCard'
@@ -22,7 +22,17 @@ export default function DashboardWalletScreen({ navigation }) {
   const releasedTotal = summary.releasedTotal || 0
   const lines = summary.recentPayments || []
 
-  if (isLoading && !summary.recentPayments) return <LoadingScreen />
+  if (isLoading && !data) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.canvas }}>
+        <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+        <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
+        <View style={{ flex: 1, padding: 16 }}>
+          <DetailSkeleton />
+        </View>
+      </View>
+    )
+  }
 
   return (
     <ScrollView

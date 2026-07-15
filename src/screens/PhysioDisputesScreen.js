@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
 import Chip from '../components/ui/Chip'
 import PaginationBar from '../components/ui/PaginationBar'
+import { ListSkeleton } from '../components/ui/skeletons'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { formatBookingDateAndSlot } from '../utils/date'
@@ -22,6 +23,7 @@ export default function PhysioDisputesScreen() {
   const [list, setList] = useState(null)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
 
   const load = useCallback(async () => {
@@ -29,6 +31,7 @@ export default function PhysioDisputesScreen() {
       const res = await api.get('/disputes/my', { params: { page, limit: 8 } })
       setList(res.data?.data || [])
       setTotalPages(res.data?.totalPages || 1)
+      setTotal(Number(res.data?.total) || 0)
     } catch {
       Toast.show({ type: 'error', text1: 'Could not load disputes' })
       setList([])
@@ -50,8 +53,8 @@ export default function PhysioDisputesScreen() {
       <View style={styles.container}>
         <View style={styles.ambientHeaderGlow} />
         <View style={styles.ambientHeaderGlow2} />
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.brand} />
+        <View style={{ padding: 16 }}>
+          <ListSkeleton count={5} />
         </View>
       </View>
     )
@@ -89,6 +92,8 @@ export default function PhysioDisputesScreen() {
             compact
             page={page}
             totalPages={totalPages}
+            total={total}
+            pageSize={8}
             onPrev={() => setPage((p) => Math.max(1, p - 1))}
             onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
           />

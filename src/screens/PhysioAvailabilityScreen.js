@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, S
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
+import { DetailSkeleton } from '../components/ui/skeletons'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 
@@ -70,8 +71,8 @@ export default function PhysioAvailabilityScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.brand} />
+      <View style={{ flex: 1, padding: 16, backgroundColor: colors.canvas }}>
+        <DetailSkeleton />
       </View>
     )
   }

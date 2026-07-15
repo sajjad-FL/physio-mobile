@@ -4,6 +4,7 @@ import KeyboardAwareScrollView from '../components/ui/KeyboardAwareScrollView'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
+import { DetailSkeleton } from '../components/ui/skeletons'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { formatBookingDateAndSlot } from '../utils/date'
@@ -91,8 +92,8 @@ export default function PhysioNotesScreen() {
       <View style={styles.container}>
         <View style={styles.ambientHeaderGlow} />
         <View style={styles.ambientHeaderGlow2} />
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.brand} />
+        <View style={{ padding: 16 }}>
+          <DetailSkeleton />
         </View>
       </View>
     )

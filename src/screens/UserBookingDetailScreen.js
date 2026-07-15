@@ -18,6 +18,7 @@ import { normalizeSessionRows } from '../utils/physioBookingHelpers'
 import { openSupportWhatsApp } from '../utils/supportContact'
 import InstallmentsPhysioCard from '../components/physio/InstallmentsPhysioCard'
 import RequiredMark from '../components/ui/RequiredMark'
+import { DetailSkeleton } from '../components/ui/skeletons'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 
@@ -602,8 +603,8 @@ export default function UserBookingDetailScreen({ route, navigation }) {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.brand} />
+      <View style={[styles.center, { padding: 16, justifyContent: 'flex-start' }]}>
+        <DetailSkeleton />
       </View>
     )
   }

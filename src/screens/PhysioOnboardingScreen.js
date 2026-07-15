@@ -2,7 +2,6 @@ import DateTimePicker from '@react-native-community/datetimepicker'
 import * as DocumentPicker from 'expo-document-picker'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ActivityIndicator,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -27,6 +26,7 @@ import Card from '../components/ui/Card'
 import Input from '../components/ui/Input'
 import PhysioNameInput from '../components/ui/PhysioNameInput'
 import RequiredMark from '../components/ui/RequiredMark'
+import { DetailSkeleton } from '../components/ui/skeletons'
 import { ID_PROOF_TYPE_OPTIONS } from '../constants/idProofTypes'
 import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll'
 import { PHYSIO_DEGREE_OPTIONS } from '../constants/physioQualification'
@@ -657,9 +657,8 @@ export default function PhysioOnboardingScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={[styles.flex, styles.centerSplash]}>
-        <ActivityIndicator size="large" color={colors.brand} />
-        <Text style={[styles.lead, { marginTop: 12 }]}>Loading onboarding…</Text>
+      <View style={[styles.flex, { padding: 16 }]}>
+        <DetailSkeleton />
       </View>
     )
   }

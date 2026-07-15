@@ -5,6 +5,7 @@ import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
 import PaginationBar from '../components/ui/PaginationBar'
 import RequiredMark from '../components/ui/RequiredMark'
+import { DetailSkeleton, TableSkeleton } from '../components/ui/skeletons'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { formatInr } from '../utils/currency'
@@ -149,6 +150,7 @@ export default function PhysioWalletScreen() {
   const [txLoading, setTxLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
   const [pendingWithdraw, setPendingWithdraw] = useState(null)
   const [withdrawOpen, setWithdrawOpen] = useState(false)
   const [withdrawAmount, setWithdrawAmount] = useState('')
@@ -176,6 +178,7 @@ export default function PhysioWalletScreen() {
       const res = await api.get('/physio/wallet/transactions', { params: { page, limit: 15 } })
       setTx(res.data?.data || [])
       setTotalPages(res.data?.totalPages || 1)
+      setTotal(Number(res.data?.total) || 0)
     } catch { Toast.show({ type: 'error', text1: 'Failed to load transactions' }) }
     finally { setTxLoading(false) }
   }, [page])
@@ -218,8 +221,8 @@ export default function PhysioWalletScreen() {
   const header = (
     <>
       {loading ? (
-        <View style={styles.loaderWrap}>
-          <ActivityIndicator size="large" color={colors.brand} />
+        <View style={{ paddingVertical: 8 }}>
+          <DetailSkeleton />
         </View>
       ) : (
         <>
@@ -296,7 +299,6 @@ export default function PhysioWalletScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHead}>
               <Text style={styles.sectionTitle}>Transactions</Text>
-              {txLoading && <ActivityIndicator size="small" color={colors.brand} />}
             </View>
           </View>
         </>
@@ -309,13 +311,27 @@ export default function PhysioWalletScreen() {
       <View style={styles.ambientHeaderGlow} />
       <View style={styles.ambientHeaderGlow2} />
       <FlatList
-        data={txLoading ? [] : tx}
+        data={txLoading || loading ? [] : tx}
         keyExtractor={(row, i) => String(row?._id || row?.syntheticKind || i)}
         renderItem={({ item }) => <TransactionRow row={item} />}
         ListHeaderComponent={header}
+        ListEmptyComponent={
+          !loading && txLoading ? (
+            <View style={{ paddingTop: 4 }}>
+              <TableSkeleton rows={6} />
+            </View>
+          ) : null
+        }
         ListFooterComponent={
           <View style={styles.footer}>
-            <PaginationBar page={page} totalPages={totalPages} onPrev={() => setPage((p) => Math.max(1, p - 1))} onNext={() => setPage((p) => p + 1)} />
+            <PaginationBar
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              pageSize={15}
+              onPrev={() => setPage((p) => Math.max(1, p - 1))}
+              onNext={() => setPage((p) => p + 1)}
+            />
             <View style={{ height: 32 }} />
           </View>
         }

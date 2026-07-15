@@ -1,10 +1,11 @@
 import { memo, useState } from 'react'
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { formatBookingDateAndSlot } from '../utils/date'
 import { bookingCodeBadge } from '../utils/bookingDisplay'
 import Chip from '../components/ui/Chip'
 import PaginationBar from '../components/ui/PaginationBar'
+import { ListSkeleton } from '../components/ui/skeletons'
 import { colors } from '../theme/colors'
 import { figmaTokens } from '../theme/figmaTokens'
 import { surfaceCard } from '../theme/surfaceCard'
@@ -24,11 +25,12 @@ export default function DashboardDisputesScreen() {
   const { data, isLoading, isRefetching, refetch } = useMyDisputes({ page, limit: 8 })
   const rows = data?.rows || []
   const totalPages = data?.totalPages || 1
+  const total = data?.total || 0
 
   if (isLoading && !rows.length) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={figmaTokens.primary} />
+      <View style={[styles.root, { padding: 16 }]}>
+        <ListSkeleton count={5} />
       </View>
     )
   }
@@ -66,6 +68,8 @@ export default function DashboardDisputesScreen() {
               compact
               page={page}
               totalPages={totalPages}
+              total={total}
+              pageSize={8}
               onPrev={() => setPage((p) => Math.max(1, p - 1))}
               onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
             />

@@ -1,10 +1,11 @@
-import { ActivityIndicator, Alert, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Alert, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../../api/client'
 import { useShopCart, useShopProducts } from '../../api/queries'
 import { ShopCartButton, ShopMyOrdersButton } from '../../components/shop/ShopNavButtons'
+import { CardSkeleton } from '../../components/ui/skeletons'
 import { assetUrl } from '../../utils/assetUrl'
 import { formatInr } from '../../utils/shopDisplay'
 import { colors } from '../../theme/colors'
@@ -78,7 +79,9 @@ export default function ShopHomeScreen({ navigation }) {
       </View>
 
       {isLoading ? (
-        <ActivityIndicator color={colors.brand} style={{ marginTop: 24 }} />
+        <View style={{ padding: 16 }}>
+          <CardSkeleton count={4} />
+        </View>
       ) : (
         <FlatList
           data={rows}

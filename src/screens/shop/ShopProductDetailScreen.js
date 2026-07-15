@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../../api/client'
 import { useShopProduct } from '../../api/queries'
+import { DetailSkeleton } from '../../components/ui/skeletons'
 import { assetUrl } from '../../utils/assetUrl'
 import { formatInr } from '../../utils/shopDisplay'
 import { colors } from '../../theme/colors'
@@ -16,7 +17,13 @@ export default function ShopProductDetailScreen({ route, navigation }) {
   const [busy, setBusy] = useState(false)
   const queryClient = useQueryClient()
 
-  if (isLoading) return <ActivityIndicator color={colors.brand} style={{ marginTop: 24 }} />
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, padding: 16 }}>
+        <DetailSkeleton />
+      </View>
+    )
+  }
   if (!product?._id) {
     return (
       <View style={styles.center}>

@@ -6,7 +6,7 @@ import { bookingStatusBadge } from '../utils/dashboardUtils'
 import PatientBookingsFilterModal from '../components/dashboard/PatientBookingsFilterModal'
 import Chip from '../components/ui/Chip'
 import EmptyState from '../components/ui/EmptyState'
-import LoadingScreen from '../components/ui/LoadingScreen'
+import { ListSkeleton } from '../components/ui/skeletons'
 import { colors } from '../theme/colors'
 import { figmaTokens } from '../theme/figmaTokens'
 import { surfaceCard } from '../theme/surfaceCard'
@@ -30,7 +30,13 @@ export default function DashboardBookingsScreen({ navigation }) {
 
   const filtersActive = filter !== 'all' || dateRange.start || dateRange.end
 
-  if (isLoading && !rows.length) return <LoadingScreen />
+  if (isLoading && !rows.length) {
+    return (
+      <View style={[styles.root, { padding: 16 }]}>
+        <ListSkeleton count={6} />
+      </View>
+    )
+  }
 
   return (
     <View style={styles.root}>

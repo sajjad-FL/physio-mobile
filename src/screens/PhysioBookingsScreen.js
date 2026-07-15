@@ -1,6 +1,5 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
@@ -13,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import PhysioApprovalBanner from '../components/physio/PhysioApprovalBanner'
 import PhysioFilterModal from '../components/physio/PhysioFilterModal'
+import { ListSkeleton } from '../components/ui/skeletons'
 import SessionsCalendarRN from '../components/physio/SessionsCalendarRN'
 import { DEFAULT_PHYSIO_FILTERS } from '../constants/physioBookingFilters'
 import { usePhysioWorkspaceOptional } from '../context/PhysioWorkspaceContext'
@@ -223,8 +223,8 @@ export default function PhysioBookingsScreen({ navigation }) {
 
   if (loading && bookings.length === 0 && !loadError) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.brand} />
+      <View style={[styles.container, { padding: 16 }]}>
+        <ListSkeleton count={6} />
       </View>
     )
   }

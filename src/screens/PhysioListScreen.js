@@ -24,6 +24,7 @@ import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context'
 import { api } from '../api/client'
 import { useReferralMyCode } from '../api/queries'
 import { useAuth } from '../context/AuthContext'
+import { ListSkeleton } from '../components/ui/skeletons'
 import { ISSUE_OPTIONS, ISSUE_OTHER_VALUE } from '../constants/issues'
 import { todayISO, defaultBookableDate, filterSelectableSlots } from '../constants/slots'
 import { formatBookingDateAndSlot, formatBookingTimeSlot } from '../utils/date'
@@ -1477,9 +1478,8 @@ export default function PhysioListScreen({ navigation, route }) {
 
             {/* Physio list */}
             {physioLoading ? (
-              <View style={styles.physioPickerLoading}>
-                <ActivityIndicator size="large" color={colors.brand} />
-                <Text style={styles.physioPickerLoadingTxt}>Loading physiotherapists…</Text>
+              <View style={{ padding: 16 }}>
+                <ListSkeleton count={5} />
               </View>
             ) : availablePhysios.length === 0 ? (
               <View style={styles.physioPickerEmpty}>

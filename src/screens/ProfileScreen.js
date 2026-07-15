@@ -35,6 +35,7 @@ import { assetUrl } from '../utils/assetUrl'
 import { validateProfileLiveField } from '../utils/profileLiveValidation'
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_SIZE_LABEL } from '../constants/uploadLimits'
 import RequiredMark from '../components/ui/RequiredMark'
+import { DetailSkeleton } from '../components/ui/skeletons'
 
 const GENDERS = [
   { value: 'male', label: 'Male', icon: 'male' },
@@ -517,8 +518,21 @@ export default function ProfileScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.brand} />
+      <View style={styles.flex}>
+        <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+        <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
+        <View style={[styles.headerBar, { paddingTop: insets.top + 6 }]}>
+          {navigation.canGoBack() ? (
+            <Pressable onPress={() => navigation.goBack()} hitSlop={12} style={styles.backBtn}>
+              <Ionicons name="chevron-back" size={20} color={colors.brand} />
+            </Pressable>
+          ) : <View style={{ width: 36 }} />}
+          <Text style={styles.headerBarTitle}>My Profile</Text>
+          <View style={{ width: 36 }} />
+        </View>
+        <View style={{ flex: 1, padding: 16 }}>
+          <DetailSkeleton />
+        </View>
       </View>
     )
   }
