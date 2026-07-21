@@ -298,6 +298,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
   const [paymentError, setPaymentError] = useState('')
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
+  const [showAllPlanSessions, setShowAllPlanSessions] = useState(false)
 
   const load = useCallback(async () => {
     if (!id) return
@@ -857,8 +858,8 @@ export default function UserBookingDetailScreen({ route, navigation }) {
               {Array.isArray(b.schedule) && b.schedule.length > 0 ? (
                 <View style={styles.planReviewSchedule}>
                   <Text style={styles.planReviewScheduleTitle}>Scheduled Sessions</Text>
-                  {b.schedule.slice(0, 3).map((s, i) => (
-                    <View key={i} style={styles.planReviewScheduleRow}>
+                  {(showAllPlanSessions ? b.schedule : b.schedule.slice(0, 3)).map((s, i) => (
+                    <View key={`${s.date}-${s.time}-${i}`} style={styles.planReviewScheduleRow}>
                       <View style={styles.planReviewScheduleDot} />
                       <Text style={styles.planReviewScheduleTxt}>
                         Session {i + 1} — {formatBookingDateAndSlot(s.date, s.time)}
@@ -866,7 +867,18 @@ export default function UserBookingDetailScreen({ route, navigation }) {
                     </View>
                   ))}
                   {b.schedule.length > 3 ? (
-                    <Text style={styles.planReviewScheduleMore}>+{b.schedule.length - 3} more sessions</Text>
+                    <Pressable
+                      onPress={() => setShowAllPlanSessions((v) => !v)}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: showAllPlanSessions }}
+                    >
+                      <Text style={styles.planReviewScheduleMore}>
+                        {showAllPlanSessions
+                          ? 'Show fewer sessions'
+                          : `+${b.schedule.length - 3} more sessions`}
+                      </Text>
+                    </Pressable>
                   ) : null}
                 </View>
               ) : null}
@@ -1674,11 +1686,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   planReviewScheduleMore: {
-    fontFamily: font.regular,
+    fontFamily: font.semiBold,
     fontSize: type.xs,
-    color: colors.textTertiary,
-    marginTop: 2,
+    color: colors.brand,
+    marginTop: 6,
     paddingLeft: 14,
+    textDecorationLine: 'underline',
   },
   planReviewApproveBtn: {
     flexDirection: 'row',

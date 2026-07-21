@@ -509,7 +509,7 @@ export default function PhysioListScreen({ navigation, route }) {
 
   const canSubmit = Boolean(
     profileName.trim() && location.trim() && date && timeSlot && resolvedIssue &&
-    (serviceType === 'home' || selectedPhysioId),
+    (serviceType === 'home' || serviceType === 'clinic' || selectedPhysioId),
   )
 
   // ── Effects ──────────────────────────────────────────────────────────────────
@@ -665,6 +665,15 @@ export default function PhysioListScreen({ navigation, route }) {
         const newBookingId = bookingRes.data?._id
         setSuccessServiceType('home')
         setSuccessMessage("Your request has been received. A care manager will contact you and prepare your treatment plan.")
+        setSuccessBookingId(newBookingId || 'new')
+        return
+      }
+
+      if (serviceType === 'clinic') {
+        const bookingRes = await api.post('/bookings/request-clinic', body)
+        const newBookingId = bookingRes.data?._id
+        setSuccessServiceType('clinic')
+        setSuccessMessage('Clinic visit requested. Our admin will assign a clinic for your appointment.')
         setSuccessBookingId(newBookingId || 'new')
         return
       }
@@ -1072,6 +1081,13 @@ export default function PhysioListScreen({ navigation, route }) {
                     desc: 'Secure video session with real-time digital posture guidance.',
                     icon: 'videocam-outline',
                     activeIcon: 'videocam'
+                  },
+                  {
+                    value: 'clinic',
+                    title: 'Clinic Visit',
+                    desc: 'Visit a PhysiOkhom clinic. Admin assigns the facility after you book.',
+                    icon: 'business-outline',
+                    activeIcon: 'business'
                   },
                 ].map((opt) => {
                   const isActive = serviceType === opt.value

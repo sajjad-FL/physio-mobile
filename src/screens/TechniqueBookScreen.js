@@ -43,11 +43,13 @@ export default function TechniqueBookScreen({ navigation, route }) {
   const [consent, setConsent] = useState(false)
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [serviceType, setServiceType] = useState('home')
 
   const price = Number(settings?.techniquePrices?.[tech?.bookingIssue])
   const priceLabel = Number.isFinite(price) && price > 0 ? `₹${price.toLocaleString('en-IN')}` : '—'
   const hasLocation = Boolean(location.trim())
   const showLocationEditor = editingLocation || !hasLocation
+  const isClinic = serviceType === 'clinic'
 
   useFocusEffect(
     useCallback(() => {
@@ -111,8 +113,16 @@ export default function TechniqueBookScreen({ navigation, route }) {
 
   const canSubmit = useMemo(
     () =>
-      Boolean(tech && profileName.trim() && location.trim() && date && timeSlot && consent && !profileLoading),
-    [tech, profileName, location, date, timeSlot, consent, profileLoading],
+      Boolean(
+        tech &&
+          profileName.trim() &&
+          date &&
+          timeSlot &&
+          consent &&
+          !profileLoading &&
+          (isClinic || location.trim()),
+      ),
+    [tech, profileName, location, date, timeSlot, consent, profileLoading, isClinic],
   )
 
   async function reverseLabel(nextLat, nextLng) {
@@ -169,7 +179,7 @@ export default function TechniqueBookScreen({ navigation, route }) {
       Toast.show({ type: 'error', text1: 'Add your name in Profile before booking' })
       return
     }
-    if (!location.trim()) {
+    if (!isClinic && !location.trim()) {
       Toast.show({ type: 'error', text1: 'Add a home address to continue' })
       setEditingLocation(true)
       return
@@ -178,15 +188,18 @@ export default function TechniqueBookScreen({ navigation, route }) {
     try {
       const body = {
         name: profileName.trim(),
-        location: location.trim(),
         issue: tech.bookingIssue,
         date,
         timeSlot,
         consentAccepted: true,
+        serviceType,
       }
-      if (lat != null && lng != null) {
-        body.lat = lat
-        body.lng = lng
+      if (!isClinic) {
+        body.location = location.trim()
+        if (lat != null && lng != null) {
+          body.lat = lat
+          body.lng = lng
+        }
       }
       const res = await api.post('/bookings/request-technique', body)
       Toast.show({
@@ -195,7 +208,9 @@ export default function TechniqueBookScreen({ navigation, route }) {
         text2:
           res.data?.carePath === 'technique_managed'
             ? 'Your care manager will assign a physiotherapist.'
-            : 'We will assign a physiotherapist for your home visit.',
+            : isClinic
+              ? 'We will assign a clinic and physiotherapist for your visit.'
+              : 'We will assign a physiotherapist for your home visit.',
       })
       const id = res.data?._id
       navigation.dispatch(
@@ -252,7 +267,9 @@ export default function TechniqueBookScreen({ navigation, route }) {
       >
         <View style={styles.card}>
           <Text style={styles.title}>Book {tech.label}</Text>
-          <Text style={styles.sub}>Home visit · {priceLabel} · physio assigned after booking</Text>
+          <Text style={styles.sub}>
+            {isClinic ? 'Clinic visit' : 'Home visit'} · {priceLabel} · physio assigned after booking
+          </Text>
           {profileLoading ? (
             <Text style={styles.hint}>Loading profile…</Text>
           ) : profileName.trim() ? (
@@ -268,6 +285,35 @@ export default function TechniqueBookScreen({ navigation, route }) {
           )}
         </View>
 
+        <View style={styles.card}>
+          <Text style={styles.label}>Visit type<RequiredMark /></Text>
+          <View style={styles.venueRow}>
+            {[
+              { id: 'home', label: 'Home visit' },
+              { id: 'clinic', label: 'Clinic visit' },
+            ].map((opt) => (
+              <Pressable
+                key={opt.id}
+                onPress={() => setServiceType(opt.id)}
+                style={[
+                  styles.venueBtn,
+                  serviceType === opt.id && { backgroundColor: tech.color, borderColor: tech.color },
+                ]}
+              >
+                <Text
+                  style={[styles.venueBtnTxt, serviceType === opt.id && { color: '#fff' }]}
+                >
+                  {opt.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {isClinic ? (
+            <Text style={styles.hint}>Our team will assign a clinic for your appointment after you book.</Text>
+          ) : null}
+        </View>
+
+        {!isClinic ? (
         <View style={styles.card}>
           <View style={styles.rowBetween}>
             <Text style={styles.label}>Home address<RequiredMark /></Text>
@@ -320,6 +366,7 @@ export default function TechniqueBookScreen({ navigation, route }) {
             </>
           )}
         </View>
+        ) : null}
 
         <View style={styles.card}>
           <Text style={styles.label}>Date (YYYY-MM-DD)<RequiredMark /></Text>
@@ -362,7 +409,9 @@ export default function TechniqueBookScreen({ navigation, route }) {
         <Pressable style={styles.consentRow} onPress={() => setConsent((v) => !v)}>
           <View style={[styles.check, consent && { backgroundColor: tech.color, borderColor: tech.color }]} />
           <Text style={styles.consentTxt}>
-            I consent to a physiotherapist visiting my home for this treatment session.
+            {isClinic
+              ? 'I consent to receiving this treatment at a PhysiOkhom clinic.'
+              : 'I consent to a physiotherapist visiting my home for this treatment session.'}
             <RequiredMark />
           </Text>
         </Pressable>
@@ -439,6 +488,17 @@ const styles = StyleSheet.create({
   },
   area: { minHeight: 72, textAlignVertical: 'top' },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  venueRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  venueBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  venueBtnTxt: { fontSize: 13, fontFamily: font.semibold, color: colors.textPrimary },
   outlineBtn: {
     flexDirection: 'row',
     alignItems: 'center',

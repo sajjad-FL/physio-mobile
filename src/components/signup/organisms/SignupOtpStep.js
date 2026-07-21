@@ -26,7 +26,7 @@ function SignupOtpStep({
         totalSteps={totalSteps}
         kickerLabel="CREATE ACCOUNT"
         title="Verify your number"
-        subtitle="Enter the 4-digit code we sent to your phone."
+        subtitle="Enter the 4-digit code we sent on WhatsApp."
       />
       <View style={authFormCard}>
         <Input

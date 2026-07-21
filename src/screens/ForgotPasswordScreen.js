@@ -12,8 +12,8 @@ import { authFormCard } from '../theme/authFormCard'
 import { font, type, leading } from '../theme/typography'
 
 const STEPS = [
-  { key: 'phone', n: 1, icon: 'phone-portrait-outline', title: 'Enter your mobile', sub: 'We\'ll send a verification code to your registered number.' },
-  { key: 'otp', n: 2, icon: 'keypad-outline', title: 'Enter the code', sub: 'Check your SMS for the 4-digit verification code.' },
+  { key: 'phone', n: 1, icon: 'phone-portrait-outline', title: 'Enter your mobile', sub: 'We\'ll send a verification code on WhatsApp to your registered number.' },
+  { key: 'otp', n: 2, icon: 'keypad-outline', title: 'Enter the code', sub: 'Check WhatsApp for the 4-digit verification code.' },
   { key: 'password', n: 3, icon: 'lock-closed-outline', title: 'New password', sub: 'Choose a strong password with at least 6 characters.' },
 ]
 

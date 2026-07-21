@@ -31,7 +31,7 @@ function SignupPhoneStep({
         totalSteps={totalSteps}
         kickerLabel="CREATE ACCOUNT"
         title="Your phone number"
-        subtitle="We will text a one-time code to verify this number."
+        subtitle="We will send a one-time code on WhatsApp to verify this number."
       />
       <View style={authFormCard}>
         <Text style={styles.fieldLabel}>Mobile number<RequiredMark /></Text>

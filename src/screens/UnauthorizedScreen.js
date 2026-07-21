@@ -4,7 +4,12 @@ import Button from '../components/ui/Button'
 import { clearSession, getRoleSync } from '../auth/tokenStore'
 import { useAuth } from '../context/AuthContext'
 import { colors } from '../theme/colors'
-import { getWebLoginUrl, openWebLoginInBrowser, openWebManagerInBrowser } from '../utils/webApp'
+import {
+  getWebLoginUrl,
+  openWebLoginInBrowser,
+  openWebManagerInBrowser,
+  openWebClinicInBrowser,
+} from '../utils/webApp'
 
 export default function UnauthorizedScreen({ navigation }) {
   const { logout } = useAuth()
@@ -12,10 +17,11 @@ export default function UnauthorizedScreen({ navigation }) {
   const role = getRoleSync()
   const isAdmin = role === 'admin'
   const isCareManager = role === 'care_manager'
+  const isClinicStaff = role === 'clinic_staff'
   const isPhysio = role === 'physio'
 
   useEffect(() => {
-    if (!isAdmin && !isCareManager) return
+    if (!isAdmin && !isCareManager && !isClinicStaff) return
     const url = getWebLoginUrl()
     if (!url) {
       setEnvHint('Set EXPO_PUBLIC_SITE_URL in .env to your web app base URL (e.g. https://your-domain.com).')
@@ -24,7 +30,9 @@ export default function UnauthorizedScreen({ navigation }) {
     let cancelled = false
     const t = setTimeout(() => {
       ;(async () => {
-        if (isCareManager) {
+        if (isClinicStaff) {
+          await openWebClinicInBrowser()
+        } else if (isCareManager) {
           await openWebManagerInBrowser()
         } else {
           await openWebLoginInBrowser()

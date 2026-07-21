@@ -437,17 +437,22 @@ const HealthHubCard = memo(function HealthHubCard({ token, navigation, openWhats
 })
 
 const FRONT_SPOTS = [
-  { id: 'neck', name: 'Neck & Cervical Care', issue: 'Neck Pain', top: 25, left: 60, icon: 'fitness-outline', desc: 'Stiffness, cervical spondylosis, nerve strain' },
+  { id: 'head', name: 'Head & Migraine Care', issue: 'Neck Pain', top: 12, left: 70, icon: 'fitness-outline', desc: 'Tension headaches, migraine-related neck strain' },
+  { id: 'neck', name: 'Neck & Cervical Care', issue: 'Neck Pain', top: 28, left: 60, icon: 'fitness-outline', desc: 'Stiffness, cervical spondylosis, nerve strain' },
   { id: 'shoulder_l', name: 'Left Shoulder Care', issue: 'Neck Pain', top: 40, left: 28, icon: 'fitness-outline', desc: 'Frozen shoulder, rotatory stiffness, impingement' },
+  { id: 'shoulder_m', name: 'Mid Shoulder & Upper Chest', issue: 'Neck Pain', top: 40, left: 60, icon: 'fitness-outline', desc: 'Upper chest / clavicle strain, bilateral shoulder tension' },
   { id: 'shoulder_r', name: 'Right Shoulder Care', issue: 'Neck Pain', top: 40, left: 92, icon: 'fitness-outline', desc: 'Frozen shoulder, rotatory stiffness, impingement' },
+  { id: 'hip', name: 'Hip & Pelvis Care', issue: 'Back Pain', top: 124, left: 60, icon: 'body-outline', desc: 'Hip joint pain, pelvic imbalance, SI joint strain' },
   { id: 'knee_l', name: 'Left Knee Joint', issue: 'Knee Pain', top: 162, left: 41, icon: 'walk-outline', desc: 'Arthritis, ligament tear, meniscus injury' },
   { id: 'knee_r', name: 'Right Knee Joint', issue: 'Knee Pain', top: 162, left: 79, icon: 'walk-outline', desc: 'Arthritis, ligament tear, meniscus injury' },
 ]
 
 const BACK_SPOTS = [
-  { id: 'upper_back', name: 'Upper Spine & Posture', issue: 'Neck Pain', top: 45, left: 60, icon: 'fitness-outline', desc: 'Upper back postural strain, thoracic stiffness' },
-  { id: 'lower_back', name: 'Lower Back Care', issue: 'Back Pain', top: 85, left: 60, icon: 'body-outline', desc: 'Sciatica, slip disc, lumbar muscle spasms' },
-  { id: 'neuro_rehab', name: 'Stroke Rehabilitation', issue: 'Neuro Rehab', top: 15, left: 78, icon: 'pulse-outline', desc: 'Hemiplegia, neural weakness, balance issues' },
+  { id: 'head', name: 'Head & Migraine Care', issue: 'Neck Pain', top: 12, left: 70, icon: 'fitness-outline', desc: 'Tension headaches, migraine-related neck strain' },
+  { id: 'shoulder_l', name: 'Left Shoulder Blade', issue: 'Neck Pain', top: 40, left: 28, icon: 'fitness-outline', desc: 'Scapular pain, postural strain, tightness' },
+  { id: 'shoulder_m', name: 'Upper Spine & Posture', issue: 'Neck Pain', top: 40, left: 60, icon: 'fitness-outline', desc: 'Upper back postural strain, thoracic stiffness' },
+  { id: 'shoulder_r', name: 'Right Shoulder Blade', issue: 'Neck Pain', top: 40, left: 92, icon: 'fitness-outline', desc: 'Scapular pain, postural strain, tightness' },
+  { id: 'hip', name: 'Hip & Pelvis Care', issue: 'Back Pain', top: 124, left: 60, icon: 'body-outline', desc: 'Hip joint pain, pelvic imbalance, SI joint strain' },
 ]
 
 export default function HomeScreen({ navigation }) {

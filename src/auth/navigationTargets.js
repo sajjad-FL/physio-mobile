@@ -4,7 +4,7 @@ import { getRoleSync } from './tokenStore'
 /** Default stack/screen name after login (React Navigation). */
 export function getDefaultDashboardScreen() {
   const r = getRoleSync()
-  if (r === 'admin' || r === 'care_manager') return 'Unauthorized'
+  if (r === 'admin' || r === 'care_manager' || r === 'clinic_staff') return 'Unauthorized'
   if (r === 'physio') return PHYSIO_DASHBOARD_ENTRY
   return USER_DASHBOARD_ENTRY
 }
