@@ -28,12 +28,58 @@ export function bookingCodeBadge(b) {
 }
 
 export function paymentModeLabel(b) {
+  if (b.serviceType === 'clinic') {
+    return 'Clinic (cash / UPI)'
+  }
   if (b.serviceType === 'home') {
     if (b.homePlanPaymentMode === 'offline') return 'Offline (cash / UPI)'
     if (b.homePlanPaymentMode === 'online') return 'Online'
     return '—'
   }
   return 'Online'
+}
+
+export function serviceTypeLabel(serviceType) {
+  if (serviceType === 'online') return 'Online'
+  if (serviceType === 'clinic') return 'Clinic'
+  return 'Home'
+}
+
+export function formatPaidAt(b) {
+  const raw = b?.paidAt || b?.heldAt
+  if (!raw) return null
+  try {
+    return new Date(raw).toLocaleString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  } catch {
+    return null
+  }
+}
+
+/** Patient-facing label for what they booked (stroke, knee pain, etc.). */
+export function bookingConditionLabel(b) {
+  const text = typeof b === 'string' ? b : b?.issue
+  const trimmed = String(text || '').trim()
+  return trimmed || null
+}
+
+/** e.g. "8 Jul, 6:00 PM – 7:00 PM (Stroke / Paralysis)" */
+export function formatBookingVisitWithCondition(input) {
+  if (input == null) return '—'
+  const date = input.date
+  const timeSlot = input.timeSlot ?? input.time
+  const conditionSource = input.booking ?? input
+  const visit = formatBookingDateAndSlot(date, timeSlot)
+  const condition = bookingConditionLabel(conditionSource)
+  if (!visit && !condition) return '—'
+  if (!condition) return visit
+  if (!visit) return `(${condition})`
+  return `${visit} (${condition})`
 }
 
 export function paymentStatusLabel(ps) {

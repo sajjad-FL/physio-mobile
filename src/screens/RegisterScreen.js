@@ -17,6 +17,7 @@ import { openWebLoginInBrowser } from '../utils/webApp'
 import { useReferralPublicSettings } from '../api/queries'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
+import { OTP_RESEND_COOLDOWN_SECONDS } from '../constants/otp'
 
 const STEPS = { PHONE: 1, OTP: 2, PROFILE: 3 }
 const TOTAL_STEPS = 3
@@ -60,6 +61,7 @@ export default function RegisterScreen({ navigation, route }) {
   const [sendingOtp, setSendingOtp] = useState(false)
   const [loading, setLoading] = useState(false)
   const [fieldErrors, setFieldErrors] = useState({})
+  const [resendIn, setResendIn] = useState(0)
   const [referralCode, setReferralCode] = useState(() =>
     String(route?.params?.ref || '')
       .trim()
@@ -68,6 +70,12 @@ export default function RegisterScreen({ navigation, route }) {
   )
   const { data: referralPublic } = useReferralPublicSettings()
   const friendSignupBonus = referralPublic?.referralSignupBonusAmount ?? 0
+
+  useEffect(() => {
+    if (resendIn <= 0) return undefined
+    const t = setTimeout(() => setResendIn((s) => Math.max(0, s - 1)), 1000)
+    return () => clearTimeout(t)
+  }, [resendIn])
 
   const openLink = useCallback(async (url) => {
     try {
@@ -91,6 +99,7 @@ export default function RegisterScreen({ navigation, route }) {
   }, [navigation])
 
   async function sendOtp() {
+    if (step === STEPS.OTP && resendIn > 0) return
     const pv = validateIndianMobile(phone)
     setFieldErrors((f) => ({ ...f, phone: pv.valid ? '' : pv.message }))
     if (!pv.valid) return
@@ -102,6 +111,7 @@ export default function RegisterScreen({ navigation, route }) {
       Toast.show({ type: 'success', text1: 'Verification code sent.' })
       setOtp('')
       setStep(STEPS.OTP)
+      setResendIn(OTP_RESEND_COOLDOWN_SECONDS)
     } catch (err) {
       Toast.show({
         type: 'error',
@@ -116,6 +126,7 @@ export default function RegisterScreen({ navigation, route }) {
     if (step === STEPS.OTP) {
       setStep(STEPS.PHONE)
       setOtp('')
+      setResendIn(0)
       setFieldErrors((f) => ({ ...f, otp: '' }))
       return
     }
@@ -144,6 +155,7 @@ export default function RegisterScreen({ navigation, route }) {
       otp: oe,
       name: ne,
       password: pe,
+      referral: '',
     })
     if (!pv.valid || ne || pe || oe) return
 
@@ -193,10 +205,13 @@ export default function RegisterScreen({ navigation, route }) {
         navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: getDefaultDashboardScreen() }] }))
       }
     } catch (err) {
-      Toast.show({
-        type: 'error',
-        text1: err.response?.data?.message || err.message || 'Registration failed',
-      })
+      const msg = err.response?.data?.message || err.message || 'Registration failed'
+      const field = err.response?.data?.field
+      if (field === 'referralCode' || /referral code/i.test(msg)) {
+        setFieldErrors((f) => ({ ...f, referral: msg }))
+      } else {
+        Toast.show({ type: 'error', text1: msg })
+      }
     } finally {
       setLoading(false)
     }
@@ -266,7 +281,14 @@ export default function RegisterScreen({ navigation, route }) {
           devOtpHint={devOtpHint}
           onResend={sendOtp}
           sendingOtp={sendingOtp}
+          resendIn={resendIn}
           onContinue={continueFromOtp}
+          onChangePhone={() => {
+            setStep(STEPS.PHONE)
+            setOtp('')
+            setResendIn(0)
+            setFieldErrors((f) => ({ ...f, otp: '' }))
+          }}
         />
       ) : null}
       {step === STEPS.PROFILE ? (
@@ -280,16 +302,22 @@ export default function RegisterScreen({ navigation, route }) {
           onChangePassword={setPassword}
           passwordError={fieldErrors.password}
           referralCode={referralCode}
-          onChangeReferralCode={(v) =>
+          onChangeReferralCode={(v) => {
             setReferralCode(
               String(v || '')
                 .trim()
                 .toUpperCase()
                 .replace(/[^A-Z0-9]/g, ''),
             )
-          }
+            setFieldErrors((f) => ({ ...f, referral: '' }))
+          }}
+          referralError={fieldErrors.referral}
           referralSignupBonus={friendSignupBonus}
           onSubmit={handleCreateAccount}
+          onBackToCode={() => {
+            setStep(STEPS.OTP)
+            setFieldErrors((f) => ({ ...f, name: '', password: '', referral: '' }))
+          }}
           loading={loading}
         />
       ) : null}

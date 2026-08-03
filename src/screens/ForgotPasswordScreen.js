@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
@@ -10,11 +10,30 @@ import KeyboardAwareScrollView from '../components/ui/KeyboardAwareScrollView'
 import { colors } from '../theme/colors'
 import { authFormCard } from '../theme/authFormCard'
 import { font, type, leading } from '../theme/typography'
+import { OTP_RESEND_COOLDOWN_SECONDS } from '../constants/otp'
 
 const STEPS = [
-  { key: 'phone', n: 1, icon: 'phone-portrait-outline', title: 'Enter your mobile', sub: 'We\'ll send a verification code on WhatsApp to your registered number.' },
-  { key: 'otp', n: 2, icon: 'keypad-outline', title: 'Enter the code', sub: 'Check WhatsApp for the 4-digit verification code.' },
-  { key: 'password', n: 3, icon: 'lock-closed-outline', title: 'New password', sub: 'Choose a strong password with at least 6 characters.' },
+  {
+    key: 'phone',
+    n: 1,
+    icon: 'phone-portrait-outline',
+    title: 'Enter your mobile',
+    sub: 'Enter your registered number. If it matches an account, we’ll send a WhatsApp code.',
+  },
+  {
+    key: 'otp',
+    n: 2,
+    icon: 'keypad-outline',
+    title: 'Enter the code',
+    sub: 'If an account exists for this number, a verification code has been sent via WhatsApp.',
+  },
+  {
+    key: 'password',
+    n: 3,
+    icon: 'lock-closed-outline',
+    title: 'New password',
+    sub: 'Choose a strong password with at least 6 characters.',
+  },
 ]
 
 export default function ForgotPasswordScreen({ navigation }) {
@@ -25,18 +44,33 @@ export default function ForgotPasswordScreen({ navigation }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
+  const [resendIn, setResendIn] = useState(0)
 
   const stepMeta = STEPS.find((s) => s.key === step) || STEPS[0]
+  const canResend = resendIn <= 0 && !loading
 
-  async function sendCode() {
+  useEffect(() => {
+    if (resendIn <= 0) return undefined
+    const t = setTimeout(() => setResendIn((s) => Math.max(0, s - 1)), 1000)
+    return () => clearTimeout(t)
+  }, [resendIn])
+
+  async function sendCode({ isResend = false } = {}) {
+    if (isResend && resendIn > 0) return
     setError('')
     const pv = validateIndianMobile(phone)
     if (!pv.valid) { setFieldErrors({ phone: pv.message }); return }
     setLoading(true)
     try {
       await api.post('/auth/forgot-password', { phone: pv.normalized })
-      Toast.show({ type: 'success', text1: 'Verification code sent' })
+      Toast.show({
+        type: 'success',
+        text1: isResend ? 'Code resent' : 'Check WhatsApp',
+        text2: 'If an account exists, a verification code was sent.',
+      })
       setStep('otp')
+      setResendIn(OTP_RESEND_COOLDOWN_SECONDS)
+      if (isResend) setOtp('')
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Could not send code')
     } finally {
@@ -81,7 +115,7 @@ export default function ForgotPasswordScreen({ navigation }) {
   }
 
   function handleBack() {
-    if (step === 'otp') { setStep('phone'); setFieldErrors({}); return }
+    if (step === 'otp') { setStep('phone'); setFieldErrors({}); setResendIn(0); return }
     if (step === 'password') { setStep('otp'); setFieldErrors({}); return }
     navigation.navigate('Login')
   }
@@ -101,141 +135,149 @@ export default function ForgotPasswordScreen({ navigation }) {
       iosHeaderOffset={0}
       extraBottomPadding={44}
     >
-      {/* Ambient Top Background Halo Glow */}
       <View style={styles.ambientHeaderGlow} pointerEvents="none" />
       <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
 
-      {/* ── Back row ──────────────────────────────── */}
       <Pressable onPress={handleBack} style={styles.backRow} hitSlop={12}>
         <Ionicons name="arrow-back" size={18} color={colors.brand} />
         <Text style={styles.backTxt}>Back</Text>
       </Pressable>
 
-        {/* ── Step progress ─────────────────────────── */}
-        <View style={styles.stepRow}>
-          {STEPS.map((s, idx) => (
-            <View key={s.key} style={styles.stepItem}>
-              <View style={[
-                styles.stepDot,
-                s.key === step && styles.stepDotActive,
-                STEPS.indexOf(STEPS.find((x) => x.key === step)) > idx && styles.stepDotDone,
-              ]}>
-                {STEPS.indexOf(STEPS.find((x) => x.key === step)) > idx ? (
-                  <Ionicons name="checkmark" size={10} color={colors.white} />
-                ) : (
-                  <Text style={[styles.stepDotNum, s.key === step && styles.stepDotNumActive]}>{s.n}</Text>
-                )}
-              </View>
-              {idx < STEPS.length - 1 ? (
-                <View style={[styles.stepLine, STEPS.indexOf(STEPS.find((x) => x.key === step)) > idx && styles.stepLineDone]} />
-              ) : null}
+      <View style={styles.stepRow}>
+        {STEPS.map((s, idx) => (
+          <View key={s.key} style={styles.stepItem}>
+            <View style={[
+              styles.stepDot,
+              s.key === step && styles.stepDotActive,
+              STEPS.indexOf(STEPS.find((x) => x.key === step)) > idx && styles.stepDotDone,
+            ]}>
+              {STEPS.indexOf(STEPS.find((x) => x.key === step)) > idx ? (
+                <Ionicons name="checkmark" size={10} color={colors.white} />
+              ) : (
+                <Text style={[styles.stepDotNum, s.key === step && styles.stepDotNumActive]}>{s.n}</Text>
+              )}
             </View>
-          ))}
-        </View>
-
-        {/* ── Icon + heading ─────────────────────────── */}
-        <View style={styles.hero}>
-          <View style={styles.heroIconWrap}>
-            <Ionicons name={stepMeta.icon} size={26} color={colors.brand} />
+            {idx < STEPS.length - 1 ? (
+              <View style={[styles.stepLine, STEPS.indexOf(STEPS.find((x) => x.key === step)) > idx && styles.stepLineDone]} />
+            ) : null}
           </View>
-          <Text style={styles.heroTitle}>{stepMeta.title}</Text>
-          <Text style={styles.heroSub}>{stepMeta.sub}</Text>
-        </View>
+        ))}
+      </View>
 
-        {/* ── Error banner ──────────────────────────── */}
-        {error ? (
-          <View style={styles.alert}>
-            <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
-            <Text style={styles.alertText}>{error}</Text>
-          </View>
+      <View style={styles.hero}>
+        <View style={styles.heroIconWrap}>
+          <Ionicons name={stepMeta.icon} size={26} color={colors.brand} />
+        </View>
+        <Text style={styles.heroTitle}>{stepMeta.title}</Text>
+        <Text style={styles.heroSub}>{stepMeta.sub}</Text>
+      </View>
+
+      {error ? (
+        <View style={styles.alert}>
+          <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
+          <Text style={styles.alertText}>{error}</Text>
+        </View>
+      ) : null}
+
+      <View style={styles.formCard}>
+        {step === 'phone' ? (
+          <Input
+            label="Mobile number"
+            required
+            keyboardType="phone-pad"
+            textContentType="telephoneNumber"
+            autoComplete="tel"
+            importantForAutofill="yes"
+            autoCorrect={false}
+            value={phone}
+            onChangeText={(v) => { setPhone(v); setFieldErrors((f) => ({ ...f, phone: '' })) }}
+            error={fieldErrors.phone}
+            placeholder="Enter mobile number"
+          />
         ) : null}
 
-        {/* ── Form card ─────────────────────────────── */}
-        <View style={styles.formCard}>
-          {step === 'phone' ? (
+        {step === 'otp' ? (
+          <>
             <Input
-              label="Mobile number"
+              label="Verification code"
               required
-              keyboardType="phone-pad"
-              textContentType="telephoneNumber"
-              autoComplete="tel"
+              keyboardType="number-pad"
+              textContentType="oneTimeCode"
+              autoComplete="one-time-code"
               importantForAutofill="yes"
-              autoCorrect={false}
-              value={phone}
-              onChangeText={(v) => { setPhone(v); setFieldErrors((f) => ({ ...f, phone: '' })) }}
-              error={fieldErrors.phone}
-              placeholder="Enter mobile number"
+              value={otp}
+              onChangeText={(v) => { setOtp(v); setFieldErrors((f) => ({ ...f, otp: '' })) }}
+              error={fieldErrors.otp}
+              placeholder="4-digit code"
             />
-          ) : null}
-
-          {step === 'otp' ? (
-            <>
-              <Input
-                label="Verification code"
-                required
-                keyboardType="number-pad"
-                textContentType="oneTimeCode"
-                autoComplete="one-time-code"
-                importantForAutofill="yes"
-                value={otp}
-                onChangeText={(v) => { setOtp(v); setFieldErrors((f) => ({ ...f, otp: '' })) }}
-                error={fieldErrors.otp}
-                placeholder="4-digit code"
-              />
-              <Pressable onPress={sendCode} style={styles.resendRow} hitSlop={8}>
-                <Text style={styles.resendTxt}>Didn't receive it? </Text>
+            {canResend ? (
+              <Pressable onPress={() => sendCode({ isResend: true })} style={styles.resendRow} hitSlop={8}>
+                <Text style={styles.resendTxt}>Didn't get it? </Text>
                 <Text style={styles.resendLink}>Resend code</Text>
               </Pressable>
-            </>
-          ) : null}
-
-          {step === 'password' ? (
-            <Input
-              label="New password"
-              required
-              secureTextEntry
-              textContentType="newPassword"
-              autoComplete="password-new"
-              importantForAutofill="yes"
-              autoCorrect={false}
-              value={newPassword}
-              onChangeText={(v) => { setNewPassword(v); setFieldErrors((f) => ({ ...f, newPassword: '' })) }}
-              error={fieldErrors.newPassword}
-              placeholder="Min. 6 characters"
-            />
-          ) : null}
-
-          <View style={styles.ctaGap} />
-
-          <Pressable
-            style={({ pressed }) => [styles.cta, loading && styles.ctaBusy, pressed && !loading && styles.ctaPressed]}
-            onPress={handleCta}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color={colors.white} />
             ) : (
-              <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.white} />
+              <Text style={styles.resendWait}>
+                Resend available in <Text style={styles.resendWaitNum}>{resendIn}s</Text>
+              </Text>
             )}
-            <Text style={styles.ctaTxt}>{loading ? 'Please wait…' : ctaLabels[step]}</Text>
-          </Pressable>
-        </View>
+            <Pressable
+              onPress={() => {
+                setStep('phone')
+                setOtp('')
+                setError('')
+                setResendIn(0)
+              }}
+              style={styles.diffNumber}
+              hitSlop={8}
+            >
+              <Text style={styles.diffNumberTxt}>Use a different number</Text>
+            </Pressable>
+          </>
+        ) : null}
 
-        {/* ── Footer ────────────────────────────────── */}
-        <Pressable onPress={() => navigation.navigate('Login')} style={styles.footerRow} hitSlop={8}>
-          <Text style={styles.footerTxt}>Remember your password? </Text>
-          <Text style={styles.footerLink}>Sign in</Text>
+        {step === 'password' ? (
+          <Input
+            label="New password"
+            required
+            secureTextEntry
+            textContentType="newPassword"
+            autoComplete="password-new"
+            importantForAutofill="yes"
+            autoCorrect={false}
+            value={newPassword}
+            onChangeText={(v) => { setNewPassword(v); setFieldErrors((f) => ({ ...f, newPassword: '' })) }}
+            error={fieldErrors.newPassword}
+            placeholder="Min. 6 characters"
+          />
+        ) : null}
+
+        <View style={styles.ctaGap} />
+
+        <Pressable
+          style={({ pressed }) => [styles.cta, loading && styles.ctaBusy, pressed && !loading && styles.ctaPressed]}
+          onPress={handleCta}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.white} />
+          )}
+          <Text style={styles.ctaTxt}>{loading ? 'Please wait…' : ctaLabels[step]}</Text>
         </Pressable>
+      </View>
+
+      <Pressable onPress={() => navigation.navigate('Login')} style={styles.footerRow} hitSlop={8}>
+        <Text style={styles.footerTxt}>Remember your password? </Text>
+        <Text style={styles.footerLink}>Sign in</Text>
+      </Pressable>
     </KeyboardAwareScrollView>
   )
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
   bg: { flex: 1, backgroundColor: colors.canvas, position: 'relative' },
   scroll: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 44 },
-
-  // Ambient Header glows
   ambientHeaderGlow: {
     position: 'absolute',
     top: -120,
@@ -256,11 +298,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(13, 107, 107, 0.04)',
     zIndex: 0,
   },
-
   backRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 32, alignSelf: 'flex-start', zIndex: 2 },
   backTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand },
-
-  // Step progress
   stepRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 32, zIndex: 2 },
   stepItem: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   stepDot: {
@@ -288,8 +327,6 @@ const styles = StyleSheet.create({
   stepDotNumActive: { color: colors.brand },
   stepLine: { flex: 1, height: 1.5, backgroundColor: 'rgba(13, 148, 136, 0.15)', marginHorizontal: 6 },
   stepLineDone: { backgroundColor: colors.brand },
-
-  // Hero
   hero: { alignItems: 'center', gap: 8, marginBottom: 28, zIndex: 2 },
   heroIconWrap: {
     width: 64,
@@ -316,8 +353,6 @@ const styles = StyleSheet.create({
     lineHeight: leading.sm,
     paddingHorizontal: 8,
   },
-
-  // Alert
   alert: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -331,17 +366,28 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   alertText: { flex: 1, fontFamily: font.medium, fontSize: type.sm, color: colors.danger, lineHeight: leading.sm },
-
-  // Form card
   formCard: {
     ...authFormCard,
     zIndex: 2,
     marginBottom: 20,
   },
-  resendRow: { flexDirection: 'row', marginTop: 10 },
+  resendRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 },
   resendTxt: { fontFamily: font.regular, fontSize: type.sm, color: colors.textSecondary },
-  resendLink: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand },
-
+  resendLink: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand, textDecorationLine: 'underline' },
+  resendWait: {
+    marginTop: 10,
+    fontFamily: font.medium,
+    fontSize: type.sm,
+    color: colors.textSecondary,
+  },
+  resendWaitNum: { fontFamily: font.semiBold, color: colors.brand },
+  diffNumber: { marginTop: 14, alignItems: 'center' },
+  diffNumberTxt: {
+    fontFamily: font.medium,
+    fontSize: type.sm,
+    color: colors.textSecondary,
+    textDecorationLine: 'underline',
+  },
   ctaGap: { height: 20 },
   cta: {
     flexDirection: 'row',
@@ -360,8 +406,6 @@ const styles = StyleSheet.create({
   ctaBusy: { opacity: 0.7 },
   ctaPressed: { opacity: 0.88 },
   ctaTxt: { fontFamily: font.bold, fontSize: type.base, color: colors.white },
-
-  // Footer
   footerRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 4, zIndex: 2 },
   footerTxt: { fontFamily: font.regular, fontSize: type.sm, color: colors.textSecondary },
   footerLink: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand },

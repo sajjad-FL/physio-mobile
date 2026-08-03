@@ -9,6 +9,7 @@ import { getTokenSync, getRoleSync } from '../auth/tokenStore'
 import DashboardHomeScreen from '../screens/DashboardHomeScreen'
 import DashboardBookingsScreen from '../screens/DashboardBookingsScreen'
 import UserBookingDetailScreen from '../screens/UserBookingDetailScreen'
+import PaymentDetailScreen from '../screens/PaymentDetailScreen'
 import DashboardWalletScreen from '../screens/DashboardWalletScreen'
 import DashboardDisputesScreen from '../screens/DashboardDisputesScreen'
 import ShopStackNavigator from './ShopStackNavigator'
@@ -32,6 +33,7 @@ function BookingsStackNav() {
     >
       <BookStack.Screen name="BookingsList" component={DashboardBookingsScreen} options={{ title: 'Bookings' }} />
       <BookStack.Screen name="BookingDetail" component={UserBookingDetailScreen} options={{ title: 'Session' }} />
+      <BookStack.Screen name="PaymentDetail" component={PaymentDetailScreen} options={{ title: 'Payment details' }} />
     </BookStack.Navigator>
   )
 }

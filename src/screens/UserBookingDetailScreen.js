@@ -1160,10 +1160,16 @@ export default function UserBookingDetailScreen({ route, navigation }) {
                 subtitle={
                   isOfflinePlan
                     ? 'Your physiotherapist records each cash/UPI payment. Admin verification unlocks sessions.'
-                    : 'Online installment summary for this plan.'
+                    : 'Tap a row to open payment details.'
                 }
                 summary={paymentSummary}
                 payments={paymentsList}
+                onRowPress={(p) =>
+                  navigation.navigate('PaymentDetail', {
+                    bookingId: b._id,
+                    paymentId: String(p._id),
+                  })
+                }
                 emptyMessage={isOfflinePlan ? 'No collections recorded yet.' : 'No installments yet.'}
               >
                 {isOnlineBooking && outstanding > 0.009 ? (
@@ -1201,7 +1207,17 @@ export default function UserBookingDetailScreen({ route, navigation }) {
 
           {/* Payment Details */}
           <View style={styles.sectionCard}>
-            <SectionTitle icon="card-outline" title="Payment" />
+            <View style={styles.paymentHeadRow}>
+              <SectionTitle icon="card-outline" title="Payment" />
+              <Pressable
+                onPress={() =>
+                  navigation.navigate('PaymentDetail', { bookingId: b._id })
+                }
+                hitSlop={8}
+              >
+                <Text style={styles.openPaymentLink}>Full details</Text>
+              </Pressable>
+            </View>
             <KV k="Mode" v={paymentModeLabel(b)} />
             <KV k="Amount" v={paymentAmountLabel(b)} />
             <KV k="Payment hold" v={paymentStatusLabel(b.paymentStatus)} />
@@ -1717,6 +1733,18 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSubtle,
     padding: 16,
     ...CARD_SHADOW,
+  },
+  paymentHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  openPaymentLink: {
+    fontFamily: font.semiBold,
+    fontSize: type.sm,
+    color: colors.brand,
+    marginBottom: 14,
   },
   sectionTitleRow: {
     flexDirection: 'row',

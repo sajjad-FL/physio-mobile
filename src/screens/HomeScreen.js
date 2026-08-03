@@ -1744,7 +1744,12 @@ const FeaturedPhysioCard = memo(function FeaturedPhysioCard({ physio, pulseAnim,
   const displayName = physio.name.startsWith('Dr') ? physio.name : `Dr. ${physio.name}`
   const badgeColors = getSpecialtyBadgeColors(physio.specialization)
   const slotText = getNextSlotText(physio._id)
-  const languages = physio.languages || 'English · Hindi · Assamese'
+  const languages =
+    Array.isArray(physio.languages) && physio.languages.length
+      ? physio.languages.join(' · ')
+      : typeof physio.languages === 'string' && physio.languages.trim()
+        ? physio.languages
+        : 'English · Hindi · Assamese'
 
   return (
     <Pressable

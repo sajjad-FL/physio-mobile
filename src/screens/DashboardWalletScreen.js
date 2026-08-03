@@ -133,7 +133,12 @@ export default function DashboardWalletScreen({ navigation }) {
                 booking={b}
                 amount={b.totalAmount || 0}
                 isLast={index === lines.length - 1}
-                onPress={() => navigation.navigate('Bookings', { screen: 'BookingDetail', params: { id: b._id } })}
+                onPress={() =>
+                  navigation.navigate('Bookings', {
+                    screen: 'PaymentDetail',
+                    params: { bookingId: b._id },
+                  })
+                }
               />
             ))}
           </View>

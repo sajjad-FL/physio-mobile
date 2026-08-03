@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors } from '../../theme/colors'
 
 function formatRupees(n) {
@@ -34,6 +34,7 @@ export default function InstallmentsPhysioCard({
   summary,
   payments,
   emptyMessage,
+  onRowPress,
   children,
 }) {
   const s = summary || {}
@@ -98,7 +99,12 @@ export default function InstallmentsPhysioCard({
         </View>
       ) : (
         rows.map((p) => (
-          <View key={p._id} style={styles.line}>
+          <Pressable
+            key={p._id}
+            onPress={onRowPress ? () => onRowPress(p) : undefined}
+            disabled={!onRowPress}
+            style={styles.line}
+          >
             <Text style={styles.lineWhen}>{formatDt(p.verifiedAt || p.collectedAt || p.createdAt)}</Text>
             {p.sessionOrdinal ? (
               <Text style={styles.lineSession}>Session {p.sessionOrdinal}</Text>
@@ -112,7 +118,7 @@ export default function InstallmentsPhysioCard({
               <Text style={styles.reject}>{p.rejectReason}</Text>
             ) : null}
             {p.note ? <Text style={styles.note}>{p.note}</Text> : null}
-          </View>
+          </Pressable>
         ))
       )}
     </View>
