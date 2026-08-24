@@ -7,6 +7,7 @@ import { usePatientAppTour } from '../tour/usePatientAppTour'
 import { formatBookingDateAndSlot, formatBookingTimeSlot } from '../utils/date'
 import { bookingStatusBadge } from '../utils/dashboardUtils'
 import { pickNextSession, todayYmd, normalizeSessionRows, listSameDaySiblings } from '../utils/physioBookingHelpers'
+import { resolveBookingDisplayVisit } from '../utils/bookingDisplay'
 import { getTechniqueByIssue } from '../constants/techniques'
 import Chip from '../components/ui/Chip'
 import ServicesSection from '../components/ServicesSection'
@@ -159,7 +160,11 @@ export default function DashboardHomeScreen({ navigation }) {
       ? {
           name: nextSession.booking.physioId.name,
           detail: `${nextSession.booking.physioId.specialization || 'Verified Physiotherapist'} · ${
-            nextSession.booking.serviceType === 'online' ? 'Online' : 'At Home'
+            nextSession.booking.serviceType === 'online'
+              ? 'Online'
+              : nextSession.booking.serviceType === 'clinic'
+                ? 'Clinic'
+                : 'At Home'
           }`,
         }
       : nextSession.booking.managerId?.name
@@ -169,7 +174,12 @@ export default function DashboardHomeScreen({ navigation }) {
           }
         : {
             name: 'Care team assigning…',
-            detail: nextSession.booking.serviceType === 'online' ? 'Online visit' : 'Home visit',
+            detail:
+              nextSession.booking.serviceType === 'online'
+                ? 'Online visit'
+                : nextSession.booking.serviceType === 'clinic'
+                  ? 'Clinic visit'
+                  : 'Home visit',
           }
     : null
 
@@ -307,7 +317,7 @@ export default function DashboardHomeScreen({ navigation }) {
               <Ionicons name="add-circle-outline" size={24} color={figmaTokens.primary} />
             </View>
             <View style={styles.bookCtaBody}>
-              <Text style={styles.bookCtaTitle}>Book a home visit</Text>
+              <Text style={styles.bookCtaTitle}>Book an appointment</Text>
               <Text style={styles.bookCtaSub}>Help is one tap away — verified physios near you</Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color={figmaTokens.primary} />
@@ -479,7 +489,10 @@ const ActivityRow = memo(function ActivityRow({ item, onPress, isLast }) {
             </Text>
           </View>
           <Text style={styles.actDate} numberOfLines={1}>
-            {formatBookingDateAndSlot(item.date, item.timeSlot)}
+            {(() => {
+              const visit = resolveBookingDisplayVisit(item)
+              return formatBookingDateAndSlot(visit.date, visit.time)
+            })()}
             {condition ? ` (${condition})` : ''}
           </Text>
         </View>

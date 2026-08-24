@@ -21,7 +21,8 @@ import {
 import Toast from 'react-native-toast-message'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { api } from '../api/client'
-import { getTokenSync, clearSession } from '../auth/tokenStore'
+import { getTokenSync } from '../auth/tokenStore'
+import { useAuth } from '../context/AuthContext'
 import {
   DEFAULT_REFERRAL_REWARD_AMOUNT,
   DEFAULT_REFERRAL_SIGNUP_BONUS_AMOUNT,
@@ -147,6 +148,7 @@ function PremiumDateInput({ label, value, onPress, error }) {
 }
 
 export default function ProfileScreen({ navigation }) {
+  const { logout } = useAuth()
   const insets = useSafeAreaInsets()
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -500,8 +502,14 @@ export default function ProfileScreen({ navigation }) {
           onPress: async () => {
             try {
               await api.delete('/profile')
-            } catch (_) {}
-            await clearSession()
+              await logout(navigation)
+              Toast.show({ type: 'success', text1: 'Account deleted' })
+            } catch (err) {
+              Toast.show({
+                type: 'error',
+                text1: err.response?.data?.message || 'Could not delete account',
+              })
+            }
           },
         },
       ],
@@ -950,17 +958,19 @@ export default function ProfileScreen({ navigation }) {
           )}
         </Pressable>
 
-        <Pressable
-          accessibilityRole="button"
-          style={({ pressed }) => [
-            styles.deleteAccountBtn,
-            pressed && { opacity: 0.7 }
-          ]}
-          onPress={handleDeleteAccount}
-        >
-          <Ionicons name="trash-outline" size={13} color={colors.red500 ?? '#ef4444'} />
-          <Text style={styles.deleteAccountTxt}>Delete Account</Text>
-        </Pressable>
+        {!isPhysio ? (
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.deleteAccountBtn,
+              pressed && { opacity: 0.7 },
+            ]}
+            onPress={handleDeleteAccount}
+          >
+            <Ionicons name="trash-outline" size={13} color={colors.red500 ?? '#ef4444'} />
+            <Text style={styles.deleteAccountTxt}>Delete Account</Text>
+          </Pressable>
+        ) : null}
 
         <Pressable
           accessibilityRole="button"

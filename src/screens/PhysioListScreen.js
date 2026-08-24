@@ -883,7 +883,7 @@ export default function PhysioListScreen({ navigation, route }) {
           <Ionicons name="calendar-outline" size={36} color={colors.white} />
         </View>
         <Text style={styles.unauthTitle}>Book an appointment</Text>
-        <Text style={styles.unauthSub}>Sign in to book a verified physiotherapy home visit in Assam.</Text>
+        <Text style={styles.unauthSub}>Sign in to book home, clinic, or online physiotherapy in Assam.</Text>
         <Pressable
           style={({ pressed }) => [styles.unauthBtn, pressed && { opacity: 0.9 }]}
           onPress={() => navigation.navigate('Login')}

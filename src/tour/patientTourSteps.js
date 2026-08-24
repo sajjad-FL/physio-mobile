@@ -55,7 +55,7 @@ function step1Title() {
 function step1Body() {
   return step1HasUpcomingBooking
     ? 'Your next session appears here. Tap to view details and manage your care plan.'
-    : 'Book a verified physio for a home visit or online session.'
+    : 'Book a verified physio for home, clinic, or online care.'
 }
 
 export function buildPatientTourSteps() {
@@ -67,7 +67,7 @@ export function buildPatientTourSteps() {
         <PatientTourTooltip
           {...props}
           title="Welcome to PhysiOkhom"
-          body="Your home for physiotherapy at home — book appointments, track care, and manage payments."
+          body="Your home for physiotherapy — book home, clinic, or online appointments, track care, and manage payments."
         />
       ),
     },

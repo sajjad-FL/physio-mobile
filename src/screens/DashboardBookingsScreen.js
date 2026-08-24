@@ -3,6 +3,7 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'rea
 import { Ionicons } from '@expo/vector-icons'
 import { formatBookingDateAndSlot } from '../utils/date'
 import { bookingStatusBadge } from '../utils/dashboardUtils'
+import { resolveBookingDisplayVisit } from '../utils/bookingDisplay'
 import PatientBookingsFilterModal from '../components/dashboard/PatientBookingsFilterModal'
 import Chip from '../components/ui/Chip'
 import EmptyState from '../components/ui/EmptyState'
@@ -110,6 +111,7 @@ export default function DashboardBookingsScreen({ navigation }) {
 const BookingCard = memo(function BookingCard({ item, onPress }) {
   const st = bookingStatusBadge(item.status, item.sessionStatus, item.paymentStatus, item.planStatus)
   const amt = Number(item.totalAmount) || 0
+  const visit = resolveBookingDisplayVisit(item)
   const indicatorColor = 
     item.status === 'cancelled' ? colors.red500 :
     item.sessionStatus === 'completed' ? colors.success :
@@ -126,7 +128,7 @@ const BookingCard = memo(function BookingCard({ item, onPress }) {
           </View>
           <View style={styles.cardBody}>
             <Text style={styles.cardDate} numberOfLines={1}>
-              {formatBookingDateAndSlot(item.date, item.timeSlot)}
+              {formatBookingDateAndSlot(visit.date, visit.time)}
             </Text>
             <Text style={styles.cardPhysio} numberOfLines={1}>
               {item.physioId?.name || 'Physio TBD'}

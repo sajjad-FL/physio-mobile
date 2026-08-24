@@ -1,15 +1,12 @@
 import { memo } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { loginTokens as t, loginType, loginLeading } from '../../theme/loginTokens'
-import { font } from '../../theme/typography'
+import { font, type } from '../../theme/typography'
 
-function LoginHomeBrandHeader({ brandTitle = 'PhysiOkhom', backLabel = 'Home', onBack }) {
+function LoginHomeBrandHeader({ backLabel = 'Home', onBack }) {
   const insets = useSafeAreaInsets()
-  const split = String(brandTitle || 'PhysiOkhom').split(/(?=khom)/i)
-  const leftPart = split[0] || 'PhysiO'
-  const rightPart = split.length > 1 ? split.slice(1).join('') : 'khom'
 
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) + 6 }]}>
@@ -28,11 +25,18 @@ function LoginHomeBrandHeader({ brandTitle = 'PhysiOkhom', backLabel = 'Home', o
             </Text>
           </Pressable>
         </View>
-        <View style={styles.centerAbs} pointerEvents="none">
-          <Text style={styles.brandRow} numberOfLines={1}>
-            <Text style={styles.brandPhysio}>{leftPart}</Text>
-            <Text style={styles.brandKhom}>{rightPart}</Text>
-          </Text>
+        <View style={styles.centerAbs} pointerEvents="none" accessibilityRole="header" accessibilityLabel="PhysiOkhom">
+          <View style={styles.brandRow}>
+            <Image
+              source={require('../../../assets/images/logo.png')}
+              style={styles.logoMark}
+              resizeMode="contain"
+            />
+            <Text numberOfLines={1}>
+              <Text style={styles.brandPhysio}>Physi</Text>
+              <Text style={styles.brandKhom}>Okhom</Text>
+            </Text>
+          </View>
         </View>
         <View style={styles.side} />
       </View>
@@ -64,20 +68,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  brandRow: { flexDirection: 'row', alignItems: 'center' },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  logoMark: {
+    width: 36,
+    height: 36,
+  },
   brandPhysio: {
     fontFamily: font.bold,
-    fontSize: loginType.brandTitle,
-    lineHeight: loginLeading.brandTitle,
-    color: t.ink,
-    letterSpacing: -0.2,
+    fontSize: type.lg,
+    color: '#0f172a',
+    letterSpacing: -0.3,
   },
   brandKhom: {
     fontFamily: font.bold,
-    fontSize: loginType.brandTitle,
-    lineHeight: loginLeading.brandTitle,
-    color: t.brandAccent,
-    letterSpacing: -0.2,
+    fontSize: type.lg,
+    color: t.brandAccent || '#0d9488',
+    letterSpacing: -0.3,
   },
 })
 

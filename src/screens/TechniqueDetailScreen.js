@@ -67,7 +67,7 @@ export default function TechniqueDetailScreen({ navigation, route }) {
           <Text style={styles.footerTitle} numberOfLines={1}>
             {tech.label}
           </Text>
-          <Text style={styles.footerSub}>{priceLabel} · home visit</Text>
+          <Text style={styles.footerSub}>{priceLabel} · home or clinic</Text>
         </View>
         <Pressable
           style={[styles.cta, { backgroundColor: tech.color }]}

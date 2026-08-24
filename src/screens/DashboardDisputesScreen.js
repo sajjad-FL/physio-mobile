@@ -1,16 +1,15 @@
 import { memo, useState } from 'react'
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { formatBookingDateAndSlot } from '../utils/date'
-import { bookingCodeBadge } from '../utils/bookingDisplay'
+import { bookingCodeBadge, resolveBookingDisplayVisit } from '../utils/bookingDisplay'
 import Chip from '../components/ui/Chip'
 import PaginationBar from '../components/ui/PaginationBar'
 import { ListSkeleton } from '../components/ui/skeletons'
 import { colors } from '../theme/colors'
 import { figmaTokens } from '../theme/figmaTokens'
-import { surfaceCard } from '../theme/surfaceCard'
 import { font, type, leading } from '../theme/typography'
-import { disputeStatusBadge } from '../utils/dashboardUtils'
+import { disputeStatusBadge, paymentBadge } from '../utils/dashboardUtils'
 import { useMyDisputes } from '../api/queries'
 
 function statusAccent(status) {
@@ -20,7 +19,7 @@ function statusAccent(status) {
   return colors.slate300
 }
 
-export default function DashboardDisputesScreen() {
+export default function DashboardDisputesScreen({ navigation }) {
   const [page, setPage] = useState(1)
   const { data, isLoading, isRefetching, refetch } = useMyDisputes({ page, limit: 8 })
   const rows = data?.rows || []
@@ -75,28 +74,42 @@ export default function DashboardDisputesScreen() {
             />
           ) : null
         }
-        renderItem={({ item }) => <DisputeCard item={item} />}
+        renderItem={({ item }) => <DisputeCard item={item} navigation={navigation} />}
       />
     </View>
   )
 }
 
-const DisputeCard = memo(function DisputeCard({ item }) {
+const DisputeCard = memo(function DisputeCard({ item, navigation }) {
   const chip = disputeStatusBadge(item.status)
   const accent = statusAccent(item.status)
+  const pay = item.bookingId?.paymentStatus ? paymentBadge(item.bookingId.paymentStatus) : null
   const bookingRef = bookingCodeBadge(item.bookingId) || ''
-  const bookingDate = formatBookingDateAndSlot(item.bookingId?.date, item.bookingId?.timeSlot)
+  const booking = item.bookingId && typeof item.bookingId === 'object' ? item.bookingId : null
+  const visit = booking ? resolveBookingDisplayVisit(booking) : { date: item.bookingId?.date, time: item.bookingId?.timeSlot }
+  const bookingDate = formatBookingDateAndSlot(visit.date, visit.time)
+  const raisedBy =
+    item.raisedBy === 'physio' ? 'Raised by physiotherapist' : 'Raised by you'
+  const bookingId = item.bookingId?._id
 
   return (
     <View style={styles.card}>
       <View style={[styles.cardAccent, { backgroundColor: accent }]} />
       <View style={styles.cardBody}>
-        <View style={styles.cardTop}>
+        <View style={styles.badgeRow}>
           <Chip label={chip.label} bg={chip.bg} fg={chip.fg} border={chip.border} />
-          {bookingRef ? (
-            <Text style={styles.bookingRef}>{bookingRef}</Text>
+          {pay ? (
+            <Chip label={pay.label} bg={pay.bg} fg={pay.fg} border={pay.border} />
           ) : null}
         </View>
+
+        <Text style={styles.reason}>{item.reason || 'Dispute'}</Text>
+
+        <Text style={styles.metaLine}>
+          {bookingRef ? `Booking ${bookingRef}` : 'Booking —'}
+          {' · '}
+          {raisedBy}
+        </Text>
 
         {bookingDate ? (
           <View style={styles.metaRow}>
@@ -104,8 +117,6 @@ const DisputeCard = memo(function DisputeCard({ item }) {
             <Text style={styles.metaTxt}>{bookingDate}</Text>
           </View>
         ) : null}
-
-        <Text style={styles.reason}>{item.reason || 'Dispute'}</Text>
 
         {item.description && item.description !== item.reason ? (
           <Text style={styles.desc}>{item.description}</Text>
@@ -116,6 +127,22 @@ const DisputeCard = memo(function DisputeCard({ item }) {
             <Ionicons name="checkmark-circle" size={13} color={colors.success} />
             <Text style={styles.resolutionTxt}>{item.resolution}</Text>
           </View>
+        ) : null}
+
+        {bookingId ? (
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.viewBookingBtn, pressed && { opacity: 0.7 }]}
+            onPress={() =>
+              navigation.navigate('Bookings', {
+                screen: 'BookingDetail',
+                params: { id: String(bookingId) },
+              })
+            }
+          >
+            <Text style={styles.viewBookingTxt}>View booking</Text>
+            <Ionicons name="arrow-forward" size={14} color={colors.brand} />
+          </Pressable>
         ) : null}
       </View>
     </View>
@@ -171,13 +198,18 @@ const styles = StyleSheet.create({
   },
   cardAccent: { width: 4, alignSelf: 'stretch' },
   cardBody: { flex: 1, padding: 16, gap: 8, zIndex: 2 },
-  cardTop: {
+  badgeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: 8,
   },
-  bookingRef: { fontFamily: font.bold, fontSize: type.xs, color: colors.textSecondary },
+  metaLine: {
+    fontFamily: font.medium,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+    lineHeight: leading.xs,
+  },
 
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   metaTxt: { fontFamily: font.medium, fontSize: type.xs, color: colors.textSecondary },
@@ -207,6 +239,18 @@ const styles = StyleSheet.create({
     fontSize: type.xs,
     color: colors.emerald700,
     lineHeight: leading.xs,
+  },
+  viewBookingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  viewBookingTxt: {
+    fontFamily: font.semiBold,
+    fontSize: type.sm,
+    color: colors.brand,
   },
 
   // Ambient Header glows

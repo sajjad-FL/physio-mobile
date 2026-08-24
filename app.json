@@ -8,8 +8,9 @@
     "userInterfaceStyle": "light",
     "scheme": "physiokhom",
     "splash": {
+      "image": "./assets/images/logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#f8fafc"
+      "backgroundColor": "#ffffff"
     },
     "assetBundlePatterns": [
       "assets/images/*",
@@ -35,7 +36,11 @@
       "package": "com.physiokhom.patient",
       "enableProguardInReleaseBuilds": true,
       "jsEngine": "hermes",
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/logo.png",
+        "backgroundColor": "#ffffff"
+      }
     },
     "plugins": [
       "expo-web-browser",

@@ -8,10 +8,6 @@ export const ISSUE_OPTIONS = [
   'Pediatric Rehab',
   'Post-Op Rehab',
   'Elderly Care',
-  'Cupping Therapy',
-  'Dry Needling',
-  'Kinesio Taping',
-  'IASTM',
 ]
 
 export const ISSUE_OTHER_VALUE = '__other__'

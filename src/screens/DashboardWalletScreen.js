@@ -2,6 +2,7 @@ import { memo, useMemo } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { formatBookingDateAndSlot } from '../utils/date'
+import { resolveBookingDisplayVisit } from '../utils/bookingDisplay'
 import EmptyState from '../components/ui/EmptyState'
 import Chip from '../components/ui/Chip'
 import { DetailSkeleton } from '../components/ui/skeletons'
@@ -160,7 +161,10 @@ const WalletRow = memo(function WalletRow({ booking, amount, isLast, onPress }) 
       </View>
       <View style={styles.txBody}>
         <Text style={styles.txDate} numberOfLines={1}>
-          {formatBookingDateAndSlot(booking.date, booking.timeSlot)}
+          {(() => {
+            const visit = resolveBookingDisplayVisit(booking)
+            return formatBookingDateAndSlot(visit.date, visit.time)
+          })()}
         </Text>
         <Text style={styles.txPhysio} numberOfLines={1}>{booking.physioId?.name || 'Physio'}</Text>
       </View>

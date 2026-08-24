@@ -12,6 +12,11 @@ import { api } from '../api/client'
 import { usePricingSettings } from '../api/queries'
 import { buildMobilePlanTierCards, FALLBACK_PLAN_TIER_CARDS } from '../utils/planTierDisplay'
 import { isAwaitingPatientConsent, isPlanLive } from '../utils/planStatus'
+import {
+  SUPPORT_PHONE,
+  SUPPORT_WHATSAPP_MESSAGE,
+  SUPPORT_WHATSAPP_NUMBER,
+} from '../constants/supportContact'
 
 const DEFAULT_SERVICE_AREA = {
   label: 'Kokrajhar',
@@ -74,7 +79,7 @@ const FAQ_CATEGORIES = ['All', 'Booking', 'Therapists', 'Payments']
 const FAQ_ITEMS = [
   {
     q: 'How do I book an appointment?',
-    a: 'Choose your condition, select a preferred date and time, complete the booking details, and pay securely online.',
+    a: 'Book a home visit, clinic visit, or online consultation. A Care Manager leads your complimentary assessment and care plan; after you consent, a verified physiotherapist is assigned for treatment.',
     cat: 'Booking',
   },
   {
@@ -94,7 +99,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How do payments work?',
-    a: 'We accept credit/debit cards, UPI, and Netbanking through Razorpay. You can pay per session or buy a package.',
+    a: 'You do not pay at booking for home or clinic visits. After your Care Manager assessment and plan consent, pay your care manager or online for installments. Online consultations use Razorpay at checkout.',
     cat: 'Payments',
   },
 ]
@@ -243,7 +248,7 @@ const HealthHubCard = memo(function HealthHubCard({ token, navigation, openWhats
             </View>
           </View>
           <Text style={[styles.hubProgressText, { marginBottom: 12 }]}>
-            Book a home visit with a verified physiotherapist and begin your personalised care plan.
+            Book an appointment with a verified physiotherapist and begin your personalised care plan.
           </Text>
           <View style={styles.hubActions}>
             <TouchableOpacity
@@ -272,10 +277,16 @@ const HealthHubCard = memo(function HealthHubCard({ token, navigation, openWhats
     const today = new Date()
     const todayYmd = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
     const nextScheduleEntry = schedule.find((s) => s.status !== 'completed' && s.date >= todayYmd)
+    const visitMode =
+      activeBooking.serviceType === 'online'
+        ? 'Online'
+        : activeBooking.serviceType === 'clinic'
+          ? 'Clinic'
+          : 'At Home'
     const nextVisitText = nextScheduleEntry
-      ? `${nextScheduleEntry.date} · ${nextScheduleEntry.time || activeBooking.timeSlot || ''} · At Home`
+      ? `${nextScheduleEntry.date} · ${nextScheduleEntry.time || activeBooking.timeSlot || ''} · ${visitMode}`
       : activeBooking.date
-        ? `${activeBooking.date} · ${activeBooking.timeSlot || ''} · At Home`
+        ? `${activeBooking.date} · ${activeBooking.timeSlot || ''} · ${visitMode}`
         : 'To be scheduled'
 
     const planTitle = activeBooking.issue || 'Home Visit Plan'
@@ -334,7 +345,7 @@ const HealthHubCard = memo(function HealthHubCard({ token, navigation, openWhats
             onPress={() => {
               Alert.alert('Contact Support', 'Calling Care Coordinator...', [
                 { text: 'Cancel' },
-                { text: 'Call Now', onPress: () => Linking.openURL('tel:+918453580556').catch(() => {}) }
+                { text: 'Call Now', onPress: () => Linking.openURL(`tel:${SUPPORT_PHONE}`).catch(() => {}) }
               ])
             }}
           >
@@ -426,7 +437,7 @@ const HealthHubCard = memo(function HealthHubCard({ token, navigation, openWhats
             <View style={styles.checkCircleDot} />
           </View>
           <View style={styles.checkTextWrap}>
-            <Text style={styles.checkLabel}>Schedule At-Home Visit</Text>
+            <Text style={styles.checkLabel}>Book an appointment</Text>
             <Text style={styles.checkDesc}>Select slot & match with a verified therapist</Text>
           </View>
           <Ionicons name="chevron-forward" size={12} color="rgba(15,23,42,0.3)" />
@@ -750,8 +761,8 @@ export default function HomeScreen({ navigation }) {
   }, [homeStats.loading, homeStats.activeSpecialists, homeStats.bookingRateToday, serviceAreaLabel])
 
   const openWhatsAppConcierge = () => {
-    const message = encodeURIComponent("Hello PhysiOkhom, I need assistance with booking a physiotherapist session.")
-    const url = `https://wa.me/918453580556?text=${message}`
+    const message = encodeURIComponent(SUPPORT_WHATSAPP_MESSAGE)
+    const url = `https://wa.me/${SUPPORT_WHATSAPP_NUMBER}?text=${message}`
     Linking.openURL(url).catch(() => {
       Alert.alert('Error', 'Could not open WhatsApp. Please contact support.')
     })
@@ -870,8 +881,8 @@ export default function HomeScreen({ navigation }) {
             <Text style={[styles.valueText, { color: colors.success }]}>Verified BPT/MPT</Text>
           </View>
           <View style={[styles.valueItem, { backgroundColor: figmaTokens.primary + '08', borderColor: figmaTokens.primary + '20' }]}>
-            <Ionicons name="home-outline" size={12} color={figmaTokens.primary} />
-            <Text style={[styles.valueText, { color: figmaTokens.primary }]}>At-Home Care</Text>
+            <Ionicons name="medkit-outline" size={12} color={figmaTokens.primary} />
+            <Text style={[styles.valueText, { color: figmaTokens.primary }]}>Home · Clinic · Online</Text>
           </View>
           <View style={[styles.valueItem, { backgroundColor: colors.info + '08', borderColor: colors.info + '20' }]}>
             <Ionicons name="shield-checkmark-outline" size={12} color={colors.info} />
@@ -1385,7 +1396,7 @@ export default function HomeScreen({ navigation }) {
               <Text style={styles.timelineNodeText}>3</Text>
             </View>
             <View style={styles.timelineContent}>
-              <Text style={styles.timelineStepTitle}>Recover At Home</Text>
+              <Text style={styles.timelineStepTitle}>Recover your way</Text>
               <Text style={styles.timelineStepDesc}>
                 Your doctor visits your home for personalized therapy. Track all recovery, metrics & reports in-app.
               </Text>

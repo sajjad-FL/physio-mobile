@@ -68,11 +68,35 @@ export function bookingConditionLabel(b) {
   return trimmed || null
 }
 
+/**
+ * Date/time for booking cards and headers.
+ * When a multi-visit schedule exists, use the chronologically first visit —
+ * booking.date can be stale (array index 0 after reschedule / duplicates).
+ */
+export function resolveBookingDisplayVisit(b) {
+  if (!b || typeof b !== 'object') return { date: undefined, time: undefined }
+  if (Array.isArray(b.schedule) && b.schedule.length > 0) {
+    const sorted = [...b.schedule].sort((a, c) => {
+      const byDate = String(a?.date || '').localeCompare(String(c?.date || ''))
+      if (byDate !== 0) return byDate
+      return String(a?.time || '').localeCompare(String(c?.time || ''))
+    })
+    const first = sorted[0]
+    return {
+      date: first?.date || b.date,
+      time: first?.time || b.timeSlot,
+    }
+  }
+  return { date: b.date, time: b.timeSlot }
+}
+
 /** e.g. "8 Jul, 6:00 PM – 7:00 PM (Stroke / Paralysis)" */
 export function formatBookingVisitWithCondition(input) {
   if (input == null) return '—'
-  const date = input.date
-  const timeSlot = input.timeSlot ?? input.time
+  const slotSource = input.booking && input.date == null ? input.booking : input
+  const slot = resolveBookingDisplayVisit(slotSource)
+  const date = slot.date ?? input.date
+  const timeSlot = slot.time ?? input.timeSlot ?? input.time
   const conditionSource = input.booking ?? input
   const visit = formatBookingDateAndSlot(date, timeSlot)
   const condition = bookingConditionLabel(conditionSource)

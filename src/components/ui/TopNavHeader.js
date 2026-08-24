@@ -1,5 +1,5 @@
 import { memo, useMemo, useState } from 'react'
-import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { Image, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { AttachStep } from 'react-native-spotlight-tour'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -171,11 +171,16 @@ function TopNavHeader({
           <View style={[styles.sideDrawer, { marginTop: drawerTop, height: drawerHeight }]}>
             {/* Brand header */}
             <View style={styles.drawerHead}>
-              <View style={styles.drawerLogoRow}>
-                <View style={styles.drawerLogoMark}>
-                  <Ionicons name="pulse" size={16} color={colors.white} />
-                </View>
-                <Text style={styles.drawerLogoTxt}>PhysiOkhom</Text>
+              <View style={styles.drawerLogoRow} accessibilityRole="header" accessibilityLabel="PhysiOkhom">
+                <Image
+                  source={require('../../../assets/images/logo.png')}
+                  style={styles.drawerLogoImg}
+                  resizeMode="contain"
+                />
+                <Text style={styles.drawerLogoTxt} numberOfLines={1}>
+                  <Text style={styles.drawerLogoPhysi}>Physi</Text>
+                  <Text style={styles.drawerLogoOkhom}>Okhom</Text>
+                </Text>
               </View>
               {subtitle ? (
                 <Text style={styles.drawerSubTxt}>{subtitle}</Text>
@@ -380,16 +385,20 @@ const styles = StyleSheet.create({
     paddingTop: 22,
     paddingBottom: 22,
   },
-  drawerLogoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  drawerLogoMark: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  drawerLogoRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
-  drawerLogoTxt: { fontFamily: font.bold, fontSize: type.xl, color: colors.white },
+  drawerLogoImg: { width: 40, height: 40 },
+  drawerLogoTxt: { fontFamily: font.bold, fontSize: type.lg },
+  drawerLogoPhysi: { fontFamily: font.bold, fontSize: type.lg, color: '#0f172a' },
+  drawerLogoOkhom: { fontFamily: font.bold, fontSize: type.lg, color: figmaTokens.primary },
   drawerSubTxt: {
     marginTop: 6,
     fontFamily: font.medium,

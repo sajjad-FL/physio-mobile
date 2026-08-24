@@ -12,9 +12,10 @@ import {
   paymentStatusLabel,
   sessionStatusLabel,
   bookingCodeBadge,
+  resolveBookingDisplayVisit,
 } from '../utils/bookingDisplay'
 import { isAwaitingPatientConsent, isPlanLive } from '../utils/planStatus'
-import { normalizeSessionRows } from '../utils/physioBookingHelpers'
+import { normalizeSessionRows, todayYmd } from '../utils/physioBookingHelpers'
 import { openSupportWhatsApp } from '../utils/supportContact'
 import InstallmentsPhysioCard from '../components/physio/InstallmentsPhysioCard'
 import RequiredMark from '../components/ui/RequiredMark'
@@ -82,10 +83,11 @@ const TabBar = memo(function TabBar({ activeTab, onChange, tabs, badges = {} }) 
   )
 })
 
-function openWhatsApp(phone) {
+function openWhatsApp(phone, message) {
   const cleaned = String(phone || '').replace(/\D/g, '')
   const number = cleaned.startsWith('91') && cleaned.length === 12 ? cleaned : '91' + cleaned.slice(-10)
-  Linking.openURL(`https://wa.me/${number}`).catch(() => {
+  const q = message ? `?text=${encodeURIComponent(message)}` : ''
+  Linking.openURL(`https://wa.me/${number}${q}`).catch(() => {
     Toast.show({ type: 'error', text1: 'Could not open WhatsApp' })
   })
 }
@@ -96,6 +98,12 @@ function callPhone(phone) {
   Linking.openURL(`tel:+${number}`).catch(() => {
     Toast.show({ type: 'error', text1: 'Could not place call' })
   })
+}
+
+function visitModeLabel(serviceType) {
+  if (serviceType === 'online') return 'Online'
+  if (serviceType === 'clinic') return 'Clinic'
+  return 'At Home'
 }
 
 const SimulatedTransitMap = memo(function SimulatedTransitMap({ transitPhase, physioName }) {
@@ -176,18 +184,77 @@ function PendingBookingView({ booking: b, navigation, refreshing, onRefresh }) {
   const ringScale = ringAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.6] })
   const ringOpacity = ringAnim.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0.5, 0.1, 0] })
 
-  const serviceLabel = b.serviceType === 'online' ? 'Online Consultation' : 'Home Visit'
+  const directTechnique = b.carePath === 'technique_direct'
+  const managedTechnique = b.carePath === 'technique_managed'
+  const isTechnique = directTechnique || managedTechnique
+  const isClinic = b.serviceType === 'clinic'
+  const isOnline = b.serviceType === 'online'
+  const clinicName = b.clinicId && typeof b.clinicId === 'object' ? b.clinicId.name : null
+  const clinicAddress = b.clinicId && typeof b.clinicId === 'object' ? b.clinicId.address : null
+  const physio = b.physioId && typeof b.physioId === 'object' ? b.physioId : null
+  const physioName = physio?.name || null
+  const physioPhone = physio?.phone || null
+  const displayVisit = resolveBookingDisplayVisit(b)
+  const whenLabel = formatBookingDateAndSlot(displayVisit.date, displayVisit.time)
+  const serviceLabel = isTechnique
+    ? isClinic
+      ? 'Technique Clinic Visit'
+      : 'Technique Home Visit'
+    : isClinic
+      ? 'Clinic Visit'
+      : isOnline
+        ? 'Online Consultation'
+        : 'Home Visit'
   const bookingRef = bookingCodeBadge(b) || '—'
   const managerName =
     b.managerId && typeof b.managerId === 'object' ? b.managerId.name : null
-  const heading = managerName ? 'Your Care Manager is on it' : 'We received your booking'
-  const subcopy = managerName
-    ? `${managerName} will visit, prepare your plan, and coordinate your physiotherapist.`
-    : 'Our team is assigning a care manager for your home visit. You will be notified when your plan is ready.'
+  const heading = isOnline
+    ? physioName
+      ? 'Your online consultation is booked'
+      : 'We received your online booking'
+    : isClinic
+      ? clinicName
+        ? 'Your clinic visit is confirmed'
+        : isTechnique
+          ? 'Technique clinic visit requested'
+          : 'Clinic visit requested'
+      : managerName
+        ? 'Your Care Manager is on it'
+        : 'We received your booking'
+  const subcopy = isOnline
+    ? physioName
+      ? `${physioName} will call you on WhatsApp at your selected time${whenLabel && whenLabel !== '—' ? ` (${whenLabel})` : ''}. Please keep WhatsApp free.`
+      : 'We are confirming your physiotherapist for this online consultation. They will call you on WhatsApp at the scheduled time.'
+    : isClinic
+      ? clinicName
+        ? `Please visit ${clinicName} at your scheduled time. Our clinic team will guide you.`
+        : 'Our admin team is assigning a clinic for your appointment. You will be notified once it is confirmed.'
+      : managerName
+        ? `${managerName} will visit, prepare your plan, and coordinate your physiotherapist.`
+        : directTechnique
+          ? 'Our team is assigning a physiotherapist for your technique visit. You can pay online after assignment.'
+          : 'Our team is assigning a care manager for your home visit. You will be notified when your plan is ready.'
+  const statusLine = isOnline
+    ? physioName
+      ? 'Your physiotherapist will WhatsApp you at the selected time'
+      : 'Confirming your physiotherapist'
+    : isClinic && !clinicName
+      ? 'Admin is assigning a clinic'
+      : 'Our team is reviewing your request'
+
+  function handleWhatsApp() {
+    if (isOnline && physioPhone) {
+      openWhatsApp(
+        physioPhone,
+        `Hi ${physioName || 'Doctor'}, I have an online consultation booked on PhysiOkhom for ${whenLabel || 'the scheduled slot'} (Booking ${bookingRef}).`,
+      )
+      return
+    }
+    openSupportWhatsApp()
+  }
 
   return (
     <View style={styles.pendingRoot}>
-      {/* Top bar */}
       <View style={styles.pendingTopBar}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={12} style={styles.pendingBackBtn}>
           <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
@@ -210,7 +277,6 @@ function PendingBookingView({ booking: b, navigation, refreshing, onRefresh }) {
           />
         }
       >
-        {/* Animated pulse icon */}
         <View style={styles.pendingPulseWrap}>
           <Animated.View
             style={[
@@ -219,30 +285,53 @@ function PendingBookingView({ booking: b, navigation, refreshing, onRefresh }) {
             ]}
           />
           <Animated.View style={[styles.pendingCircle, { transform: [{ scale: pulseAnim }] }]}>
-            <Ionicons name="person-add-outline" size={36} color={colors.brand} />
+            <Ionicons
+              name={isOnline ? 'videocam-outline' : isClinic ? 'business-outline' : 'person-add-outline'}
+              size={36}
+              color={colors.brand}
+            />
           </Animated.View>
         </View>
 
-        {/* Headline */}
         <Text style={styles.pendingHeadline}>{heading}</Text>
         <Text style={styles.pendingSubMsg}>{subcopy}</Text>
 
-        {/* Booking summary card */}
         <View style={styles.pendingSummaryCard}>
-          <View style={[styles.pendingKvRow]}>
+          <View style={styles.pendingKvRow}>
             <Text style={styles.pendingKvLabel}>Date & Time</Text>
-            <Text style={styles.pendingKvValue}>{formatBookingDateAndSlot(b.date, b.timeSlot) || '—'}</Text>
+            <Text style={styles.pendingKvValue}>{whenLabel || '—'}</Text>
           </View>
           {managerName ? (
-            <View style={[styles.pendingKvRow]}>
+            <View style={styles.pendingKvRow}>
               <Text style={styles.pendingKvLabel}>Care Manager</Text>
               <Text style={styles.pendingKvValue}>{managerName}</Text>
             </View>
           ) : null}
-          <View style={[styles.pendingKvRow]}>
+          {physioName ? (
+            <View style={styles.pendingKvRow}>
+              <Text style={styles.pendingKvLabel}>Physiotherapist</Text>
+              <Text style={styles.pendingKvValue}>{physioName}</Text>
+            </View>
+          ) : null}
+          {clinicName ? (
+            <View style={styles.pendingKvRow}>
+              <Text style={styles.pendingKvLabel}>Clinic</Text>
+              <Text style={[styles.pendingKvValue, { flex: 1, textAlign: 'right', marginLeft: 12 }]} numberOfLines={2}>
+                {clinicName}
+                {clinicAddress ? `\n${clinicAddress}` : ''}
+              </Text>
+            </View>
+          ) : null}
+          <View style={styles.pendingKvRow}>
             <Text style={styles.pendingKvLabel}>Service</Text>
             <Text style={styles.pendingKvValue}>{serviceLabel}</Text>
           </View>
+          {isOnline ? (
+            <View style={styles.pendingKvRow}>
+              <Text style={styles.pendingKvLabel}>How you connect</Text>
+              <Text style={styles.pendingKvValue}>WhatsApp call from physio</Text>
+            </View>
+          ) : null}
           <View style={[styles.pendingKvRow, styles.pendingKvRowLast]}>
             <Text style={styles.pendingKvLabel}>Condition</Text>
             <Text style={[styles.pendingKvValue, { flex: 1, textAlign: 'right', marginLeft: 12 }]} numberOfLines={2}>
@@ -251,26 +340,30 @@ function PendingBookingView({ booking: b, navigation, refreshing, onRefresh }) {
           </View>
         </View>
 
-        {/* Booking ID chip */}
         <View style={styles.pendingIdChip}>
           <Ionicons name="receipt-outline" size={11} color={colors.textTertiary} />
           <Text style={styles.pendingIdTxt}>Booking ID {bookingRef}</Text>
         </View>
 
-        {/* Status indicator row */}
         <View style={styles.pendingStatusRow}>
           <View style={styles.pendingStatusDot} />
-          <Text style={styles.pendingStatusTxt}>Our team is reviewing your request</Text>
+          <Text style={styles.pendingStatusTxt}>{statusLine}</Text>
         </View>
 
-        {/* Contact support */}
         <Pressable
           style={[styles.pendingSupportBtn, { borderColor: 'rgba(37,211,102,0.35)', backgroundColor: 'rgba(37,211,102,0.08)' }]}
-          onPress={openSupportWhatsApp}
+          onPress={handleWhatsApp}
         >
           <Ionicons name="logo-whatsapp" size={16} color="#25D366" />
-          <Text style={[styles.pendingSupportTxt, { color: '#128C7E' }]}>Chat on WhatsApp</Text>
+          <Text style={[styles.pendingSupportTxt, { color: '#128C7E' }]}>
+            {isOnline && physioPhone ? 'Message physiotherapist on WhatsApp' : 'Chat on WhatsApp'}
+          </Text>
         </Pressable>
+        {isOnline ? (
+          <Text style={{ marginTop: 10, textAlign: 'center', fontFamily: font.regular, fontSize: type.xs, color: colors.textTertiary, lineHeight: 16 }}>
+            You do not need to start the call — your physiotherapist will WhatsApp you at the selected time.
+          </Text>
+        ) : null}
       </ScrollView>
     </View>
   )
@@ -619,20 +712,37 @@ export default function UserBookingDetailScreen({ route, navigation }) {
     )
   }
 
-  // Show waiting screen only while assignment is pending (physio hasn't accepted).
-  // planStatus === 'proposed' means the physio already engaged with the booking —
-  // never send the patient back to the waiting screen at that stage.
+  // Show waiting / confirmation screen for pending assignment paths (aligned with web).
   const planAwaitingConsent =
     b.serviceType === 'home' && isAwaitingPatientConsent(b.planStatus)
   const planLive = b.serviceType === 'home' && isPlanLive(b.planStatus)
+  const clinicAwaitingFacility = b.serviceType === 'clinic' && !b.clinicId
+  const isOnlineConsult = b.serviceType === 'online'
+  const hasPhysio = Boolean(b.physioId)
+  const onlineConsultationReady =
+    isOnlineConsult &&
+    hasPhysio &&
+    (b.status === 'pending' ||
+      b.status === 'assigned' ||
+      b.status === 'accepted' ||
+      b.status === 'scheduled') &&
+    b.sessionStatus !== 'completed' &&
+    b.sessionStatus !== 'done'
+  const awaitingHomeCareTeam =
+    !isOnlineConsult &&
+    (b.status === 'pending' || b.status === 'assigned') &&
+    !planAwaitingConsent &&
+    !planLive &&
+    b.serviceType !== 'clinic'
 
-  if ((b.status === 'pending' || b.status === 'assigned') && !planAwaitingConsent && !planLive) {
+  if (clinicAwaitingFacility || awaitingHomeCareTeam || onlineConsultationReady) {
     return <PendingBookingView booking={b} navigation={navigation} refreshing={refreshing} onRefresh={onRefresh} />
   }
 
   const paymentSummary = b.paymentSummary || null
   const paymentsList = Array.isArray(b.payments) ? b.payments : []
   const rows = normalizeSessionRows(b)
+  const displayVisit = resolveBookingDisplayVisit(b)
   const sessionsCount = paymentSummary?.sessionsCount || (Array.isArray(b.schedule) && b.schedule.length > 0 ? b.schedule.length : 1)
   const isOfflinePlan = b.serviceType === 'home' && b.homePlanPaymentMode === 'offline'
   const isOnlineBooking = b.serviceType === 'online' || (b.serviceType === 'home' && b.homePlanPaymentMode === 'online')
@@ -679,7 +789,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
             </Text>
           ) : null}
           <Text style={styles.headerDateCompact} numberOfLines={1}>
-            {formatBookingDateAndSlot(b.date, b.timeSlot)}
+            {formatBookingDateAndSlot(displayVisit.date, displayVisit.time)}
           </Text>
         </View>
         {b.rescheduled && b.previousDate ? (
@@ -708,7 +818,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
             <View style={styles.headerPhysioBadges}>
               <View style={[styles.headerSessionBadge, { backgroundColor: colors.brandSoft }]}>
                 <Text style={[styles.headerSessionBadgeTxt, { color: colors.brand }]}>
-                  {String(b.serviceType || 'home').charAt(0).toUpperCase() + String(b.serviceType || 'home').slice(1)}
+                  {visitModeLabel(b.serviceType)}
                 </Text>
               </View>
               <View style={[styles.headerSessionBadge, { backgroundColor: colors.brandSoft }]}>
@@ -718,6 +828,16 @@ export default function UserBookingDetailScreen({ route, navigation }) {
               </View>
             </View>
           </View>
+
+          {typeof b.clinicId === 'object' && b.clinicId?.name ? (
+            <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.slate200 }}>
+              <Text style={styles.headerPhysioLabel}>CLINIC</Text>
+              <Text style={styles.headerPhysioName}>{b.clinicId.name}</Text>
+              {b.clinicId.address ? (
+                <Text style={styles.headerPhysioSub}>{b.clinicId.address}</Text>
+              ) : null}
+            </View>
+          ) : null}
 
           {typeof b.physioId === 'object' ? (
             <View style={styles.headerPhysioActionsRow}>
@@ -900,21 +1020,33 @@ export default function UserBookingDetailScreen({ route, navigation }) {
           {/* Session Progress */}
           {rows.length > 0 ? (
             <View style={styles.sectionCard}>
-              <SectionTitle icon="calendar-outline" title="Session Progress" />
+              <SectionTitle icon="calendar-outline" title="Visit schedule" />
               <View style={styles.nestedSessionsList}>
                 {rows.map((r) => {
+                  const isComplimentary = Boolean(r.complimentary)
                   const isCompleted = r.status === 'completed'
                   const isNoShow = r.status === 'no_show'
-                  const needsConfirm = isCompleted && !r.patientConfirmed
+                  const bookingRescheduled = Boolean(b.rescheduled)
+                  const tday = todayYmd()
+                  const rowStatus =
+                    isCompleted || isNoShow
+                      ? r.status
+                      : bookingRescheduled && r.date !== tday
+                        ? 'rescheduled'
+                        : 'scheduled'
+                  const needsConfirm = isCompleted && !r.patientConfirmed && !isComplimentary
                   const isConfirmed = isCompleted && r.patientConfirmed
                   const confirming = confirmingSessionId === String(r.sessionId)
                   const paymentAmt = Number(r.paymentAtCompletion || 0)
+                  const sessionTitle = isComplimentary
+                    ? r.label || 'Assessment'
+                    : `Session ${r.n}`
 
                   if (needsConfirm) {
                     return (
                       <View key={r.key} style={styles.sessionConfirmCard}>
                         <Text style={styles.sessionConfirmTitle}>
-                          Session {r.n} — {formatBookingDateAndSlot(r.date, r.time)}
+                          {sessionTitle} — {formatBookingDateAndSlot(r.date, r.time)}
                         </Text>
                         <Text style={styles.sessionConfirmSub}>
                           Completed by your physiotherapist.
@@ -953,6 +1085,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
                       style={[
                         styles.nestedSessionRow,
                         (isCompleted || isConfirmed) && styles.nestedSessionRowDone,
+                        isComplimentary && styles.nestedSessionRowComplimentary,
                       ]}
                     >
                       <View
@@ -960,12 +1093,15 @@ export default function UserBookingDetailScreen({ route, navigation }) {
                           styles.nestedSessionIndicator,
                           isCompleted ? styles.nestedSessionIndicatorDone : styles.nestedSessionIndicatorPending,
                           isNoShow && { backgroundColor: colors.danger },
+                          isComplimentary && !isCompleted && styles.nestedSessionIndicatorComplimentary,
                         ]}
                       >
                         {isCompleted ? (
                           <Ionicons name="checkmark" size={10} color={colors.white} />
                         ) : isNoShow ? (
                           <Ionicons name="close" size={10} color={colors.white} />
+                        ) : isComplimentary ? (
+                          <Ionicons name="gift-outline" size={10} color={colors.white} />
                         ) : (
                           <Text style={styles.nestedSessionNumText}>{r.n}</Text>
                         )}
@@ -977,7 +1113,8 @@ export default function UserBookingDetailScreen({ route, navigation }) {
                             isCompleted && styles.nestedSessionTitleDone,
                           ]}
                         >
-                          Session {r.n}
+                          {sessionTitle}
+                          {isComplimentary ? ' · Complimentary' : ''}
                         </Text>
                         <Text style={styles.nestedSessionTime}>
                           {formatBookingDateAndSlot(r.date, r.time)}
@@ -997,7 +1134,8 @@ export default function UserBookingDetailScreen({ route, navigation }) {
                           styles.sessionStatusPill,
                           isCompleted && styles.sessionStatusPillDone,
                           isNoShow && styles.sessionStatusPillNoShow,
-                          !isCompleted && !isNoShow && styles.sessionStatusPillScheduled,
+                          rowStatus === 'rescheduled' && styles.sessionStatusPillRescheduled,
+                          !isCompleted && !isNoShow && rowStatus !== 'rescheduled' && styles.sessionStatusPillScheduled,
                         ]}
                       >
                         <Text
@@ -1005,6 +1143,7 @@ export default function UserBookingDetailScreen({ route, navigation }) {
                             styles.sessionStatusPillTxt,
                             isCompleted && styles.sessionStatusPillTxtDone,
                             isNoShow && styles.sessionStatusPillTxtNoShow,
+                            rowStatus === 'rescheduled' && styles.sessionStatusPillTxtRescheduled,
                           ]}
                         >
                           {isCompleted
@@ -1013,7 +1152,9 @@ export default function UserBookingDetailScreen({ route, navigation }) {
                               : 'Completed'
                             : isNoShow
                               ? 'No-show'
-                              : 'Scheduled'}
+                              : rowStatus === 'rescheduled'
+                                ? 'Rescheduled'
+                                : 'Scheduled'}
                         </Text>
                       </View>
                     </View>
@@ -2008,6 +2149,10 @@ const styles = StyleSheet.create({
   nestedSessionRowDone: {
     opacity: 0.9,
   },
+  nestedSessionRowComplimentary: {
+    borderColor: '#99f6e4',
+    backgroundColor: '#f0fdfa',
+  },
   nestedSessionIndicator: {
     width: 18,
     height: 18,
@@ -2021,6 +2166,9 @@ const styles = StyleSheet.create({
   },
   nestedSessionIndicatorPending: {
     backgroundColor: colors.slate200,
+  },
+  nestedSessionIndicatorComplimentary: {
+    backgroundColor: '#0d9488',
   },
   nestedSessionNumText: {
     fontFamily: font.bold,
@@ -2138,6 +2286,9 @@ const styles = StyleSheet.create({
   sessionStatusPillNoShow: {
     backgroundColor: '#fef2f2',
   },
+  sessionStatusPillRescheduled: {
+    backgroundColor: '#fffbeb',
+  },
   sessionStatusPillTxt: {
     fontFamily: font.semiBold,
     fontSize: 9,
@@ -2148,6 +2299,9 @@ const styles = StyleSheet.create({
   },
   sessionStatusPillTxtNoShow: {
     color: colors.danger,
+  },
+  sessionStatusPillTxtRescheduled: {
+    color: '#b45309',
   },
   nestedRateBtnMuted: {
     borderColor: colors.borderSubtle,
