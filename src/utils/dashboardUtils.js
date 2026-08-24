@@ -1,6 +1,7 @@
 /** Mirrors client/src/pages/dashboard/dashboardUtils.js (labels for RN chips). */
+import { isPlanLive, isAwaitingPatientConsent } from './planStatus'
 
-export function bookingStatusBadge(status, sessionStatus, paymentStatus) {
+export function bookingStatusBadge(status, sessionStatus, paymentStatus, planStatus) {
   if (paymentStatus === 'refunded') {
     return { label: 'Dispute / refunded', bg: '#fff1f2', fg: '#881337', border: '#fecdd3' }
   }
@@ -10,8 +11,23 @@ export function bookingStatusBadge(status, sessionStatus, paymentStatus) {
   if (status === 'completed') {
     return { label: 'Session done', bg: '#ecfdf5', fg: '#064e3b', border: '#a7f3d0' }
   }
+  if (isAwaitingPatientConsent(planStatus)) {
+    return { label: 'Consent to plan', bg: '#fff7ed', fg: '#c2410c', border: '#ffedd5' }
+  }
+  if (planStatus === 'live') {
+    return { label: 'Plan active', bg: '#ecfdf5', fg: '#064e3b', border: '#a7f3d0' }
+  }
+  if (paymentStatus === 'pending' && (isPlanLive(planStatus) || status === 'assigned')) {
+    return { label: 'Pay installment', bg: '#fffbeb', fg: '#78350f', border: '#fde68a' }
+  }
+  if (status === 'scheduled' || status === 'accepted' || sessionStatus === 'scheduled') {
+    return { label: 'Scheduled', bg: '#ccfbf1', fg: '#0f766e', border: '#99f6e4' }
+  }
   if (status === 'assigned') {
-    return { label: 'Assigned', bg: '#ccfbf1', fg: '#0f766e', border: '#99f6e4' }
+    return { label: 'Therapist assigned', bg: '#ccfbf1', fg: '#0f766e', border: '#99f6e4' }
+  }
+  if (status === 'pending') {
+    return { label: 'Awaiting care team', bg: '#f8fafc', fg: '#475569', border: '#e2e8f0' }
   }
   return { label: 'Pending', bg: '#fffbeb', fg: '#78350f', border: '#fde68a' }
 }

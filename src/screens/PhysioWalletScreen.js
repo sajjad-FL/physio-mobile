@@ -1,9 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
 import PaginationBar from '../components/ui/PaginationBar'
+import RequiredMark from '../components/ui/RequiredMark'
+import { DetailSkeleton, TableSkeleton } from '../components/ui/skeletons'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { formatInr } from '../utils/currency'
@@ -11,32 +13,40 @@ import { formatInr } from '../utils/currency'
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function typeLabel(row) {
-  if (row?.isSynthetic && row?.syntheticKind === 'net_available') return 'Withdrawable balance'
   const t = row?.type
+  const direction = row?.direction
   const leg = row?.meta?.leg
-  if (t === 'online' && leg === 'refund') return 'Refund (online)'
-  switch (t) {
-    case 'online': return 'Online payment'
-    case 'offline': return 'Offline payment'
-    case 'settlement': return 'Settlement'
-    case 'withdrawal': return 'Withdrawal'
-    default: return t || '—'
+
+  if (t === 'online') {
+    if (leg === 'refund') return 'Refund (reversed)'
+    if (direction === 'credit') return 'Online Booking Earned'
+    return 'Online payment'
   }
+  if (t === 'offline') {
+    if (leg === 'gross') return 'Cash Collected'
+    if (leg === 'commission') return 'Platform Fee (Cash)'
+    return 'Offline payment'
+  }
+  if (t === 'settlement') {
+    return 'Fee Remitted to Platform'
+  }
+  if (t === 'withdrawal') {
+    return 'Withdrawal Paid Out'
+  }
+  return t || '—'
 }
 
-function typePalette(t, row) {
-  if (row?.isSynthetic) return { bg: colors.slate50, fg: colors.slate700, bd: colors.borderSubtle }
+function typePalette(t) {
   switch (t) {
     case 'online': return { bg: colors.emerald50, fg: colors.emerald700, bd: '#a7f3d0' }
     case 'offline': return { bg: colors.amber50, fg: colors.amber800, bd: colors.amber200 }
     case 'settlement': return { bg: colors.blue50, fg: colors.blue700, bd: '#bae6fd' }
     case 'withdrawal': return { bg: colors.rose50, fg: colors.rose900, bd: '#fecdd3' }
-    default: return { bg: colors.slate50, fg: colors.slate700, bd: colors.borderSubtle }
+    default: return { bg: 'rgba(241, 245, 249, 0.6)', fg: colors.slate700, bd: 'rgba(13, 148, 136, 0.15)' }
   }
 }
 
-function typeIcon(t, row) {
-  if (row?.isSynthetic) return 'analytics-outline'
+function typeIcon(t) {
   switch (t) {
     case 'online': return 'card-outline'
     case 'offline': return 'cash-outline'
@@ -49,7 +59,7 @@ function typeIcon(t, row) {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 const TypeTag = memo(function TypeTag({ type: t, row }) {
-  const p = typePalette(t, row)
+  const p = typePalette(t)
   return (
     <View style={[styles.typeTag, { backgroundColor: p.bg, borderColor: p.bd }]}>
       <Text style={[styles.typeTagTxt, { color: p.fg }]}>{typeLabel(row)}</Text>
@@ -58,28 +68,26 @@ const TypeTag = memo(function TypeTag({ type: t, row }) {
 })
 
 const TransactionRow = memo(function TransactionRow({ row }) {
-  const p = typePalette(row.type, row)
-  const icon = typeIcon(row.type, row)
-  const isCredit = !row.isSynthetic && row.direction === 'credit'
-  const isDebit = !row.isSynthetic && row.direction === 'debit'
+  const p = typePalette(row.type)
+  const icon = typeIcon(row.type)
+  const isCredit = row.direction === 'credit'
+  const isDebit = row.direction === 'debit'
 
   return (
-    <View style={[styles.txRow, row.isSynthetic && styles.txRowSynth]}>
+    <View style={styles.txRow}>
       <View style={[styles.txIconWrap, { backgroundColor: p.bg }]}>
         <Ionicons name={icon} size={16} color={p.fg} />
       </View>
       <View style={styles.txBody}>
         <View style={styles.txTopRow}>
           <TypeTag type={row.type} row={row} />
-          {!row.isSynthetic && (
-            <Text style={[styles.txDir, isCredit ? styles.txCredit : isDebit ? styles.txDebit : null]}>
-              {isCredit ? '+ Credit' : isDebit ? '− Debit' : ''}
-            </Text>
-          )}
+          <Text style={[styles.txDir, isCredit ? styles.txCredit : isDebit ? styles.txDebit : null]}>
+            {isCredit ? '+ Credit' : isDebit ? '− Debit' : ''}
+          </Text>
         </View>
         <Text style={styles.txAmount}>{formatInr(row.totalAmount)}</Text>
         <TxNote row={row} />
-        {!row.isSynthetic && row.createdAt && (
+        {row.createdAt && (
           <Text style={styles.txDate}>{new Date(row.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
         )}
       </View>
@@ -89,18 +97,16 @@ const TransactionRow = memo(function TransactionRow({ row }) {
 
 const TxNote = memo(function TxNote({ row }) {
   let note = null
-  if (row.isSynthetic && row.meta) {
-    note = `Online balance ${formatInr(row.meta.onlineAvailableBalance)} − Commission ${formatInr(row.meta.commissionDue)} = withdrawable ${formatInr(row.meta.onlineAvailableBalance - row.meta.commissionDue)}`
-  } else if (row.bookingId?.date) {
+  if (row.bookingId?.date) {
     note = `Booking ${row.bookingId.date}${row.bookingId.timeSlot ? ' · ' + row.bookingId.timeSlot : ''}`
   } else if (row.type === 'settlement' && row.meta?.note) {
     note = row.meta.note
   } else if (row.type === 'online' && row.meta?.gross != null && row.direction === 'credit') {
-    note = `Gross ${formatInr(row.meta.gross)} · Commission ${formatInr(row.commission)}`
+    note = `Gross ${formatInr(row.meta.gross)} · Platform fee ${formatInr(row.commission)}`
   } else if (row.type === 'offline' && row.meta?.leg === 'gross') {
     note = `Gross collection · Share ${formatInr(row.physioEarning)}`
   } else if (row.type === 'offline' && row.meta?.leg === 'commission') {
-    note = 'Platform commission owed'
+    note = 'Platform fee owed (reduces withdrawable balance)'
   } else if (row.type === 'withdrawal' && row.meta?.note) {
     note = row.meta.note
   }
@@ -140,13 +146,16 @@ export default function PhysioWalletScreen() {
   const [dash, setDash] = useState(null)
   const [tx, setTx] = useState([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [txLoading, setTxLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
   const [pendingWithdraw, setPendingWithdraw] = useState(null)
   const [withdrawOpen, setWithdrawOpen] = useState(false)
   const [withdrawAmount, setWithdrawAmount] = useState('')
   const [withdrawSubmitting, setWithdrawSubmitting] = useState(false)
+  const [withdrawInputFocused, setWithdrawInputFocused] = useState(false)
 
   const loadPendingWithdraw = useCallback(async () => {
     try {
@@ -169,9 +178,16 @@ export default function PhysioWalletScreen() {
       const res = await api.get('/physio/wallet/transactions', { params: { page, limit: 15 } })
       setTx(res.data?.data || [])
       setTotalPages(res.data?.totalPages || 1)
+      setTotal(Number(res.data?.total) || 0)
     } catch { Toast.show({ type: 'error', text1: 'Failed to load transactions' }) }
     finally { setTxLoading(false) }
   }, [page])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await Promise.all([loadDash(), loadTx(), loadPendingWithdraw()])
+    setRefreshing(false)
+  }, [loadDash, loadTx, loadPendingWithdraw])
 
   useEffect(() => { loadDash(); loadPendingWithdraw() }, [loadDash, loadPendingWithdraw])
   useEffect(() => { loadTx() }, [loadTx])
@@ -205,8 +221,8 @@ export default function PhysioWalletScreen() {
   const header = (
     <>
       {loading ? (
-        <View style={styles.loaderWrap}>
-          <ActivityIndicator size="large" color={colors.brand} />
+        <View style={{ paddingVertical: 8 }}>
+          <DetailSkeleton />
         </View>
       ) : (
         <>
@@ -214,11 +230,11 @@ export default function PhysioWalletScreen() {
           <View style={styles.heroCard}>
             <View style={styles.heroTop}>
               <View style={styles.heroLeft}>
-                <Text style={styles.heroLabel}>AVAILABLE BALANCE</Text>
+                <Text style={styles.heroLabel}>WITHDRAWABLE BALANCE</Text>
                 <Text style={styles.heroAmount}>{formatInr(w?.availableBalance)}</Text>
                 {showNetExplainer && (
                   <Text style={styles.heroSub}>
-                    {formatInr(onlineAvail)} online − {formatInr(commissionDue)} commission
+                    {formatInr(onlineAvail)} online − {formatInr(commissionDue)} platform fee
                   </Text>
                 )}
               </View>
@@ -252,15 +268,15 @@ export default function PhysioWalletScreen() {
 
           {/* ── Stat tiles ── */}
           <View style={styles.statsRow}>
-            <View style={[styles.statTile, { borderLeftColor: colors.amber400 }]}>
-              <Text style={styles.statTileLabel}>COMMISSION DUE</Text>
+            <View style={[styles.statTile, { borderLeftColor: colors.warning }]}>
+              <Text style={styles.statTileLabel}>PLATFORM FEE OWED</Text>
               <Text style={[styles.statTileValue, { color: colors.amber800 }]}>{formatInr(w?.commissionDue)}</Text>
-              <Text style={styles.statTileSub}>Owed from offline visits</Text>
+              <Text style={styles.statTileSub}>Owed from offline cash</Text>
             </View>
             <View style={[styles.statTile, { borderLeftColor: colors.brand }]}>
               <Text style={styles.statTileLabel}>TOTAL EARNED</Text>
               <Text style={styles.statTileValue}>{formatInr(w?.totalEarned)}</Text>
-              <Text style={styles.statTileSub}>Lifetime physio share</Text>
+              <Text style={styles.statTileSub}>Lifetime earnings share</Text>
             </View>
           </View>
 
@@ -272,9 +288,9 @@ export default function PhysioWalletScreen() {
                 <Text style={styles.sectionSub}>By payment channel</Text>
               </View>
               <View style={styles.breakdownCard}>
-                <BreakdownRow type="online" label="Online" count={b.online_payment?.count} vol={b.online_payment?.volume} detail={`Online wallet (withdrawable minus commission)`} />
-                <BreakdownRow type="offline" label="Offline" count={b.offline_payment?.count} vol={b.offline_payment?.volume} detail={`Commission ${formatInr(b.offline_payment?.commissionAccrued)} · Share ${formatInr(b.offline_payment?.physioShare)}`} />
-                <BreakdownRow type="settlement" label="Settlements" count={b.settlement?.count} vol={b.settlement?.volume} detail="Remitted to platform" last />
+                <BreakdownRow type="online" label="Online" count={b.online_payment?.count} vol={b.online_payment?.volume} detail={`Online wallet (withdrawable minus platform fee)`} />
+                <BreakdownRow type="offline" label="Offline" count={b.offline_payment?.count} vol={b.offline_payment?.volume} detail={`Platform fee ${formatInr(b.offline_payment?.commissionAccrued)} · Share ${formatInr(b.offline_payment?.physioShare)}`} />
+                <BreakdownRow type="settlement" label="Fee collections" count={b.settlement?.count} vol={b.settlement?.volume} detail="Remitted to platform" last />
               </View>
             </View>
           )}
@@ -283,7 +299,6 @@ export default function PhysioWalletScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHead}>
               <Text style={styles.sectionTitle}>Transactions</Text>
-              {txLoading && <ActivityIndicator size="small" color={colors.brand} />}
             </View>
           </View>
         </>
@@ -292,15 +307,31 @@ export default function PhysioWalletScreen() {
   )
 
   return (
-    <>
+    <View style={styles.container}>
+      <View style={styles.ambientHeaderGlow} />
+      <View style={styles.ambientHeaderGlow2} />
       <FlatList
-        data={txLoading ? [] : tx}
+        data={txLoading || loading ? [] : tx}
         keyExtractor={(row, i) => String(row?._id || row?.syntheticKind || i)}
         renderItem={({ item }) => <TransactionRow row={item} />}
         ListHeaderComponent={header}
+        ListEmptyComponent={
+          !loading && txLoading ? (
+            <View style={{ paddingTop: 4 }}>
+              <TableSkeleton rows={6} />
+            </View>
+          ) : null
+        }
         ListFooterComponent={
           <View style={styles.footer}>
-            <PaginationBar page={page} totalPages={totalPages} onPrev={() => setPage((p) => Math.max(1, p - 1))} onNext={() => setPage((p) => p + 1)} />
+            <PaginationBar
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              pageSize={15}
+              onPrev={() => setPage((p) => Math.max(1, p - 1))}
+              onNext={() => setPage((p) => p + 1)}
+            />
             <View style={{ height: 32 }} />
           </View>
         }
@@ -310,6 +341,14 @@ export default function PhysioWalletScreen() {
         maxToRenderPerBatch={8}
         windowSize={7}
         removeClippedSubviews
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.brand]}
+            tintColor={colors.brand}
+          />
+        }
       />
 
       {/* ── Withdrawal modal ── */}
@@ -325,14 +364,19 @@ export default function PhysioWalletScreen() {
             <Text style={styles.modalSub}>
               Max: {formatInr(w?.availableBalance)} · Minimum ₹1 · One request at a time
             </Text>
-            <Text style={styles.modalLabel}>Amount (INR)</Text>
+            <Text style={styles.modalLabel}>Amount (INR)<RequiredMark /></Text>
             <TextInput
-              style={styles.modalInput}
+              style={[
+                styles.modalInput,
+                withdrawInputFocused && styles.modalInputFocused
+              ]}
               keyboardType="decimal-pad"
               value={withdrawAmount}
               onChangeText={setWithdrawAmount}
               placeholder="e.g. 5000"
               placeholderTextColor={colors.slate300}
+              onFocus={() => setWithdrawInputFocused(true)}
+              onBlur={() => setWithdrawInputFocused(false)}
             />
             <View style={styles.modalActions}>
               <Pressable style={styles.modalCancel} onPress={() => setWithdrawOpen(false)}>
@@ -351,12 +395,12 @@ export default function PhysioWalletScreen() {
           </View>
         </View>
       </Modal>
-    </>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.canvas },
+  root: { flex: 1, backgroundColor: 'transparent' },
   listPad: { padding: 16, paddingBottom: 20 },
   loaderWrap: { paddingVertical: 60, alignItems: 'center' },
 
@@ -367,13 +411,15 @@ const styles = StyleSheet.create({
     padding: 22,
     gap: 14,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     shadowColor: colors.brand,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 16,
     elevation: 8,
   },
-  heroTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  heroTop: { flexDirection: 'row', alignItems: 'flex-start', justifycontent: 'space-between' },
   heroLeft: { flex: 1 },
   heroLabel: { fontFamily: font.bold, fontSize: type.xs, letterSpacing: 1, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', marginBottom: 8 },
   heroAmount: { fontFamily: font.bold, fontSize: 32, color: '#fff', letterSpacing: -1, lineHeight: 36 },
@@ -406,10 +452,10 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   statTile: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(240, 253, 250, 0.88)',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
     borderLeftWidth: 3,
     padding: 14,
     gap: 3,
@@ -431,10 +477,10 @@ const styles = StyleSheet.create({
 
   // Breakdown
   breakdownCard: {
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(240, 253, 250, 0.88)',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
     overflow: 'hidden',
   },
   bdRow: {
@@ -442,7 +488,7 @@ const styles = StyleSheet.create({
     gap: 14,
     padding: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
+    borderBottomColor: 'rgba(13, 148, 136, 0.08)',
   },
   bdRowLast: { borderBottomWidth: 0 },
   bdLeft: { flexShrink: 0, paddingTop: 2 },
@@ -461,14 +507,16 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
+    borderTopColor: 'rgba(13, 148, 136, 0.12)',
   },
   txRowSynth: {
-    backgroundColor: colors.slate50,
+    backgroundColor: 'rgba(240, 253, 250, 0.88)',
+    borderColor: 'rgba(13, 148, 136, 0.15)',
+    borderWidth: 1,
     borderRadius: 12,
     padding: 14,
     borderTopWidth: 0,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   txIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   txBody: { flex: 1, gap: 5 },
@@ -485,17 +533,17 @@ const styles = StyleSheet.create({
   footer: { marginTop: 8 },
 
   // Modal
-  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 20 },
+  modalBg: { flex: 1, backgroundColor: 'rgba(13, 50, 50, 0.3)', justifyContent: 'center', padding: 20 },
   modalCard: {
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
     padding: 22,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
     gap: 14,
-    shadowColor: '#000',
+    shadowColor: colors.brand,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.12,
     shadowRadius: 24,
     elevation: 12,
   },
@@ -505,18 +553,22 @@ const styles = StyleSheet.create({
   modalLabel: { fontFamily: font.semiBold, fontSize: type.xs, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
   modalInput: {
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
     borderRadius: 12,
     padding: 14,
     fontFamily: font.regular,
     fontSize: type.base,
     color: colors.textPrimary,
-    backgroundColor: colors.canvas,
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
   },
-  modalActions: { flexDirection: 'row', gap: 10, justifyContent: 'flex-end' },
+  modalInputFocused: {
+    borderColor: colors.brand,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+  },
+  modalActions: { flexDirection: 'row', gap: 10, justifycontent: 'flex-end' },
   modalCancel: {
     paddingHorizontal: 16, paddingVertical: 11, borderRadius: 11,
-    borderWidth: 1, borderColor: colors.borderSubtle,
+    borderWidth: 1, borderColor: 'rgba(13, 148, 136, 0.15)',
   },
   modalCancelTxt: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textSecondary },
   modalSubmit: {
@@ -525,4 +577,32 @@ const styles = StyleSheet.create({
   },
   modalSubmitBusy: { opacity: 0.7 },
   modalSubmitTxt: { fontFamily: font.semiBold, fontSize: type.base, color: colors.white },
+
+  // New backgrounds/glows
+  container: {
+    flex: 1,
+    backgroundColor: '#e8f8f6',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  ambientHeaderGlow: {
+    position: 'absolute',
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(162, 240, 239, 0.15)',
+    zIndex: 0,
+  },
+  ambientHeaderGlow2: {
+    position: 'absolute',
+    top: -50,
+    left: '20%',
+    width: '60%',
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(13, 107, 107, 0.04)',
+    zIndex: 0,
+  },
 })

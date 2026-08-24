@@ -1,6 +1,5 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
@@ -13,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import PhysioApprovalBanner from '../components/physio/PhysioApprovalBanner'
 import PhysioFilterModal from '../components/physio/PhysioFilterModal'
+import { ListSkeleton } from '../components/ui/skeletons'
 import SessionsCalendarRN from '../components/physio/SessionsCalendarRN'
 import { DEFAULT_PHYSIO_FILTERS } from '../constants/physioBookingFilters'
 import { usePhysioWorkspaceOptional } from '../context/PhysioWorkspaceContext'
@@ -20,14 +20,13 @@ import { usePhysioBookings } from '../api/queries'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { formatBookingDateAndSlot } from '../utils/date'
-import { openGoogleMapsDestination } from '../utils/googleMaps'
+import { physioListStatusLabel } from '../utils/bookingDisplay'
 import { normalizeIndianPhone } from '../utils/phoneIndia'
 import { matchesFilters } from '../utils/physioBookingHelpers'
+import { isAwaitingPatientConsent, isPlanLive, isManagerOwnedBooking } from '../utils/planStatus'
 
 function listStatusLabel(b) {
-  if (b.sessionStatus === 'completed') return 'Completed'
-  if (b.rescheduled) return 'Rescheduled'
-  return 'Scheduled'
+  return physioListStatusLabel(b)
 }
 
 function patientInitial(name) {
@@ -36,14 +35,34 @@ function patientInitial(name) {
 }
 
 function statusAccent(b) {
-  if (b.sessionStatus === 'completed') return colors.success
+  if (b.sessionStatus === 'completed' || b.status === 'completed') return colors.success
+  if (isManagerOwnedBooking(b)) return colors.brand
+  if (isAwaitingPatientConsent(b.planStatus)) return colors.blue600
+  if (isPlanLive(b.planStatus)) return colors.success
+  if (b.status === 'assigned' || b.status === 'pending' || b.planStatus === 'requested') return colors.warning
   if (b.rescheduled) return colors.warning
   return colors.brand
 }
 
 function statusChipColors(b) {
-  if (b.sessionStatus === 'completed') return { bg: colors.successBg, fg: colors.emerald700, border: '#a7f3d0' }
-  if (b.rescheduled) return { bg: colors.amber50, fg: colors.amber800, border: '#fde68a' }
+  if (b.sessionStatus === 'completed' || b.status === 'completed') {
+    return { bg: colors.successBg, fg: colors.emerald700, border: '#a7f3d0' }
+  }
+  if (isManagerOwnedBooking(b)) {
+    return { bg: colors.teal50, fg: colors.teal800, border: colors.brandSoft }
+  }
+  if (isAwaitingPatientConsent(b.planStatus)) {
+    return { bg: colors.blue50, fg: colors.blue800, border: '#bfdbfe' }
+  }
+  if (isPlanLive(b.planStatus)) {
+    return { bg: colors.successBg, fg: colors.emerald700, border: '#a7f3d0' }
+  }
+  if (b.status === 'assigned' || b.status === 'pending' || b.planStatus === 'requested') {
+    return { bg: colors.amber50, fg: colors.amber800, border: '#fde68a' }
+  }
+  if (b.rescheduled) {
+    return { bg: colors.amber50, fg: colors.amber800, border: '#fde68a' }
+  }
   return { bg: colors.teal50, fg: colors.teal800, border: colors.brandSoft }
 }
 
@@ -204,65 +223,75 @@ export default function PhysioBookingsScreen({ navigation }) {
 
   if (loading && bookings.length === 0 && !loadError) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.brand} />
+      <View style={[styles.container, { padding: 16 }]}>
+        <ListSkeleton count={6} />
       </View>
     )
   }
 
   if (loadError) {
     return (
-      <FlatList
-        data={[{ key: 'err' }]}
-        style={styles.root}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} />}
-        renderItem={() => (
-          <View style={styles.errorCard}>
-            <View style={styles.errorIconWrap}>
-              <Ionicons name="warning-outline" size={24} color={colors.warning} />
+      <View style={styles.container}>
+        <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+        <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
+        <FlatList
+          data={[{ key: 'err' }]}
+          style={[styles.root, { backgroundColor: 'transparent' }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} />}
+          renderItem={() => (
+            <View style={styles.errorCard}>
+              <View style={styles.errorIconWrap}>
+                <Ionicons name="warning-outline" size={24} color={colors.warning} />
+              </View>
+              <Text style={styles.errorTitle}>{loadError}</Text>
+              {(errorCode === 'PHYSIO_PENDING' || errorCode === 'PROFILE_INCOMPLETE') && (
+                <Pressable
+                  style={styles.errorBtn}
+                  onPress={() => navigation.getParent()?.getParent()?.navigate('PhysioOnboarding')}
+                >
+                  <Text style={styles.errorBtnTxt}>Complete profile setup</Text>
+                </Pressable>
+              )}
             </View>
-            <Text style={styles.errorTitle}>{loadError}</Text>
-            {(errorCode === 'PHYSIO_PENDING' || errorCode === 'PROFILE_INCOMPLETE') && (
-              <Pressable
-                style={styles.errorBtn}
-                onPress={() => navigation.getParent()?.getParent()?.navigate('PhysioOnboarding')}
-              >
-                <Text style={styles.errorBtnTxt}>Complete profile setup</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-      />
+          )}
+        />
+      </View>
     )
   }
 
   if (bookings.length === 0) {
     return (
-      <FlatList
-        data={[{ key: 'empty' }]}
-        style={styles.root}
-        contentContainerStyle={styles.listPad}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} />}
-        ListHeaderComponent={header}
-        renderItem={() => (
-          <View style={styles.emptyBox}>
-            <View style={styles.emptyIconWrap}>
-              <Ionicons name="calendar-outline" size={30} color={colors.slate300} />
+      <View style={styles.container}>
+        <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+        <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
+        <FlatList
+          data={[{ key: 'empty' }]}
+          style={[styles.root, { backgroundColor: 'transparent' }]}
+          contentContainerStyle={styles.listPad}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} />}
+          ListHeaderComponent={header}
+          renderItem={() => (
+            <View style={styles.emptyBox}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="calendar-outline" size={30} color={colors.slate300} />
+              </View>
+              <Text style={styles.emptyTitle}>No bookings yet</Text>
+              <Text style={styles.emptySub}>Assigned sessions will appear here.</Text>
             </View>
-            <Text style={styles.emptyTitle}>No bookings yet</Text>
-            <Text style={styles.emptySub}>Assigned sessions will appear here.</Text>
-          </View>
-        )}
-      />
+          )}
+        />
+      </View>
     )
   }
 
   if (displayBookings.length === 0) {
     return (
-      <>
+      <View style={styles.container}>
+        <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+        <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
         <FlatList
           data={[{ key: 'empty2' }]}
-          style={styles.root}
+          style={[styles.root, { backgroundColor: 'transparent' }]}
           contentContainerStyle={styles.listPad}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} />}
           ListHeaderComponent={header}
@@ -280,16 +309,18 @@ export default function PhysioBookingsScreen({ navigation }) {
           setDraft={setFilterDraft}
           onClose={() => { setFilters({ ...filterDraft }); setFilterOpen(false) }}
         />
-      </>
+      </View>
     )
   }
 
   if (view === 'calendar') {
     return (
-      <>
+      <View style={styles.container}>
+        <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+        <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
         <ScrollView
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} />}
-          style={styles.root}
+          style={[styles.root, { backgroundColor: 'transparent' }]}
           contentContainerStyle={styles.listPad}
         >
           {header}
@@ -304,95 +335,68 @@ export default function PhysioBookingsScreen({ navigation }) {
           setDraft={setFilterDraft}
           onClose={() => { setFilters({ ...filterDraft }); setFilterOpen(false) }}
         />
-      </>
+      </View>
     )
   }
 
   return (
-    <>
+    <View style={styles.container}>
+      <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+      <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
       <FlatList
         data={displayBookings}
         keyExtractor={(item) => String(item._id)}
-        style={styles.root}
+        style={[styles.root, { backgroundColor: 'transparent' }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} />}
         ListHeaderComponent={header}
         contentContainerStyle={styles.listPad}
         renderItem={({ item: b }) => {
-          const canStart = Boolean(b.userId?.coordinates || String(b.userId?.location || '').trim())
           const svc = serviceChipColors(b)
           const st = statusChipColors(b)
           const accent = statusAccent(b)
+          const dateObj = b.date ? new Date(b.date + 'T00:00:00') : new Date()
+          const dayNum = dateObj.getDate()
+          const monStr = dateObj.toLocaleDateString('en-IN', { month: 'short' }).toUpperCase()
 
           return (
             <Pressable
               style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
               onPress={() => navigation.navigate('PhysioBookingDetail', { id: b._id })}
             >
-              {/* Status accent border */}
-              <View style={[styles.cardAccent, { backgroundColor: accent }]} />
+              {/* Left: visual date zone */}
+              <View style={[styles.cardDateZone, { backgroundColor: accent + '14' }]}>
+                <View style={[styles.cardDateZoneBar, { backgroundColor: accent }]} />
+                <View style={[styles.cardDateAvatar, { backgroundColor: accent }]}>
+                  <Text style={styles.cardDateAvatarTxt}>{patientInitial(b.userId?.name)}</Text>
+                </View>
+                <Text style={[styles.cardDayNum, { color: accent }]}>{dayNum}</Text>
+                <Text style={[styles.cardDayMon, { color: accent }]}>{monStr}</Text>
+              </View>
 
+              {/* Right: patient info */}
               <View style={styles.cardBody}>
-                {/* Top row: date + pills */}
-                <View style={styles.cardTopRow}>
-                  <View style={styles.cardDateWrap}>
-                    <Ionicons name="calendar-outline" size={12} color={colors.textTertiary} />
-                    <Text style={styles.cardDate}>{formatBookingDateAndSlot(b.date, b.timeSlot)}</Text>
+                <Text style={styles.cardPatientName} numberOfLines={1}>
+                  {b.userId?.name ?? '—'}
+                </Text>
+                {b.issue ? (
+                  <Text style={styles.cardIssue} numberOfLines={1}>{b.issue}</Text>
+                ) : null}
+                <Text style={styles.cardTimeText} numberOfLines={1}>
+                  {formatBookingDateAndSlot(b.date, b.timeSlot)}
+                </Text>
+                <View style={styles.cardPills}>
+                  <View style={[styles.pill, { backgroundColor: svc.bg, borderColor: svc.border }]}>
+                    <Text style={[styles.pillTxt, { color: svc.fg }]}>{svc.label}</Text>
                   </View>
-                  <View style={styles.cardPills}>
-                    <View style={[styles.pill, { backgroundColor: svc.bg, borderColor: svc.border }]}>
-                      <Text style={[styles.pillTxt, { color: svc.fg }]}>{svc.label}</Text>
-                    </View>
-                    <View style={[styles.pill, { backgroundColor: st.bg, borderColor: st.border }]}>
-                      <Text style={[styles.pillTxt, { color: st.fg }]}>{listStatusLabel(b)}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Patient row */}
-                <View style={styles.cardPatientRow}>
-                  <View style={[styles.cardAvatar, { backgroundColor: accent + '22' }]}>
-                    <Text style={[styles.cardAvatarTxt, { color: accent }]}>
-                      {patientInitial(b.userId?.name)}
-                    </Text>
-                  </View>
-                  <View style={styles.cardPatientBody}>
-                    <Text style={styles.cardPatientName} numberOfLines={1}>
-                      {b.userId?.name ?? '—'}
-                    </Text>
-                    {b.userId?.phone ? (
-                      <Text style={styles.cardPhone}>{b.userId.phone}</Text>
-                    ) : null}
-                    {b.issue ? (
-                      <Text style={styles.cardIssue} numberOfLines={1}>{b.issue}</Text>
-                    ) : null}
+                  <View style={[styles.pill, { backgroundColor: st.bg, borderColor: st.border }]}>
+                    <Text style={[styles.pillTxt, { color: st.fg }]}>{listStatusLabel(b)}</Text>
                   </View>
                 </View>
+              </View>
 
-                {/* Action row */}
-                <View style={styles.cardActions}>
-                  <Pressable
-                    style={[styles.startBtn, !canStart && styles.startBtnDisabled]}
-                    disabled={!canStart}
-                    onPress={(e) => {
-                      e.stopPropagation?.()
-                      openGoogleMapsDestination({
-                        coordinates: b.userId?.coordinates,
-                        address: b.userId?.location,
-                      })
-                    }}
-                  >
-                    <Ionicons name="navigate-outline" size={13} color={canStart ? colors.white : colors.slate400} />
-                    <Text style={[styles.startBtnTxt, !canStart && styles.startBtnTxtDisabled]}>Directions</Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={styles.detailBtn}
-                    onPress={() => navigation.navigate('PhysioBookingDetail', { id: b._id })}
-                  >
-                    <Text style={styles.detailBtnTxt}>Details</Text>
-                    <Ionicons name="chevron-forward" size={13} color={colors.brand} />
-                  </Pressable>
-                </View>
+              {/* Chevron */}
+              <View style={styles.cardChevronWrap}>
+                <Ionicons name="chevron-forward" size={16} color={colors.slate200} />
               </View>
             </Pressable>
           )
@@ -404,7 +408,7 @@ export default function PhysioBookingsScreen({ navigation }) {
         setDraft={setFilterDraft}
         onClose={() => { setFilters({ ...filterDraft }); setFilterOpen(false) }}
       />
-    </>
+    </View>
   )
 }
 
@@ -423,9 +427,9 @@ function StatPill({ icon, value, label, color }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.canvas },
+  root: { flex: 1, backgroundColor: 'transparent' },
   listPad: { paddingHorizontal: 16, paddingBottom: 32 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.canvas },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#e8f8f6' },
 
   headerBlock: { paddingTop: 8, paddingBottom: 12 },
   bannerWrap: { marginBottom: 10 },
@@ -437,50 +441,50 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingVertical: 12,
+    borderColor: 'rgba(13, 148, 136, 0.12)',
+    paddingVertical: 14,
     paddingHorizontal: 6,
     marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+    elevation: 3,
   },
   statPill: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 3,
     minWidth: 0,
   },
   statIconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 7,
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  statTextWrap: { minWidth: 0, flexShrink: 1 },
-  statValue: { fontFamily: font.bold, fontSize: type.sm, color: colors.textPrimary, lineHeight: 17 },
-  statLabel: { fontFamily: font.regular, fontSize: 8, color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.3 },
-  statsDivider: { width: 1, height: 28, backgroundColor: colors.borderSubtle },
+  statTextWrap: { minWidth: 0, flexShrink: 1, alignItems: 'center' },
+  statValue: { fontFamily: font.bold, fontSize: 20, color: colors.textPrimary, lineHeight: 24 },
+  statLabel: { fontFamily: font.regular, fontSize: 8, color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  statsDivider: { width: 1, height: 36, backgroundColor: 'rgba(13, 148, 136, 0.08)' },
 
   // Toolbar
   toolbar: {
     backgroundColor: colors.white,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
     padding: 12,
     gap: 10,
     marginBottom: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
     elevation: 1,
   },
   searchWrap: {
@@ -488,10 +492,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
     borderRadius: 10,
     paddingHorizontal: 10,
-    backgroundColor: colors.canvas,
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
     minHeight: 38,
   },
   searchInput: {
@@ -509,10 +513,10 @@ const styles = StyleSheet.create({
   },
   segWrap: {
     flexDirection: 'row',
-    backgroundColor: colors.canvas,
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
     padding: 2,
     gap: 2,
   },
@@ -525,12 +529,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   segBtnOn: {
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     borderWidth: 1,
-    borderColor: colors.brandSoft,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
     shadowColor: colors.brand,
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 1,
   },
@@ -546,8 +550,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.white,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
   },
   sortTxt: { fontFamily: font.medium, fontSize: type.xs, color: colors.slate500 },
   filterBtn: {
@@ -558,8 +562,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.white,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
   },
   filterBtnActive: {
     backgroundColor: colors.brand,
@@ -581,83 +585,90 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
     marginBottom: 10,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowColor: '#0d3d38',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.09,
+    shadowRadius: 10,
+    elevation: 3,
+    minHeight: 88,
   },
-  cardPressed: { opacity: 0.92 },
-  cardAccent: { width: 4, alignSelf: 'stretch', flexShrink: 0 },
-  cardBody: { flex: 1, padding: 14, gap: 10 },
+  cardPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
 
-  cardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  cardDateWrap: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  cardDate: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.textPrimary },
-  cardPills: { flexDirection: 'row', gap: 5 },
-  pill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  pillTxt: { fontFamily: font.bold, fontSize: 9, letterSpacing: 0.3 },
-
-  cardPatientRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  cardAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+  // Left date zone
+  cardDateZone: {
+    width: 68,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 1,
+    paddingVertical: 14,
     flexShrink: 0,
+    position: 'relative',
   },
-  cardAvatarTxt: { fontFamily: font.bold, fontSize: type.base },
-  cardPatientBody: { flex: 1, minWidth: 0 },
-  cardPatientName: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textPrimary },
-  cardPhone: { marginTop: 2, fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
+  cardDateZoneBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+  },
+  cardDateAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 5,
+  },
+  cardDateAvatarTxt: {
+    fontFamily: font.bold,
+    fontSize: 15,
+    color: colors.white,
+  },
+  cardDayNum: {
+    fontFamily: font.bold,
+    fontSize: 19,
+    lineHeight: 22,
+  },
+  cardDayMon: {
+    fontFamily: font.semiBold,
+    fontSize: 9,
+    letterSpacing: 0.6,
+  },
+
+  // Right body
+  cardBody: { flex: 1, paddingVertical: 13, paddingHorizontal: 12, gap: 3, justifyContent: 'center' },
+  cardPatientName: { fontFamily: font.bold, fontSize: 17, color: colors.textPrimary, lineHeight: 22 },
   cardIssue: {
-    marginTop: 2,
     fontFamily: font.regular,
     fontSize: type.xs,
     color: colors.textTertiary,
     fontStyle: 'italic',
   },
+  cardTimeText: {
+    fontFamily: font.medium,
+    fontSize: 11,
+    color: colors.slate400,
+    marginBottom: 3,
+  },
+  cardPills: { flexDirection: 'row', gap: 5, flexWrap: 'wrap' },
+  pill: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
+    borderWidth: 1,
+  },
+  pillTxt: { fontFamily: font.bold, fontSize: 9, letterSpacing: 0.3 },
 
-  cardActions: {
-    flexDirection: 'row',
+  // Chevron
+  cardChevronWrap: {
+    width: 32,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 6,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
+    justifyContent: 'center',
+    flexShrink: 0,
   },
-  startBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    backgroundColor: colors.brand,
-  },
-  startBtnDisabled: { backgroundColor: colors.slate100 },
-  startBtnTxt: { fontFamily: font.semiBold, fontSize: type.xs, color: colors.white },
-  startBtnTxtDisabled: { color: colors.slate400 },
-  detailBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  detailBtnTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand },
 
   // Error state
   errorCard: {
@@ -696,11 +707,39 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 20,
-    backgroundColor: colors.slate50,
+    backgroundColor: 'rgba(13, 148, 136, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
   },
   emptyTitle: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textSecondary },
   emptySub: { fontFamily: font.regular, fontSize: type.sm, color: colors.textTertiary, textAlign: 'center', lineHeight: leading.sm },
+
+  // New backgrounds/glows
+  container: {
+    flex: 1,
+    backgroundColor: '#e8f8f6',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  ambientHeaderGlow: {
+    position: 'absolute',
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(162, 240, 239, 0.15)',
+    zIndex: 0,
+  },
+  ambientHeaderGlow2: {
+    position: 'absolute',
+    top: -50,
+    left: '20%',
+    width: '60%',
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(13, 107, 107, 0.04)',
+    zIndex: 0,
+  },
 })

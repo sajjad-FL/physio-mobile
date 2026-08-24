@@ -2,7 +2,6 @@ import DateTimePicker from '@react-native-community/datetimepicker'
 import * as DocumentPicker from 'expo-document-picker'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ActivityIndicator,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -17,11 +16,17 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Toast from 'react-native-toast-message'
-import { api } from '../api/client'
+import { api, postFormData } from '../api/client'
 import AppHeader from '../components/AppHeader'
+import EarningsEstimatorWidget from '../components/EarningsEstimatorWidget'
+import GovtIdDocumentSection from '../components/physio/GovtIdDocumentSection'
+import MultiInternshipDocRow from '../components/physio/MultiInternshipDocRow'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import Input from '../components/ui/Input'
+import PhysioNameInput from '../components/ui/PhysioNameInput'
+import RequiredMark from '../components/ui/RequiredMark'
+import { DetailSkeleton } from '../components/ui/skeletons'
 import { ID_PROOF_TYPE_OPTIONS } from '../constants/idProofTypes'
 import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll'
 import { PHYSIO_DEGREE_OPTIONS } from '../constants/physioQualification'
@@ -36,8 +41,10 @@ import {
   validateQualificationSection,
   validateSubmitForm,
 } from '../utils/onboardingValidation'
-import { formatPhysioSessionFeeLabel } from '../utils/physioSessionFee'
-import { appendFormDataFile, normalizePickedDocument } from '../utils/physioFormMultipart'
+import { appendFormDataFile, appendFormDataFiles, normalizePickedDocument } from '../utils/physioFormMultipart'
+import { pickMultipleDocuments } from '../utils/physioDocumentPicker'
+import { formatPhysioDisplayName, stripPhysioNameAffixes } from '../utils/physioDisplayName'
+import { DOB_PICKER_MIN, defaultDobPickerDate } from '../utils/date'
 
 const STEPS = [
   { n: 1, title: 'Basic info' },
@@ -60,9 +67,6 @@ const SERVICE_TYPE_OPTIONS = [
   { value: 'home', label: 'Home visit' },
   { value: 'both', label: 'Both' },
 ]
-
-const DOB_MIN = new Date(1900, 0, 1)
-const DOB_DEFAULT = new Date(1998, 0, 15)
 
 function formatYmd(date) {
   const y = date.getFullYear()
@@ -95,10 +99,13 @@ function ErrorBanner({ formError, fieldErrors }) {
   )
 }
 
-function OptionPickRow({ label, valueLabel, error, onPress }) {
+function OptionPickRow({ label, valueLabel, error, onPress, required = false }) {
   return (
     <View style={{ marginBottom: 12 }}>
-      <Text style={styles.pickLabel}>{label}</Text>
+      <Text style={styles.pickLabel}>
+        {label}
+        {required ? <RequiredMark /> : null}
+      </Text>
       <Pressable
         onPress={onPress}
         style={[styles.pickField, error ? styles.pickFieldErr : null]}
@@ -110,11 +117,14 @@ function OptionPickRow({ label, valueLabel, error, onPress }) {
   )
 }
 
-function DocRow({ title, subtitle, asset, existingUrl, error, onPick }) {
+function DocRow({ title, subtitle, asset, existingUrl, error, onPick, isOptional = false }) {
   const onFileLabel = asset?.name || 'No file chosen'
   return (
     <View style={styles.docRow}>
-      <Text style={styles.docTitle}>{title}</Text>
+      <Text style={styles.docTitle}>
+        {title}
+        {isOptional ? ' (optional)' : <RequiredMark />}
+      </Text>
       {subtitle ? <Text style={styles.docSub}>{subtitle}</Text> : null}
       {existingUrl ? (
         <Text style={styles.docOnFile} numberOfLines={1}>
@@ -169,14 +179,13 @@ export default function PhysioOnboardingScreen({ navigation }) {
   const [specialization, setSpecialization] = useState('')
   const [serviceType, setServiceType] = useState('both')
   const [areas, setAreas] = useState('')
-  const [feeMin, setFeeMin] = useState('')
+  const [adminSessionFee, setAdminSessionFee] = useState(null)
 
   const [fCertificate, setFCertificate] = useState(null)
   const [fIdProof, setFIdProof] = useState(null)
   const [fRegCert, setFRegCert] = useState(null)
   const [fSelfie, setFSelfie] = useState(null)
-  const [fInternship, setFInternship] = useState(null)
-  const [fCouncil, setFCouncil] = useState(null)
+  const [fInternships, setFInternships] = useState([])
   const [idProofType, setIdProofType] = useState('')
   const [qualificationAgreed, setQualificationAgreed] = useState(false)
 
@@ -194,17 +203,17 @@ export default function PhysioOnboardingScreen({ navigation }) {
     idProof: '',
     registration: '',
     selfie: '',
-    internship: '',
-    council: '',
+    internshipCertificates: [],
   })
 
   const [fieldErrors, setFieldErrors] = useState({})
   const [formError, setFormError] = useState('')
+  const [addressFocused, setAddressFocused] = useState(false)
 
   const [pickModal, setPickModal] = useState(null)
   const [dobPickerVisible, setDobPickerVisible] = useState(false)
-  const [pickerTempDate, setPickerTempDate] = useState(() => DOB_DEFAULT)
   const maxDob = useMemo(() => new Date(), [])
+  const [pickerTempDate, setPickerTempDate] = useState(() => defaultDobPickerDate(new Date()))
 
   const clearErrors = useCallback(() => {
     setFieldErrors({})
@@ -215,7 +224,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
     setLoading(true)
     try {
       const { data } = await api.get('/physio/onboarding')
-      setName(data.name || '')
+      setName(stripPhysioNameAffixes(data.name || ''))
       setEmail(data.email || '')
       setDob(dobInputFromApi(data.dob))
       setGender(data.gender || '')
@@ -230,7 +239,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
       setSpecialization(data.specialization || '')
       setServiceType(data.serviceType || 'both')
       setAreas((data.serviceAreas || []).join(', '))
-      setFeeMin(data.pricePerSession != null ? String(data.pricePerSession) : '')
+      setAdminSessionFee(data.pricePerSession != null ? Number(data.pricePerSession) : null)
       setStep(Math.min(5, Math.max(1, data.onboarding?.currentStep || 1)))
       setVStatus(data.verification?.status || 'pending')
       setVReason(data.verification?.rejectionReason || '')
@@ -258,8 +267,11 @@ export default function PhysioOnboardingScreen({ navigation }) {
         idProof: data.documentUrls?.idProof || '',
         registration: data.documentUrls?.registrationCertificate || '',
         selfie: data.documentUrls?.selfieWithId || '',
-        internship: data.documentUrls?.internshipCertificate || '',
-        council: data.documentUrls?.councilRegistrationCertificate || '',
+        internshipCertificates: Array.isArray(data.documentUrls?.internshipCertificates)
+          ? data.documentUrls.internshipCertificates.filter(Boolean)
+          : data.documentUrls?.internshipCertificate
+            ? [data.documentUrls.internshipCertificate]
+            : [],
       })
       setIdProofType(String(data.documentUrls?.idProofType || '').trim().toLowerCase())
     } catch {
@@ -276,22 +288,33 @@ export default function PhysioOnboardingScreen({ navigation }) {
   async function uploadFilesPartial(formExtra) {
     const fd = new FormData()
     let n = 0
-    function add(field, asset) {
-      if (!asset?.uri) return
-      appendFormDataFile(fd, field, asset)
-      n += 1
+    async function add(field, asset) {
+      if (!asset) return
+      if (await appendFormDataFile(fd, field, asset)) n += 1
     }
-    if (formExtra.avatar) add('avatar', formExtra.avatar)
-    if (formExtra.certificate) add('certificate', formExtra.certificate)
-    if (formExtra.idProof) add('idProof', formExtra.idProof)
-    if (formExtra.registrationCertificate) add('registrationCertificate', formExtra.registrationCertificate)
-    if (formExtra.selfieWithId) add('selfieWithId', formExtra.selfieWithId)
-    if (formExtra.internshipCertificate) add('internshipCertificate', formExtra.internshipCertificate)
-    if (formExtra.councilRegistrationCertificate) {
-      add('councilRegistrationCertificate', formExtra.councilRegistrationCertificate)
+    if (formExtra.avatar) await add('avatar', formExtra.avatar)
+    if (formExtra.certificate) await add('certificate', formExtra.certificate)
+    if (formExtra.idProof) await add('idProof', formExtra.idProof)
+    if (formExtra.registrationCertificate) await add('registrationCertificate', formExtra.registrationCertificate)
+    if (formExtra.selfieWithId) await add('selfieWithId', formExtra.selfieWithId)
+    if (Array.isArray(formExtra.internshipCertificates)) {
+      n += await appendFormDataFiles(fd, 'internshipCertificate', formExtra.internshipCertificates)
+    } else if (formExtra.internshipCertificate) {
+      await add('internshipCertificate', formExtra.internshipCertificate)
     }
     if (n === 0) return
-    await api.post('/physio/onboarding/upload', fd)
+    await postFormData('/physio/onboarding/upload', fd)
+  }
+
+  async function addInternshipCertificates() {
+    const picked = await pickMultipleDocuments('Internship certificate')
+    if (!picked.length) return
+    setFInternships((prev) => [...prev, ...picked])
+    setFieldErrors((prev) => ({ ...prev, internshipCertificate: '' }))
+  }
+
+  function removeInternshipCertificate(index) {
+    setFInternships((prev) => prev.filter((_, i) => i !== index))
   }
 
   async function pickDoc(label, setter, avatar = false) {
@@ -412,7 +435,6 @@ export default function PhysioOnboardingScreen({ navigation }) {
           specialization,
           serviceType,
           areas,
-          feeMin,
         })
         if (Object.keys(errors).length) {
           setFieldErrors(errors)
@@ -422,12 +444,13 @@ export default function PhysioOnboardingScreen({ navigation }) {
       }
       if (fromStep === 4) {
         const { errors, ok } = validateDocumentsStep(
-          { fCertificate, fIdProof, fRegCert, fSelfie, fInternship, fCouncil },
+          { fCertificate, fIdProof, fRegCert, fSelfie, fInternships },
           {
             certificate: docUrls.certificate,
             idProof: docUrls.idProof,
             registration: docUrls.registration,
             selfie: docUrls.selfie,
+            internshipCertificates: docUrls.internshipCertificates,
           },
           {
             requireSignedNda: ndaPolicy.requireSignedNda,
@@ -443,9 +466,8 @@ export default function PhysioOnboardingScreen({ navigation }) {
           return
         }
         const checks = [
-          [fCertificate, 'Qualification certificate'],
-          [fIdProof, 'ID proof'],
-          [fRegCert, 'Registration certificate'],
+          [fCertificate, 'BPT/MPT pass certificate'],
+          [fIdProof, 'GOVERNMENT ID'],
           [fSelfie, 'Selfie with ID'],
         ]
         for (const [file, label] of checks) {
@@ -458,17 +480,20 @@ export default function PhysioOnboardingScreen({ navigation }) {
             }
           }
         }
-        for (const [file, label] of [
-          [fInternship, 'Internship certificate'],
-          [fCouncil, 'Council registration certificate'],
-        ]) {
-          if (file) {
-            const r = validateFileAsset(file, label)
-            if (!r.ok) {
-              setFieldErrors({ file: r.message })
-              setFormError(r.message)
-              return
-            }
+        if (fRegCert) {
+          const r = validateFileAsset(fRegCert, 'NCAHP/IAP registration certificate')
+          if (!r.ok) {
+            setFieldErrors({ file: r.message })
+            setFormError(r.message)
+            return
+          }
+        }
+        for (const file of fInternships) {
+          const r = validateFileAsset(file, 'Internship certificate')
+          if (!r.ok) {
+            setFieldErrors({ file: r.message })
+            setFormError(r.message)
+            return
           }
         }
         await uploadFilesPartial({
@@ -476,15 +501,13 @@ export default function PhysioOnboardingScreen({ navigation }) {
           idProof: fIdProof || undefined,
           registrationCertificate: fRegCert || undefined,
           selfieWithId: fSelfie || undefined,
-          internshipCertificate: fInternship || undefined,
-          councilRegistrationCertificate: fCouncil || undefined,
+          internshipCertificates: fInternships.length ? fInternships : undefined,
         })
         setFCertificate(null)
         setFIdProof(null)
         setFRegCert(null)
         setFSelfie(null)
-        setFInternship(null)
-        setFCouncil(null)
+        setFInternships([])
         await load()
       }
 
@@ -496,7 +519,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
       }
       if (fromStep === 1) {
         patch.basic = {
-          name,
+          name: formatPhysioDisplayName(name),
           email,
           dob: dob || undefined,
           gender,
@@ -518,7 +541,6 @@ export default function PhysioOnboardingScreen({ navigation }) {
           specialization,
           serviceType,
           areas,
-          feeMin,
         }
       }
       if (fromStep < 5) {
@@ -547,7 +569,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
     setSaving(true)
     try {
       const submitValues = {
-        name,
+        name: formatPhysioDisplayName(name),
         email,
         location,
         dob,
@@ -561,11 +583,10 @@ export default function PhysioOnboardingScreen({ navigation }) {
         specialization,
         serviceType,
         areas,
-        feeMin,
         docCertificate: docUrls.certificate,
         docIdProof: docUrls.idProof,
-        docRegistration: docUrls.registration,
         docSelfie: docUrls.selfie,
+        docInternshipCertificates: docUrls.internshipCertificates,
         idProofType,
         docSignedNda: '',
         requireSignedNda: Boolean(ndaPolicy.requireSignedNda),
@@ -617,7 +638,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
   }
 
   function openDobPicker() {
-    setPickerTempDate(parseDobToDate(dob) || DOB_DEFAULT)
+    setPickerTempDate(parseDobToDate(dob) || defaultDobPickerDate(maxDob))
     setDobPickerVisible(true)
   }
 
@@ -636,9 +657,8 @@ export default function PhysioOnboardingScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={[styles.flex, styles.centerSplash]}>
-        <ActivityIndicator size="large" color={colors.brand} />
-        <Text style={[styles.lead, { marginTop: 12 }]}>Loading onboarding…</Text>
+      <View style={[styles.flex, { padding: 16 }]}>
+        <DetailSkeleton />
       </View>
     )
   }
@@ -665,13 +685,9 @@ export default function PhysioOnboardingScreen({ navigation }) {
         </Card>
         <Card style={{ marginTop: 12 }}>
           <Text style={styles.sectionTitle}>On file</Text>
-          <ReviewLine label="Name" value={name || '—'} />
+          <ReviewLine label="Name" value={formatPhysioDisplayName(name) || '—'} />
           <ReviewLine label="Specialization" value={specialization || '—'} />
           <ReviewLine label="Experience" value={experience !== '' ? `${experience} yrs` : '—'} />
-          <ReviewLine
-            label="Fee / session"
-            value={feeMin === '' ? '—' : formatPhysioSessionFeeLabel({ pricePerSession: Number(feeMin) })}
-          />
         </Card>
       </ScrollView>
     )
@@ -681,11 +697,14 @@ export default function PhysioOnboardingScreen({ navigation }) {
     <KeyboardAvoidingView {...keyboardAvoidingViewProps}>
       <AppHeader title="Onboarding" onBack={() => navigation.goBack()} />
       <View style={styles.mainCol}>
-      <ScrollView
-        {...scrollViewProps}
-        contentContainerStyle={[styles.scrollPad, { paddingBottom: padBottom }]}
-        style={styles.scrollFlex}
-      >
+        {/* Ambient Top Background Halo Glow */}
+        <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+        <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
+        <ScrollView
+          {...scrollViewProps}
+          contentContainerStyle={[styles.scrollPad, { paddingBottom: padBottom }]}
+          style={styles.scrollFlex}
+        >
         <Text style={styles.h1}>Physiotherapist onboarding</Text>
         <Text style={styles.lead}>
           Complete all steps. Verification: <Text style={{ fontWeight: '700' }}>{vStatus}</Text>
@@ -713,7 +732,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
           <Card style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Basic info</Text>
             <View style={{ height: 14 }} />
-            <Input label="Full name" value={name} onChangeText={setName} error={fieldErrors.name} />
+            <PhysioNameInput value={name} onChangeText={setName} error={fieldErrors.name} placeholder="Your name" required />
             <View style={{ height: 12 }} />
             <Input
               label="Email"
@@ -722,11 +741,12 @@ export default function PhysioOnboardingScreen({ navigation }) {
               value={email}
               onChangeText={setEmail}
               error={fieldErrors.email}
+              required
             />
             <View style={{ height: 12 }} />
             {Platform.OS !== 'web' ? (
               <View>
-                <Text style={styles.pickLabel}>Date of birth</Text>
+                <Text style={styles.pickLabel}>Date of birth<RequiredMark /></Text>
                 <Pressable
                   onPress={openDobPicker}
                   style={[styles.pickField, fieldErrors.dob ? styles.pickFieldErr : null]}
@@ -738,7 +758,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
                 {fieldErrors.dob ? <Text style={styles.fieldErr}>{fieldErrors.dob}</Text> : null}
               </View>
             ) : (
-              <Input label="Date of birth (YYYY-MM-DD)" value={dob} onChangeText={setDob} error={fieldErrors.dob} />
+              <Input label="Date of birth (YYYY-MM-DD)" value={dob} onChangeText={setDob} error={fieldErrors.dob} required />
             )}
             <View style={{ height: 12 }} />
             <OptionPickRow
@@ -746,11 +766,18 @@ export default function PhysioOnboardingScreen({ navigation }) {
               valueLabel={gender ? genderLabel() : ''}
               error={fieldErrors.gender}
               onPress={() => setPickModal('genderAll')}
+              required
             />
             <View style={{ height: 4 }} />
             <Text style={styles.pickLabel}>Address</Text>
             <TextInput
-              style={[styles.textArea, fieldErrors.address ? styles.textAreaErr : null]}
+              style={[
+                styles.textArea,
+                addressFocused && styles.textAreaFocused,
+                fieldErrors.address ? styles.textAreaErr : null,
+              ]}
+              onFocus={() => setAddressFocused(true)}
+              onBlur={() => setAddressFocused(false)}
               value={address}
               onChangeText={setAddress}
               placeholder="Street, locality"
@@ -761,7 +788,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
             <View style={{ height: 12 }} />
             <Text style={styles.pickLabel}>Coverage / location</Text>
             <Text style={styles.help}>Label patients see when booking (matches web onboarding).</Text>
-            <Input label="Coverage label (area)" value={location} onChangeText={setLocation} error={fieldErrors.location} />
+            <Input label="Coverage label (area)" value={location} onChangeText={setLocation} error={fieldErrors.location} required />
 
             <View style={{ height: 16 }} />
             <Text style={styles.pickLabel}>Profile photo (optional)</Text>
@@ -780,17 +807,18 @@ export default function PhysioOnboardingScreen({ navigation }) {
           <Card style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Qualification</Text>
             <View style={{ height: 14 }} />
-            <OptionPickRow label="Degree" valueLabel={degreeLabel()} error={fieldErrors.degree} onPress={() => setPickModal('degree')} />
+            <OptionPickRow label="Degree" valueLabel={degreeLabel()} error={fieldErrors.degree} onPress={() => setPickModal('degree')} required />
             <View style={{ height: 12 }} />
-            <Input label="University" value={university} onChangeText={setUniversity} error={fieldErrors.university} />
+            <Input label="University" value={university} onChangeText={setUniversity} error={fieldErrors.university} required />
             <View style={{ height: 12 }} />
-            <Input label="Passing year" keyboardType="number-pad" value={year} onChangeText={setYear} error={fieldErrors.year} />
+            <Input label="Passing year" keyboardType="number-pad" value={year} onChangeText={setYear} error={fieldErrors.year} required />
             <View style={{ height: 12 }} />
             <Input
-              label="Council registration no (optional)"
+              label="NCAHP/IAP registration no. (optional)"
               value={registrationNumber}
               onChangeText={setRegistrationNumber}
               error={fieldErrors.registrationNumber}
+              placeholder="Enter NCAHP/IAP registration number"
             />
           </Card>
         )}
@@ -799,15 +827,16 @@ export default function PhysioOnboardingScreen({ navigation }) {
           <Card style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Practice details</Text>
             <View style={{ height: 14 }} />
-            <Input label="Experience (years)" keyboardType="decimal-pad" value={experience} onChangeText={setExperience} error={fieldErrors.experience} />
+            <Input label="Experience (years)" keyboardType="decimal-pad" value={experience} onChangeText={setExperience} error={fieldErrors.experience} required />
             <View style={{ height: 12 }} />
-            <Input label="Specialization" value={specialization} onChangeText={setSpecialization} error={fieldErrors.specialization} />
+            <Input label="Specialization" value={specialization} onChangeText={setSpecialization} error={fieldErrors.specialization} required />
             <View style={{ height: 12 }} />
             <OptionPickRow
               label="Service type"
               valueLabel={SERVICE_TYPE_OPTIONS.find((o) => o.value === serviceType)?.label || ''}
               error={fieldErrors.serviceType}
               onPress={() => setPickModal('service')}
+              required
             />
             <View style={{ height: 12 }} />
             <Input
@@ -816,9 +845,9 @@ export default function PhysioOnboardingScreen({ navigation }) {
               onChangeText={setAreas}
               placeholder="e.g. Guwahati, Beltola"
               error={fieldErrors.areas}
+              required
             />
-            <View style={{ height: 12 }} />
-            <Input label="Fee per session (₹)" keyboardType="decimal-pad" value={feeMin} onChangeText={setFeeMin} error={fieldErrors.feeMin} />
+            <EarningsEstimatorWidget sessionFee={adminSessionFee} />
           </Card>
         )}
 
@@ -828,36 +857,30 @@ export default function PhysioOnboardingScreen({ navigation }) {
             <Text style={styles.help}>PDF or image, max 2MB each.</Text>
             <View style={{ height: 12 }} />
             <DocRow
-              title="Qualification certificate"
+              title="BPT/MPT pass certificate"
               subtitle="Degree or marksheet."
               asset={fCertificate}
               existingUrl={docUrls.certificate}
               error={fieldErrors.certificate}
-              onPick={() => pickDoc('Qualification certificate', setFCertificate)}
+              onPick={() => pickDoc('BPT/MPT pass certificate', setFCertificate)}
             />
             <View style={{ height: 16 }} />
-            <DocRow
-              title="Government ID"
-              subtitle="Clear photo or PDF."
-              asset={fIdProof}
-              existingUrl={docUrls.idProof}
-              error={fieldErrors.idProof || fieldErrors.idProofType}
-              onPick={() => pickDoc('ID proof', setFIdProof)}
-            />
-            <OptionPickRow
-              label="ID type"
-              valueLabel={ID_PROOF_TYPE_OPTIONS.find((o) => o.value === idProofType)?.label || ''}
-              error={fieldErrors.idProofType}
-              onPress={() => setPickModal('idProof')}
+            <MultiInternshipDocRow
+              assets={fInternships}
+              existingUrls={docUrls.internshipCertificates}
+              error={fieldErrors.internshipCertificate}
+              onAdd={addInternshipCertificates}
+              onRemove={removeInternshipCertificate}
             />
             <View style={{ height: 16 }} />
-            <DocRow
-              title="Professional registration"
-              subtitle="State council document."
-              asset={fRegCert}
-              existingUrl={docUrls.registration}
-              error={fieldErrors.registrationCertificate}
-              onPick={() => pickDoc('Registration certificate', setFRegCert)}
+            <GovtIdDocumentSection
+              idProofType={idProofType}
+              onPressIdType={() => setPickModal('idProof')}
+              idProofAsset={fIdProof}
+              existingIdProofUrl={docUrls.idProof}
+              onPickIdProof={() => pickDoc('GOVERNMENT ID', setFIdProof)}
+              error={{ idProofType: fieldErrors.idProofType, idProof: fieldErrors.idProof }}
+              useDropdown={false}
             />
             <View style={{ height: 16 }} />
             <DocRow
@@ -870,31 +893,25 @@ export default function PhysioOnboardingScreen({ navigation }) {
             />
             <View style={{ height: 16 }} />
             <DocRow
-              title="Internship certificate (optional)"
-              asset={fInternship}
-              existingUrl={docUrls.internship}
-              error={fieldErrors.internshipCertificate}
-              onPick={() => pickDoc('Internship certificate', setFInternship)}
-            />
-            <View style={{ height: 16 }} />
-            <DocRow
-              title="Council certificate (optional)"
-              asset={fCouncil}
-              existingUrl={docUrls.council}
-              error={fieldErrors.councilRegistrationCertificate}
-              onPick={() => pickDoc('Council registration certificate', setFCouncil)}
+              title="NCAHP/IAP registration certificate"
+              subtitle="If registered, upload your certificate."
+              asset={fRegCert}
+              existingUrl={docUrls.registration}
+              error={fieldErrors.registrationCertificate}
+              onPick={() => pickDoc('NCAHP/IAP registration certificate', setFRegCert)}
+              isOptional
             />
             <View style={{ height: 20 }} />
             <Text style={styles.sectionTitle}>Qualification declaration</Text>
             <Text style={styles.declaration}>
               {ndaPolicy.declarationText ||
-                'I confirm that all qualifications and documents I submit to PhysioKhom are accurate. Misrepresentation may result in removal from the platform and legal consequences.'}
+                'I confirm that all qualifications and documents I submit to PhysiOkhom are accurate. Misrepresentation may result in removal from the platform and legal consequences.'}
             </Text>
             <Pressable style={styles.checkRow} onPress={() => setQualificationAgreed((v) => !v)}>
               <View style={[styles.checkBox, qualificationAgreed ? styles.checkBoxOn : null]}>
                 {qualificationAgreed ? <Text style={styles.checkMark}>✓</Text> : null}
               </View>
-              <Text style={styles.checkLabel}>I have read and agree to the declaration above.</Text>
+              <Text style={styles.checkLabel}>I have read and agree to the declaration above.<RequiredMark /></Text>
             </Pressable>
             {fieldErrors.qualificationDeclaration ? (
               <Text style={styles.fieldErr}>{fieldErrors.qualificationDeclaration}</Text>
@@ -907,15 +924,11 @@ export default function PhysioOnboardingScreen({ navigation }) {
           <Card style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Submit for review</Text>
             <View style={{ height: 12 }} />
-            <ReviewLine label="Name" value={name} />
+            <ReviewLine label="Name" value={formatPhysioDisplayName(name)} />
             <ReviewLine label="Email" value={email} />
             <ReviewLine label="Location" value={location} />
             <ReviewLine label="Specialization" value={specialization} />
             <ReviewLine label="Experience" value={experience !== '' ? `${experience} yrs` : '—'} />
-            <ReviewLine
-              label="Fee / session"
-              value={feeMin === '' ? '—' : formatPhysioSessionFeeLabel({ pricePerSession: Number(feeMin) })}
-            />
             <Text style={styles.help}>
               Submit sends your application to admin review (same as the web physio onboarding).
             </Text>
@@ -1008,7 +1021,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
                 themeVariant="light"
                 onChange={(_, date) => date && setPickerTempDate(date)}
                 maximumDate={maxDob}
-                minimumDate={DOB_MIN}
+                minimumDate={DOB_PICKER_MIN}
               />
             </View>
           </View>
@@ -1025,7 +1038,7 @@ export default function PhysioOnboardingScreen({ navigation }) {
             if (date) applyPickedDob(date)
           }}
           maximumDate={maxDob}
-          minimumDate={DOB_MIN}
+          minimumDate={DOB_PICKER_MIN}
         />
       ) : null}
     </KeyboardAvoidingView>
@@ -1057,21 +1070,30 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
   },
-  stepChipOff: { backgroundColor: colors.white, borderColor: colors.borderSubtle },
-  stepChipOn: { backgroundColor: colors.brand, borderColor: colors.brand, shadowColor: colors.brand, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 },
+  stepChipOff: { backgroundColor: 'rgba(255, 255, 255, 0.45)', borderColor: 'rgba(13, 148, 136, 0.15)' },
+  stepChipOn: { backgroundColor: colors.brand, borderColor: colors.brand, shadowColor: colors.brand, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 3 },
   stepChipText: { fontFamily: font.semiBold, fontSize: type.xs, color: colors.textSecondary },
   stepChipTextOn: { color: colors.white },
-  sectionCard: { marginBottom: 10 },
+  sectionCard: {
+    marginBottom: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+  },
   sectionTitle: { fontFamily: font.bold, fontSize: type.base, color: colors.textPrimary },
   help: { marginTop: 6, fontFamily: font.regular, fontSize: type.xs, color: colors.textTertiary, lineHeight: leading.xs },
   pickLabel: { marginBottom: 6, fontFamily: font.semiBold, fontSize: type.sm, color: colors.textSecondary },
   pickField: {
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
     minHeight: 42,
     justifyContent: 'center',
   },
@@ -1080,7 +1102,7 @@ const styles = StyleSheet.create({
   pickPlaceholder: { color: colors.slate300 },
   textArea: {
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
     borderRadius: 10,
     padding: 12,
     minHeight: 80,
@@ -1088,7 +1110,11 @@ const styles = StyleSheet.create({
     fontFamily: font.regular,
     fontSize: type.sm,
     color: colors.textPrimary,
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
+  },
+  textAreaFocused: {
+    borderColor: colors.brand,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
   },
   textAreaErr: { borderColor: colors.danger },
   coordHint: { marginTop: 6, fontFamily: font.regular, fontSize: type.xs, color: colors.textTertiary },
@@ -1096,10 +1122,10 @@ const styles = StyleSheet.create({
   docRow: {
     paddingVertical: 10,
     paddingHorizontal: 14,
-    backgroundColor: colors.canvas,
+    backgroundColor: 'rgba(241, 245, 249, 0.4)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
   },
   docTitle: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.textPrimary },
   docSub: { marginTop: 3, fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
@@ -1112,10 +1138,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: leading.sm,
     padding: 12,
-    backgroundColor: colors.slate50,
+    backgroundColor: 'rgba(241, 245, 249, 0.4)',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
   },
   checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 14 },
   checkBox: {
@@ -1144,20 +1170,20 @@ const styles = StyleSheet.create({
   },
   errorBannerTitle: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.danger, marginBottom: 6 },
   errorBannerItem: { fontFamily: font.regular, fontSize: type.xs, color: colors.danger, marginTop: 2 },
-  mainCol: { flex: 1 },
+  mainCol: { flex: 1, position: 'relative', overflow: 'hidden' },
   scrollFlex: { flex: 1 },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 12,
-    backgroundColor: colors.white,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(13, 148, 136, 0.08)',
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
     elevation: 4,
   },
   reviewRow: {
@@ -1218,4 +1244,24 @@ const styles = StyleSheet.create({
   },
   modalBtn: { fontFamily: font.medium, fontSize: type.sm, color: colors.textSecondary },
   modalBtnPrimary: { fontFamily: font.bold, color: colors.brand },
+  ambientHeaderGlow: {
+    position: 'absolute',
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(162, 240, 239, 0.15)',
+    zIndex: 0,
+  },
+  ambientHeaderGlow2: {
+    position: 'absolute',
+    top: -50,
+    left: '20%',
+    width: '60%',
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(13, 107, 107, 0.04)',
+    zIndex: 0,
+  },
 })

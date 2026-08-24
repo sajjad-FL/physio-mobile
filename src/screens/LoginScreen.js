@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Image,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -26,6 +29,7 @@ import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { useAuth } from '../context/AuthContext'
 import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll'
+import RequiredMark from '../components/ui/RequiredMark'
 
 function digitsOnly(text, maxLen) {
   const d = String(text || '').replace(/\D/g, '')
@@ -43,8 +47,25 @@ export default function LoginScreen({ navigation }) {
   const [fieldErrors, setFieldErrors] = useState({})
   const [phoneFocused, setPhoneFocused] = useState(false)
   const [passFocused, setPassFocused] = useState(false)
+  const phoneRef = useRef(null)
+  const passwordRef = useRef(null)
+  const passwordBlockRef = useRef(null)
   const { authEpoch } = useAuth()
-  const { padBottom, scrollViewProps, keyboardAvoidingViewProps } = useKeyboardAwareScroll()
+  const { padBottom, scrollViewProps, keyboardAvoidingViewProps, scrollIntoView } = useKeyboardAwareScroll({
+    scrollToEndOnShow: false,
+    extraBottomPadding: 40,
+  })
+
+  const revealPasswordField = useCallback(() => {
+    scrollIntoView(passwordBlockRef, { offset: 96 })
+  }, [scrollIntoView])
+
+  useEffect(() => {
+    if (!passFocused) return undefined
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+    const sub = Keyboard.addListener(showEvent, revealPasswordField)
+    return () => sub.remove()
+  }, [passFocused, revealPasswordField])
 
   useEffect(() => {
     if (getTokenSync()) {
@@ -119,6 +140,9 @@ export default function LoginScreen({ navigation }) {
   return (
     <KeyboardAvoidingView {...keyboardAvoidingViewProps}>
       <View style={styles.bg}>
+        {/* Ambient Top Background Halo Glow */}
+        <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+        <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
 
         {/* ── Header ─────────────────────────────── */}
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 8) + 6 }]}>
@@ -133,12 +157,16 @@ export default function LoginScreen({ navigation }) {
               <Ionicons name="chevron-back" size={16} color={colors.brand} />
               <Text style={styles.backTxt}>Home</Text>
             </Pressable>
-            <View style={styles.brandRow}>
-              <View style={styles.logoMark}>
-                <Ionicons name="pulse" size={11} color={colors.white} />
-              </View>
-              <Text style={styles.brandPhysio}>Physio</Text>
-              <Text style={styles.brandKhom}>Khom</Text>
+            <View style={styles.brandRow} accessibilityRole="header" accessibilityLabel="PhysiOkhom">
+              <Image
+                source={require('../../assets/images/logo.png')}
+                style={styles.logoMark}
+                resizeMode="contain"
+              />
+              <Text numberOfLines={1}>
+                <Text style={styles.brandPhysio}>Physi</Text>
+                <Text style={styles.brandKhom}>Okhom</Text>
+              </Text>
             </View>
             <View style={styles.headerSpacer} />
           </View>
@@ -146,6 +174,7 @@ export default function LoginScreen({ navigation }) {
 
         <ScrollView
           {...scrollViewProps}
+          style={styles.scrollView}
           contentContainerStyle={[styles.scroll, { paddingBottom: padBottom }]}
         >
 
@@ -171,8 +200,10 @@ export default function LoginScreen({ navigation }) {
             ) : null}
 
             {/* Mobile field */}
-            <View>
-              <Text style={styles.fieldLabel}>Mobile number</Text>
+            <View style={styles.fieldBlock}>
+              <Pressable onPress={() => phoneRef.current?.focus()} accessibilityRole="none">
+                <Text style={styles.fieldLabel}>Mobile number<RequiredMark /></Text>
+              </Pressable>
               <View style={[
                 styles.mobileField,
                 phoneFocused && styles.fieldFocused,
@@ -182,39 +213,68 @@ export default function LoginScreen({ navigation }) {
                   <Text style={styles.phonePrefixTxt}>+91</Text>
                 </View>
                 <TextInput
+                  ref={phoneRef}
+                  nativeID="login-phone"
                   style={styles.textInput}
                   placeholder="Enter mobile number"
                   placeholderTextColor={colors.textTertiary}
                   keyboardType="phone-pad"
                   autoCapitalize="none"
+                  textContentType="username"
+                  autoComplete="username"
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  autoCorrect={false}
                   maxLength={10}
                   value={phone}
                   onChangeText={(txt) => setPhone(digitsOnly(txt, 10))}
                   onFocus={() => setPhoneFocused(true)}
                   onBlur={() => setPhoneFocused(false)}
+                  onSubmitEditing={() => {
+                    passwordRef.current?.focus()
+                    revealPasswordField()
+                  }}
                 />
               </View>
               {fieldErrors.phone ? <Text style={styles.fieldErrTxt}>{fieldErrors.phone}</Text> : null}
             </View>
 
             {/* Password field */}
-            <View style={styles.fieldGap}>
-              <Text style={styles.fieldLabel}>Password</Text>
+            <View ref={passwordBlockRef} style={[styles.fieldBlock, styles.fieldGap]}>
+              <Pressable
+                onPress={() => {
+                  passwordRef.current?.focus()
+                  revealPasswordField()
+                }}
+                accessibilityRole="none"
+              >
+                <Text style={styles.fieldLabel}>Password<RequiredMark /></Text>
+              </Pressable>
               <View style={[
                 styles.passField,
                 passFocused && styles.fieldFocused,
                 Boolean(fieldErrors.password) && styles.fieldError,
               ]}>
                 <TextInput
+                  ref={passwordRef}
+                  nativeID="login-password"
                   style={[styles.textInput, styles.passInput]}
                   placeholder="Enter password"
                   placeholderTextColor={colors.textTertiary}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  textContentType="password"
+                  autoComplete="password"
+                  returnKeyType="done"
+                  autoCorrect={false}
                   value={password}
                   onChangeText={setPassword}
-                  onFocus={() => setPassFocused(true)}
+                  onFocus={() => {
+                    setPassFocused(true)
+                    revealPasswordField()
+                  }}
                   onBlur={() => setPassFocused(false)}
+                  onSubmitEditing={handleSubmit}
                 />
                 <Pressable
                   onPress={() => setShowPassword((v) => !v)}
@@ -311,8 +371,30 @@ export default function LoginScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  bg: { flex: 1, backgroundColor: colors.canvas },
+  bg: { flex: 1, backgroundColor: colors.canvas, position: 'relative' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.canvas },
+
+  // Ambient Header glows
+  ambientHeaderGlow: {
+    position: 'absolute',
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(162, 240, 239, 0.15)',
+    zIndex: 0,
+  },
+  ambientHeaderGlow2: {
+    position: 'absolute',
+    top: -50,
+    left: '20%',
+    width: '60%',
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(13, 107, 107, 0.04)',
+    zIndex: 0,
+  },
 
   // Header
   header: {
@@ -321,6 +403,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
+    zIndex: 10,
   },
   headerRow: {
     flexDirection: 'row',
@@ -330,23 +413,20 @@ const styles = StyleSheet.create({
   },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 80 },
   backTxt: { fontFamily: font.medium, fontSize: type.base, color: colors.brand },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   logoMark: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    backgroundColor: colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 40,
+    height: 40,
   },
-  brandPhysio: { fontFamily: font.bold, fontSize: type.lg, color: colors.textPrimary, letterSpacing: -0.3 },
+  brandPhysio: { fontFamily: font.bold, fontSize: type.lg, color: '#0f172a', letterSpacing: -0.3 },
   brandKhom: { fontFamily: font.bold, fontSize: type.lg, color: colors.brand, letterSpacing: -0.3 },
   headerSpacer: { minWidth: 80 },
 
-  scroll: { paddingHorizontal: 16, paddingTop: 24 },
+  scrollView: { flex: 1 },
+  scroll: { paddingHorizontal: 16, paddingTop: 24, flexGrow: 1 },
 
   // Hero section
-  heroSection: { alignItems: 'center', gap: 10, marginBottom: 24 },
+  heroSection: { alignItems: 'center', gap: 10, marginBottom: 24, zIndex: 2 },
   heroIconWrap: {
     width: 68,
     height: 68,
@@ -378,6 +458,8 @@ const styles = StyleSheet.create({
   // Form card
   formCard: {
     ...authFormCard,
+    zIndex: 2,
+    marginBottom: 20,
   },
 
   // Alert banner
@@ -401,29 +483,38 @@ const styles = StyleSheet.create({
   },
 
   // Form fields
+  fieldBlock: { zIndex: 0 },
   fieldLabel: { marginBottom: 6, fontFamily: font.medium, fontSize: type.base, color: colors.textPrimary },
-  fieldGap: { marginTop: 12 },
+  fieldGap: { marginTop: 16, zIndex: 1 },
   mobileField: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 44,
+    height: 46,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: 10,
-    backgroundColor: colors.canvas,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
     overflow: 'hidden',
   },
   passField: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 44,
+    height: 46,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: 10,
-    backgroundColor: colors.canvas,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
     paddingRight: 4,
+    overflow: 'hidden',
   },
-  fieldFocused: { borderColor: colors.borderFocus, backgroundColor: colors.white },
+  fieldFocused: { 
+    borderColor: colors.brand, 
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
   fieldError: { borderColor: colors.danger },
   phonePrefix: {
     paddingLeft: 14,
@@ -431,19 +522,19 @@ const styles = StyleSheet.create({
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: colors.borderSubtle,
     justifyContent: 'center',
-    height: 44,
+    height: 46,
   },
   phonePrefixTxt: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textSecondary },
   textInput: {
     flex: 1,
-    height: 44,
+    height: 46,
     paddingHorizontal: 12,
     fontFamily: font.regular,
     fontSize: type.base,
     color: colors.textPrimary,
   },
   passInput: { paddingRight: 0 },
-  eyeBtn: { paddingHorizontal: 10, height: 44, alignItems: 'center', justifyContent: 'center' },
+  eyeBtn: { paddingHorizontal: 10, height: 46, alignItems: 'center', justifyContent: 'center' },
   fieldErrTxt: { marginTop: 5, fontFamily: font.regular, fontSize: type.sm, color: colors.danger },
 
   spacer10: { height: 10 },

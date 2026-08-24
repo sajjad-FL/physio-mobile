@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
@@ -8,12 +8,32 @@ import { validateLoginPassword, validateOtp } from '../utils/validation'
 import Input from '../components/ui/Input'
 import KeyboardAwareScrollView from '../components/ui/KeyboardAwareScrollView'
 import { colors } from '../theme/colors'
+import { authFormCard } from '../theme/authFormCard'
 import { font, type, leading } from '../theme/typography'
+import { OTP_RESEND_COOLDOWN_SECONDS } from '../constants/otp'
 
 const STEPS = [
-  { key: 'phone', n: 1, icon: 'phone-portrait-outline', title: 'Enter your mobile', sub: 'We\'ll send a verification code to your registered number.' },
-  { key: 'otp', n: 2, icon: 'keypad-outline', title: 'Enter the code', sub: 'Check your SMS for the 6-digit verification code.' },
-  { key: 'password', n: 3, icon: 'lock-closed-outline', title: 'New password', sub: 'Choose a strong password with at least 8 characters.' },
+  {
+    key: 'phone',
+    n: 1,
+    icon: 'phone-portrait-outline',
+    title: 'Enter your mobile',
+    sub: 'Enter your registered number. If it matches an account, we’ll send a WhatsApp code.',
+  },
+  {
+    key: 'otp',
+    n: 2,
+    icon: 'keypad-outline',
+    title: 'Enter the code',
+    sub: 'If an account exists for this number, a verification code has been sent via WhatsApp.',
+  },
+  {
+    key: 'password',
+    n: 3,
+    icon: 'lock-closed-outline',
+    title: 'New password',
+    sub: 'Choose a strong password with at least 6 characters.',
+  },
 ]
 
 export default function ForgotPasswordScreen({ navigation }) {
@@ -24,18 +44,33 @@ export default function ForgotPasswordScreen({ navigation }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
+  const [resendIn, setResendIn] = useState(0)
 
   const stepMeta = STEPS.find((s) => s.key === step) || STEPS[0]
+  const canResend = resendIn <= 0 && !loading
 
-  async function sendCode() {
+  useEffect(() => {
+    if (resendIn <= 0) return undefined
+    const t = setTimeout(() => setResendIn((s) => Math.max(0, s - 1)), 1000)
+    return () => clearTimeout(t)
+  }, [resendIn])
+
+  async function sendCode({ isResend = false } = {}) {
+    if (isResend && resendIn > 0) return
     setError('')
     const pv = validateIndianMobile(phone)
     if (!pv.valid) { setFieldErrors({ phone: pv.message }); return }
     setLoading(true)
     try {
       await api.post('/auth/forgot-password', { phone: pv.normalized })
-      Toast.show({ type: 'success', text1: 'Verification code sent' })
+      Toast.show({
+        type: 'success',
+        text1: isResend ? 'Code resent' : 'Check WhatsApp',
+        text2: 'If an account exists, a verification code was sent.',
+      })
       setStep('otp')
+      setResendIn(OTP_RESEND_COOLDOWN_SECONDS)
+      if (isResend) setOtp('')
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Could not send code')
     } finally {
@@ -51,7 +86,7 @@ export default function ForgotPasswordScreen({ navigation }) {
     if (oe) { setFieldErrors({ otp: oe }); return }
     setLoading(true)
     try {
-      await api.post('/auth/verify-otp', { phone: pv.normalized, otp: otp.replace(/\D/g, '') })
+      await api.post('/auth/verify-otp', { phone: pv.normalized, otp })
       Toast.show({ type: 'success', text1: 'Code verified' })
       setStep('password')
     } catch (err) {
@@ -80,7 +115,7 @@ export default function ForgotPasswordScreen({ navigation }) {
   }
 
   function handleBack() {
-    if (step === 'otp') { setStep('phone'); setFieldErrors({}); return }
+    if (step === 'otp') { setStep('phone'); setFieldErrors({}); setResendIn(0); return }
     if (step === 'password') { setStep('otp'); setFieldErrors({}); return }
     navigation.navigate('Login')
   }
@@ -100,158 +135,214 @@ export default function ForgotPasswordScreen({ navigation }) {
       iosHeaderOffset={0}
       extraBottomPadding={44}
     >
-        {/* ── Back row ──────────────────────────────── */}
-        <Pressable onPress={handleBack} style={styles.backRow} hitSlop={12}>
-          <Ionicons name="arrow-back" size={18} color={colors.brand} />
-          <Text style={styles.backTxt}>Back</Text>
-        </Pressable>
+      <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+      <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
 
-        {/* ── Step progress ─────────────────────────── */}
-        <View style={styles.stepRow}>
-          {STEPS.map((s, idx) => (
-            <View key={s.key} style={styles.stepItem}>
-              <View style={[
-                styles.stepDot,
-                s.key === step && styles.stepDotActive,
-                STEPS.indexOf(STEPS.find((x) => x.key === step)) > idx && styles.stepDotDone,
-              ]}>
-                {STEPS.indexOf(STEPS.find((x) => x.key === step)) > idx ? (
-                  <Ionicons name="checkmark" size={10} color={colors.white} />
-                ) : (
-                  <Text style={[styles.stepDotNum, s.key === step && styles.stepDotNumActive]}>{s.n}</Text>
-                )}
-              </View>
-              {idx < STEPS.length - 1 ? (
-                <View style={[styles.stepLine, STEPS.indexOf(STEPS.find((x) => x.key === step)) > idx && styles.stepLineDone]} />
-              ) : null}
+      <Pressable onPress={handleBack} style={styles.backRow} hitSlop={12}>
+        <Ionicons name="arrow-back" size={18} color={colors.brand} />
+        <Text style={styles.backTxt}>Back</Text>
+      </Pressable>
+
+      <View style={styles.stepRow}>
+        {STEPS.map((s, idx) => (
+          <View key={s.key} style={styles.stepItem}>
+            <View style={[
+              styles.stepDot,
+              s.key === step && styles.stepDotActive,
+              STEPS.indexOf(STEPS.find((x) => x.key === step)) > idx && styles.stepDotDone,
+            ]}>
+              {STEPS.indexOf(STEPS.find((x) => x.key === step)) > idx ? (
+                <Ionicons name="checkmark" size={10} color={colors.white} />
+              ) : (
+                <Text style={[styles.stepDotNum, s.key === step && styles.stepDotNumActive]}>{s.n}</Text>
+              )}
             </View>
-          ))}
-        </View>
-
-        {/* ── Icon + heading ─────────────────────────── */}
-        <View style={styles.hero}>
-          <View style={styles.heroIconWrap}>
-            <Ionicons name={stepMeta.icon} size={26} color={colors.brand} />
+            {idx < STEPS.length - 1 ? (
+              <View style={[styles.stepLine, STEPS.indexOf(STEPS.find((x) => x.key === step)) > idx && styles.stepLineDone]} />
+            ) : null}
           </View>
-          <Text style={styles.heroTitle}>{stepMeta.title}</Text>
-          <Text style={styles.heroSub}>{stepMeta.sub}</Text>
-        </View>
+        ))}
+      </View>
 
-        {/* ── Error banner ──────────────────────────── */}
-        {error ? (
-          <View style={styles.alert}>
-            <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
-            <Text style={styles.alertText}>{error}</Text>
-          </View>
+      <View style={styles.hero}>
+        <View style={styles.heroIconWrap}>
+          <Ionicons name={stepMeta.icon} size={26} color={colors.brand} />
+        </View>
+        <Text style={styles.heroTitle}>{stepMeta.title}</Text>
+        <Text style={styles.heroSub}>{stepMeta.sub}</Text>
+      </View>
+
+      {error ? (
+        <View style={styles.alert}>
+          <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
+          <Text style={styles.alertText}>{error}</Text>
+        </View>
+      ) : null}
+
+      <View style={styles.formCard}>
+        {step === 'phone' ? (
+          <Input
+            label="Mobile number"
+            required
+            keyboardType="phone-pad"
+            textContentType="telephoneNumber"
+            autoComplete="tel"
+            importantForAutofill="yes"
+            autoCorrect={false}
+            value={phone}
+            onChangeText={(v) => { setPhone(v); setFieldErrors((f) => ({ ...f, phone: '' })) }}
+            error={fieldErrors.phone}
+            placeholder="Enter mobile number"
+          />
         ) : null}
 
-        {/* ── Form card ─────────────────────────────── */}
-        <View style={styles.formCard}>
-          {step === 'phone' ? (
+        {step === 'otp' ? (
+          <>
             <Input
-              label="Mobile number"
-              keyboardType="phone-pad"
-              value={phone}
-              onChangeText={(v) => { setPhone(v); setFieldErrors((f) => ({ ...f, phone: '' })) }}
-              error={fieldErrors.phone}
-              placeholder="+91 XXXXXXXXXX"
+              label="Verification code"
+              required
+              keyboardType="number-pad"
+              textContentType="oneTimeCode"
+              autoComplete="one-time-code"
+              importantForAutofill="yes"
+              value={otp}
+              onChangeText={(v) => { setOtp(v); setFieldErrors((f) => ({ ...f, otp: '' })) }}
+              error={fieldErrors.otp}
+              placeholder="4-digit code"
             />
-          ) : null}
-
-          {step === 'otp' ? (
-            <>
-              <Input
-                label="Verification code"
-                keyboardType="number-pad"
-                value={otp}
-                onChangeText={(v) => { setOtp(v); setFieldErrors((f) => ({ ...f, otp: '' })) }}
-                error={fieldErrors.otp}
-                placeholder="6-digit code"
-              />
-              <Pressable onPress={sendCode} style={styles.resendRow} hitSlop={8}>
-                <Text style={styles.resendTxt}>Didn't receive it? </Text>
+            {canResend ? (
+              <Pressable onPress={() => sendCode({ isResend: true })} style={styles.resendRow} hitSlop={8}>
+                <Text style={styles.resendTxt}>Didn't get it? </Text>
                 <Text style={styles.resendLink}>Resend code</Text>
               </Pressable>
-            </>
-          ) : null}
-
-          {step === 'password' ? (
-            <Input
-              label="New password"
-              secureTextEntry
-              value={newPassword}
-              onChangeText={(v) => { setNewPassword(v); setFieldErrors((f) => ({ ...f, newPassword: '' })) }}
-              error={fieldErrors.newPassword}
-              placeholder="Min. 8 characters"
-            />
-          ) : null}
-
-          <View style={styles.ctaGap} />
-
-          <Pressable
-            style={({ pressed }) => [styles.cta, loading && styles.ctaBusy, pressed && !loading && styles.ctaPressed]}
-            onPress={handleCta}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color={colors.white} />
             ) : (
-              <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.white} />
+              <Text style={styles.resendWait}>
+                Resend available in <Text style={styles.resendWaitNum}>{resendIn}s</Text>
+              </Text>
             )}
-            <Text style={styles.ctaTxt}>{loading ? 'Please wait…' : ctaLabels[step]}</Text>
-          </Pressable>
-        </View>
+            <Pressable
+              onPress={() => {
+                setStep('phone')
+                setOtp('')
+                setError('')
+                setResendIn(0)
+              }}
+              style={styles.diffNumber}
+              hitSlop={8}
+            >
+              <Text style={styles.diffNumberTxt}>Use a different number</Text>
+            </Pressable>
+          </>
+        ) : null}
 
-        {/* ── Footer ────────────────────────────────── */}
-        <Pressable onPress={() => navigation.navigate('Login')} style={styles.footerRow} hitSlop={8}>
-          <Text style={styles.footerTxt}>Remember your password? </Text>
-          <Text style={styles.footerLink}>Sign in</Text>
+        {step === 'password' ? (
+          <Input
+            label="New password"
+            required
+            secureTextEntry
+            textContentType="newPassword"
+            autoComplete="password-new"
+            importantForAutofill="yes"
+            autoCorrect={false}
+            value={newPassword}
+            onChangeText={(v) => { setNewPassword(v); setFieldErrors((f) => ({ ...f, newPassword: '' })) }}
+            error={fieldErrors.newPassword}
+            placeholder="Min. 6 characters"
+          />
+        ) : null}
+
+        <View style={styles.ctaGap} />
+
+        <Pressable
+          style={({ pressed }) => [styles.cta, loading && styles.ctaBusy, pressed && !loading && styles.ctaPressed]}
+          onPress={handleCta}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.white} />
+          )}
+          <Text style={styles.ctaTxt}>{loading ? 'Please wait…' : ctaLabels[step]}</Text>
         </Pressable>
+      </View>
+
+      <Pressable onPress={() => navigation.navigate('Login')} style={styles.footerRow} hitSlop={8}>
+        <Text style={styles.footerTxt}>Remember your password? </Text>
+        <Text style={styles.footerLink}>Sign in</Text>
+      </Pressable>
     </KeyboardAwareScrollView>
   )
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  bg: { flex: 1, backgroundColor: colors.canvas },
+  bg: { flex: 1, backgroundColor: colors.canvas, position: 'relative' },
   scroll: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 44 },
-
-  backRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 32, alignSelf: 'flex-start' },
+  ambientHeaderGlow: {
+    position: 'absolute',
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(162, 240, 239, 0.15)',
+    zIndex: 0,
+  },
+  ambientHeaderGlow2: {
+    position: 'absolute',
+    top: -50,
+    left: '20%',
+    width: '60%',
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(13, 107, 107, 0.04)',
+    zIndex: 0,
+  },
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 32, alignSelf: 'flex-start', zIndex: 2 },
   backTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand },
-
-  // Step progress
-  stepRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 32 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 32, zIndex: 2 },
   stepItem: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   stepDot: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    borderWidth: 2,
-    borderColor: colors.slate200,
+    borderWidth: 1.5,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  stepDotActive: { borderColor: colors.brand, backgroundColor: colors.teal50 },
+  stepDotActive: {
+    borderColor: colors.brand,
+    backgroundColor: 'rgba(13, 148, 136, 0.12)',
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 2,
+  },
   stepDotDone: { borderColor: colors.brand, backgroundColor: colors.brand },
   stepDotNum: { fontFamily: font.bold, fontSize: 10, color: colors.slate400 },
   stepDotNumActive: { color: colors.brand },
-  stepLine: { flex: 1, height: 2, backgroundColor: colors.slate200, marginHorizontal: 6 },
+  stepLine: { flex: 1, height: 1.5, backgroundColor: 'rgba(13, 148, 136, 0.15)', marginHorizontal: 6 },
   stepLineDone: { backgroundColor: colors.brand },
-
-  // Hero
-  hero: { alignItems: 'center', gap: 8, marginBottom: 28 },
+  hero: { alignItems: 'center', gap: 8, marginBottom: 28, zIndex: 2 },
   heroIconWrap: {
     width: 64,
     height: 64,
     borderRadius: 20,
-    backgroundColor: colors.teal50,
+    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: colors.brandSoft,
+    borderColor: colors.borderSubtle,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   heroTitle: { fontFamily: font.bold, fontSize: 22, color: colors.textPrimary, letterSpacing: -0.3, textAlign: 'center' },
   heroSub: {
@@ -262,8 +353,6 @@ const styles = StyleSheet.create({
     lineHeight: leading.sm,
     paddingHorizontal: 8,
   },
-
-  // Alert
   alert: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -274,27 +363,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.dangerBorder,
     backgroundColor: colors.dangerBg,
+    zIndex: 2,
   },
   alertText: { flex: 1, fontFamily: font.medium, fontSize: type.sm, color: colors.danger, lineHeight: leading.sm },
-
-  // Form card
   formCard: {
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+    ...authFormCard,
+    zIndex: 2,
     marginBottom: 20,
   },
-  resendRow: { flexDirection: 'row', marginTop: 10 },
+  resendRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 },
   resendTxt: { fontFamily: font.regular, fontSize: type.sm, color: colors.textSecondary },
-  resendLink: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand },
-
+  resendLink: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand, textDecorationLine: 'underline' },
+  resendWait: {
+    marginTop: 10,
+    fontFamily: font.medium,
+    fontSize: type.sm,
+    color: colors.textSecondary,
+  },
+  resendWaitNum: { fontFamily: font.semiBold, color: colors.brand },
+  diffNumber: { marginTop: 14, alignItems: 'center' },
+  diffNumberTxt: {
+    fontFamily: font.medium,
+    fontSize: type.sm,
+    color: colors.textSecondary,
+    textDecorationLine: 'underline',
+  },
   ctaGap: { height: 20 },
   cta: {
     flexDirection: 'row',
@@ -305,17 +398,15 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: colors.brand,
     shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
     elevation: 5,
   },
   ctaBusy: { opacity: 0.7 },
   ctaPressed: { opacity: 0.88 },
   ctaTxt: { fontFamily: font.bold, fontSize: type.base, color: colors.white },
-
-  // Footer
-  footerRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 4 },
+  footerRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 4, zIndex: 2 },
   footerTxt: { fontFamily: font.regular, fontSize: type.sm, color: colors.textSecondary },
   footerLink: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand },
 })

@@ -2,6 +2,7 @@ import { memo, useState } from 'react'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
 import SignupHero from '../molecules/SignupHero'
 import SignupContinueButton from '../molecules/SignupContinueButton'
+import RequiredMark from '../../ui/RequiredMark'
 import { authFormCard } from '../../../theme/authFormCard'
 import { colors } from '../../../theme/colors'
 import { font, type } from '../../../theme/typography'
@@ -30,10 +31,10 @@ function SignupPhoneStep({
         totalSteps={totalSteps}
         kickerLabel="CREATE ACCOUNT"
         title="Your phone number"
-        subtitle="We will text a one-time code to verify this number."
+        subtitle="We will send a one-time code on WhatsApp to verify this number."
       />
       <View style={authFormCard}>
-        <Text style={styles.fieldLabel}>Mobile number</Text>
+        <Text style={styles.fieldLabel}>Mobile number<RequiredMark /></Text>
         <View
           style={[
             styles.mobileField,
@@ -50,6 +51,10 @@ function SignupPhoneStep({
             placeholderTextColor={colors.textTertiary}
             keyboardType="phone-pad"
             autoCapitalize="none"
+            textContentType="telephoneNumber"
+            autoComplete="tel"
+            importantForAutofill="yes"
+            autoCorrect={false}
             maxLength={10}
             value={phone}
             onChangeText={(txt) => onChangePhone(digitsOnly(txt, 10))}
@@ -72,14 +77,21 @@ const styles = StyleSheet.create({
   mobileField: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 44,
+    height: 46,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: 10,
-    backgroundColor: colors.canvas,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
     overflow: 'hidden',
   },
-  fieldFocused: { borderColor: colors.borderFocus, backgroundColor: colors.white },
+  fieldFocused: {
+    borderColor: colors.brand,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
   fieldError: { borderColor: colors.danger },
   phonePrefix: {
     paddingLeft: 14,
@@ -87,12 +99,12 @@ const styles = StyleSheet.create({
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: colors.borderSubtle,
     justifyContent: 'center',
-    height: 44,
+    height: 46,
   },
   phonePrefixTxt: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textSecondary },
   textInput: {
     flex: 1,
-    height: 44,
+    height: 46,
     paddingHorizontal: 12,
     fontFamily: font.regular,
     fontSize: type.base,

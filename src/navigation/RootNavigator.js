@@ -9,17 +9,18 @@ import ForgotPasswordScreen from '../screens/ForgotPasswordScreen'
 import UnauthorizedScreen from '../screens/UnauthorizedScreen'
 import ProfileScreen from '../screens/ProfileScreen'
 import PlaceholderScreen from '../screens/PlaceholderScreen'
+import PhysioListScreen from '../screens/PhysioListScreen'
+import TechniqueDetailScreen from '../screens/TechniqueDetailScreen'
+import TechniqueBookScreen from '../screens/TechniqueBookScreen'
+import ReferEarnScreen from '../screens/ReferEarnScreen'
+import PublicPhysicianScreen from '../screens/PublicPhysicianScreen'
+import UserTabNavigator from './UserTabNavigator'
+import PhysioTabNavigator from './PhysioTabNavigator'
 import PhysioAvailabilityScreen from '../screens/PhysioAvailabilityScreen'
 import PhysioNotesScreen from '../screens/PhysioNotesScreen'
 import PhysioDisputesScreen from '../screens/PhysioDisputesScreen'
 import PhysioOnboardingScreen from '../screens/PhysioOnboardingScreen'
 import PhysioVerificationRedirectScreen from '../screens/PhysioVerificationRedirectScreen'
-import RegisterPhysioScreen from '../screens/RegisterPhysioScreen'
-import PhysioListScreen from '../screens/PhysioListScreen'
-import ReferEarnScreen from '../screens/ReferEarnScreen'
-import PublicPhysicianScreen from '../screens/PublicPhysicianScreen'
-import UserTabNavigator from './UserTabNavigator'
-import PhysioTabNavigator from './PhysioTabNavigator'
 import { defaultNativeStackScreenOptions } from './navLayout'
 
 const Stack = createNativeStackNavigator()
@@ -50,26 +51,22 @@ export default function RootNavigator() {
       <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="RegisterPhysio" component={RegisterPhysioScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Unauthorized" component={UnauthorizedScreen} options={{ title: 'Unauthorized' }} />
       <Stack.Screen name="PublicPhysician" component={PublicPhysicianScreen} options={{ title: 'Physician' }} />
-      {/**
-       * Register role dashboards on the root stack so CommonActions.reset targets
-       * (e.g. PhysioTabs after login) always resolve. UserTabNavigator / PhysioTabNavigator
-       * guard token + role and redirect to Login or Unauthorized.
-       */}
       <Stack.Screen name="UserTabs" component={UserTabNavigator} options={{ headerShown: false }} />
       <Stack.Screen name="PhysioTabs" component={PhysioTabNavigator} options={{ headerShown: false }} />
       <Stack.Screen name="ProfileGlobal" component={ProfileScreen} options={{ title: 'Profile' }} />
-      <Stack.Screen name="PhysioList" component={PhysioListScreen} options={{ title: 'Book' }} />
-      <Stack.Screen name="ReferEarn" component={ReferEarnScreen} options={{ title: 'Refer & Earn' }} />
-      <Stack.Screen name="MapView" component={PlaceholderScreen} options={{ title: 'Map' }} />
-      <Stack.Screen name="BookingLegacy" component={PlaceholderScreen} options={{ title: 'Book (legacy)' }} />
       <Stack.Screen name="PhysioAvailability" component={PhysioAvailabilityScreen} options={{ title: 'Availability' }} />
       <Stack.Screen name="PhysioNotes" component={PhysioNotesScreen} options={{ title: 'Clinical notes' }} />
       <Stack.Screen name="PhysioDisputes" component={PhysioDisputesScreen} options={{ title: 'Disputes' }} />
       <Stack.Screen name="PhysioOnboarding" component={PhysioOnboardingScreen} options={{ title: 'Onboarding' }} />
       <Stack.Screen name="PhysioVerification" component={PhysioVerificationRedirectScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="PhysioList" component={PhysioListScreen} options={{ title: 'Book' }} />
+      <Stack.Screen name="TechniqueDetail" component={TechniqueDetailScreen} options={{ title: 'Technique' }} />
+      <Stack.Screen name="TechniqueBook" component={TechniqueBookScreen} options={{ title: 'Book technique' }} />
+      <Stack.Screen name="ReferEarn" component={ReferEarnScreen} options={{ title: 'Refer & Earn' }} />
+      <Stack.Screen name="MapView" component={PlaceholderScreen} options={{ title: 'Map' }} />
+      <Stack.Screen name="BookingLegacy" component={PlaceholderScreen} options={{ title: 'Book (legacy)' }} />
     </Stack.Navigator>
   )
 }

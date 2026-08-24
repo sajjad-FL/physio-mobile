@@ -76,108 +76,138 @@ export default function PhysioMoreScreen({ navigation }) {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <View style={styles.container}>
+      <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+      <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-      {/* ── Brand hero card ──────────────────────── */}
-      <View style={styles.heroCard}>
-        <View style={styles.heroTop}>
-          <View style={styles.heroLogoWrap}>
-            <Ionicons name="pulse" size={20} color={colors.white} />
-          </View>
-          <View style={styles.heroText}>
-            <Text style={styles.heroGreeting}>Hello, {firstName} 👋</Text>
-            <Text style={styles.heroSub}>PhysioKhom workspace</Text>
-          </View>
-          <View style={styles.roleTag}>
-            <Text style={styles.roleTagTxt}>PHYSIO</Text>
-          </View>
-        </View>
-
-        {/* Stats row */}
-        <View style={styles.heroStats}>
-          <View style={styles.heroStatItem}>
-            <Text style={styles.heroStatValue}>{bookingN}</Text>
-            <Text style={styles.heroStatLabel}>Pending</Text>
-          </View>
-          <View style={styles.heroStatDivider} />
-          <View style={styles.heroStatItem}>
-            <Text style={styles.heroStatValue}>{disputeN}</Text>
-            <Text style={styles.heroStatLabel}>Disputes</Text>
-          </View>
-          <View style={styles.heroStatDivider} />
-          <View style={styles.heroStatItem}>
-            <Ionicons name="checkmark-circle" size={18} color="rgba(255,255,255,0.9)" />
-            <Text style={styles.heroStatLabel}>Active</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* ── Quick stats row ──────────────────────── */}
-      <View style={styles.statsRow}>
-        <StatCard
-          icon="calendar-outline"
-          iconBg={colors.teal50}
-          iconColor={colors.brand}
-          value={bookingN}
-          label="New bookings"
-        />
-        <StatCard
-          icon="alert-circle-outline"
-          iconBg={colors.warningBg}
-          iconColor={colors.warning}
-          value={disputeN}
-          label="Open disputes"
-        />
-        <StatCard
-          icon="wallet-outline"
-          iconBg={colors.blue50}
-          iconColor={colors.blue600}
-          value="—"
-          label="Wallet"
-        />
-      </View>
-
-      {/* ── Section label ────────────────────────── */}
-      <Text style={styles.sectionLabel}>QUICK ACCESS</Text>
-
-      {/* ── Navigation rows ──────────────────────── */}
-      <View style={styles.navList}>
-        {LINKS.map((link, index) => (
-          <Pressable
-            key={link.screen}
-            style={({ pressed }) => [
-              styles.navRow,
-              index < LINKS.length - 1 && styles.navRowDivider,
-              pressed && styles.navRowPressed,
-            ]}
-            onPress={() => go(link.screen)}
-          >
-            <View style={[styles.navIcon, { backgroundColor: link.iconBg }]}>
-              <Ionicons name={link.icon} size={18} color={link.iconColor} />
+        {/* ── Brand hero card ──────────────────────── */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroTop}>
+            <View style={styles.heroLogoWrap}>
+              <Ionicons name="pulse" size={20} color={colors.white} />
             </View>
-            <View style={styles.navBody}>
-              <View style={styles.navTitleRow}>
-                <Text style={styles.navTitle}>{link.label}</Text>
-                {link.badgeKey === 'disputes' && <Badge count={disputeN} />}
+            <View style={styles.heroText}>
+              <Text style={styles.heroGreeting}>Hello, {firstName} 👋</Text>
+              <Text style={styles.heroSub}>PhysiOkhom workspace</Text>
+            </View>
+            <View style={styles.roleTag}>
+              <Text style={styles.roleTagTxt}>PHYSIO</Text>
+            </View>
+          </View>
+
+          {/* Stats row */}
+          <View style={styles.heroStats}>
+            <View style={styles.heroStatItem}>
+              <Text style={styles.heroStatValue}>{bookingN}</Text>
+              <Text style={styles.heroStatLabel}>Pending</Text>
+            </View>
+            <View style={styles.heroStatDivider} />
+            <View style={styles.heroStatItem}>
+              <Text style={styles.heroStatValue}>{disputeN}</Text>
+              <Text style={styles.heroStatLabel}>Disputes</Text>
+            </View>
+            <View style={styles.heroStatDivider} />
+            <View style={styles.heroStatItem}>
+              <Ionicons name="checkmark-circle" size={18} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.heroStatLabel}>Active</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ── Quick stats row ──────────────────────── */}
+        <View style={styles.statsRow}>
+          <StatCard
+            icon="calendar-outline"
+            iconBg={colors.teal50}
+            iconColor={colors.brand}
+            value={bookingN}
+            label="New bookings"
+          />
+          <StatCard
+            icon="alert-circle-outline"
+            iconBg={colors.warningBg}
+            iconColor={colors.warning}
+            value={disputeN}
+            label="Open disputes"
+          />
+          <StatCard
+            icon="wallet-outline"
+            iconBg={colors.blue50}
+            iconColor={colors.blue600}
+            value="—"
+            label="Wallet"
+          />
+        </View>
+
+        {/* ── Section label ────────────────────────── */}
+        <Text style={styles.sectionLabel}>QUICK ACCESS</Text>
+
+        {/* ── Navigation rows ──────────────────────── */}
+        <View style={styles.navList}>
+          {LINKS.map((link, index) => (
+            <Pressable
+              key={link.screen}
+              style={({ pressed }) => [
+                styles.navRow,
+                index < LINKS.length - 1 && styles.navRowDivider,
+                pressed && styles.navRowPressed,
+              ]}
+              onPress={() => go(link.screen)}
+            >
+              <View style={[styles.navIcon, { backgroundColor: link.iconBg }]}>
+                <Ionicons name={link.icon} size={18} color={link.iconColor} />
               </View>
-              <Text style={styles.navSub}>{link.sub}</Text>
-            </View>
-            <View style={styles.navChevronWrap}>
-              <Ionicons name="chevron-forward" size={14} color={colors.slate400} />
-            </View>
-          </Pressable>
-        ))}
-      </View>
+              <View style={styles.navBody}>
+                <View style={styles.navTitleRow}>
+                  <Text style={styles.navTitle}>{link.label}</Text>
+                  {link.badgeKey === 'disputes' && <Badge count={disputeN} />}
+                </View>
+                <Text style={styles.navSub}>{link.sub}</Text>
+              </View>
+              <View style={styles.navChevronWrap}>
+                <Ionicons name="chevron-forward" size={14} color={colors.slate400} />
+              </View>
+            </Pressable>
+          ))}
+        </View>
 
-      {/* ── Footer ───────────────────────────────── */}
-      <Text style={styles.appVersion}>physiokhom.com · Physio App</Text>
+        {/* ── Footer ───────────────────────────────── */}
+        <Text style={styles.appVersion}>physiokhom.com · Physio App</Text>
 
-    </ScrollView>
+      </ScrollView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  scroll: { paddingHorizontal: 16, paddingBottom: 36, backgroundColor: colors.canvas },
+  container: {
+    flex: 1,
+    backgroundColor: '#e8f8f6',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  ambientHeaderGlow: {
+    position: 'absolute',
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(162, 240, 239, 0.15)',
+    zIndex: 0,
+  },
+  ambientHeaderGlow2: {
+    position: 'absolute',
+    top: -50,
+    left: '20%',
+    width: '60%',
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(13, 107, 107, 0.04)',
+    zIndex: 0,
+  },
+  scroll: { paddingHorizontal: 16, paddingBottom: 36, backgroundColor: 'transparent' },
 
   // Hero card
   heroCard: {
@@ -244,18 +274,18 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(240, 253, 250, 0.88)',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
     padding: 12,
     alignItems: 'center',
     gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   statIconWrap: {
     width: 36,
@@ -280,17 +310,17 @@ const styles = StyleSheet.create({
 
   // Nav list
   navList: {
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(240, 253, 250, 0.88)',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
     overflow: 'hidden',
     marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   navRow: {
     flexDirection: 'row',
@@ -299,8 +329,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 14,
   },
-  navRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle },
-  navRowPressed: { backgroundColor: colors.slate50 },
+  navRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(13, 148, 136, 0.1)' },
+  navRowPressed: { backgroundColor: 'rgba(13, 148, 136, 0.06)' },
   navIcon: {
     width: 40,
     height: 40,
@@ -317,7 +347,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 6,
-    backgroundColor: colors.canvas,
+    backgroundColor: 'rgba(13, 148, 136, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,

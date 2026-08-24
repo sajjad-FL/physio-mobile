@@ -1,9 +1,9 @@
 import axios from 'axios'
 import { clearSession, getTokenSync } from '../auth/tokenStore'
+import { resolveApiBaseUrl } from '../utils/apiBaseUrl'
 
 /** No trailing slash. Must match server mount (routes use paths like `/auth/login`). */
-const rawBase = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api'
-const baseURL = String(rawBase).trim().replace(/\/+$/, '')
+const baseURL = resolveApiBaseUrl()
 
 export const api = axios.create({ baseURL })
 
@@ -78,3 +78,13 @@ api.interceptors.response.use(
     return Promise.reject(error)
   },
 )
+
+/** Multipart POST — bypass axios JSON transforms so RN/Web file parts stay intact. */
+export function postFormData(path, formData, config = {}) {
+  return api.post(path, formData, {
+    ...config,
+    transformRequest: (data) => data,
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
+  })
+}

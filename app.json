@@ -1,14 +1,16 @@
 {
   "expo": {
-    "name": "PhysioKhom",
+    "name": "PhysiOkhom",
     "slug": "physiokhom",
-    "version": "1.0.0",
+    "version": "1.0.02",
+    "icon": "./assets/images/icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "physiokhom",
     "splash": {
+      "image": "./assets/images/logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#f8fafc"
+      "backgroundColor": "#ffffff"
     },
     "assetBundlePatterns": [
       "assets/images/*",
@@ -16,7 +18,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.physiokhom.app",
+      "bundleIdentifier": "com.physiokhom.patient",
       "jsEngine": "hermes",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -31,10 +33,14 @@
       }
     },
     "android": {
-      "package": "com.physiokhom.app",
+      "package": "com.physiokhom.patient",
       "enableProguardInReleaseBuilds": true,
       "jsEngine": "hermes",
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/logo.png",
+        "backgroundColor": "#ffffff"
+      }
     },
     "plugins": [
       "expo-web-browser",
@@ -44,13 +50,13 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "PhysioKhom uses your location to set your coverage point for patient bookings."
+          "locationWhenInUsePermission": "PhysiOkhom uses your location to set your coverage point for patient bookings."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "PhysioKhom accesses your photos so you can set a profile picture."
+          "photosPermission": "PhysiOkhom accesses your photos so you can set a profile picture."
         }
       ],
       [

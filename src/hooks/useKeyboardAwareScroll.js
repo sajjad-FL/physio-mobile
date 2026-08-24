@@ -18,7 +18,7 @@ export function useKeyboardAwareScroll({
   extraBottomPadding = 28,
   minBottomInset = 20,
   iosHeaderOffset,
-  scrollToEndOnShow = true,
+  scrollToEndOnShow = false,
 } = {}) {
   const insets = useSafeAreaInsets()
   const scrollRef = useRef(null)

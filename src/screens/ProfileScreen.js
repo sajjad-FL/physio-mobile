@@ -1,15 +1,17 @@
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { Ionicons } from '@expo/vector-icons'
-import * as ImagePicker from 'expo-image-picker'
 import * as Location from 'expo-location'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import * as ImagePicker from 'expo-image-picker'
+import * as WebBrowser from 'expo-web-browser'
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Modal,
   Platform,
-  KeyboardAvoidingView,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,6 +21,8 @@ import {
 import Toast from 'react-native-toast-message'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { api } from '../api/client'
+import { getTokenSync } from '../auth/tokenStore'
+import { useAuth } from '../context/AuthContext'
 import {
   DEFAULT_REFERRAL_REWARD_AMOUNT,
   DEFAULT_REFERRAL_SIGNUP_BONUS_AMOUNT,
@@ -27,16 +31,27 @@ import {
 import MapPickerModal from '../components/booking/MapPickerModal'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
+import { figmaTokens, figmaShadowCard, figmaShadowGlow } from '../theme/figmaTokens'
 import { assetUrl } from '../utils/assetUrl'
-import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll'
 import { validateProfileLiveField } from '../utils/profileLiveValidation'
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_SIZE_LABEL } from '../constants/uploadLimits'
+import RequiredMark from '../components/ui/RequiredMark'
+import { DetailSkeleton } from '../components/ui/skeletons'
 
 const GENDERS = [
-  { value: 'male', label: 'Male' },
-  { value: 'female', label: 'Female' },
-  { value: 'other', label: 'Other' },
-  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+  { value: 'male', label: 'Male', icon: 'male' },
+  { value: 'female', label: 'Female', icon: 'female' },
+  { value: 'other', label: 'Other', icon: 'help-circle' },
+  { value: 'prefer_not_to_say', label: 'Private', icon: 'eye-off' },
 ]
+
+const CARD_SHADOW = {
+  shadowColor: '#0f172a',
+  shadowOffset: { width: 0, height: 6 },
+  shadowOpacity: 0.04,
+  shadowRadius: 12,
+  elevation: 3,
+}
 
 function profileRoleFromApi(d) {
   if (d?.role === 'physio') return 'physio'
@@ -60,13 +75,83 @@ function parseYmd(s) {
   return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
 }
 
+// Custom Premium Form Input component
+function PremiumInput({ icon, error, label, style, multiline, ...props }) {
+  const [focused, setFocused] = useState(false)
+  return (
+    <View style={styles.inputWrapper}>
+      {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
+      <View style={[
+        styles.inputContainer,
+        multiline && styles.textAreaContainer,
+        focused && styles.inputContainerFocused,
+        error && styles.inputContainerError,
+        style
+      ]}>
+        <Ionicons
+          name={icon}
+          size={18}
+          color={focused ? figmaTokens.primary : colors.slate400}
+          style={[styles.inputIcon, multiline && { marginTop: 12 }]}
+        />
+        <TextInput
+          {...props}
+          multiline={multiline}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholderTextColor={colors.slate400}
+          style={[styles.textInput, multiline && styles.textInputMultiline]}
+        />
+      </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  )
+}
+
+// Custom Premium Read Only display component
+function PremiumReadOnlyInput({ icon, label, value, helper }) {
+  return (
+    <View style={styles.inputWrapper}>
+      <Text style={styles.inputLabel}>{label}</Text>
+      <View style={styles.inputContainerReadOnly}>
+        <Ionicons name={icon} size={18} color={colors.slate400} style={styles.inputIcon} />
+        <Text style={styles.textInputReadOnly}>{value || '—'}</Text>
+        <Ionicons name="lock-closed-outline" size={14} color={colors.slate400} style={{ marginRight: 12 }} />
+      </View>
+      {helper ? <Text style={styles.inputHelperText}>{helper}</Text> : null}
+    </View>
+  )
+}
+
+// Custom Premium Date selector component
+function PremiumDateInput({ label, value, onPress, error }) {
+  return (
+    <View style={styles.inputWrapper}>
+      <Text style={styles.inputLabel}>{label}</Text>
+      <Pressable
+        style={({ pressed }) => [
+          styles.inputContainer,
+          error && styles.inputContainerError,
+          pressed && { transform: [{ scale: 0.985 }], opacity: 0.9 }
+        ]}
+        onPress={onPress}
+      >
+        <Ionicons name="calendar-outline" size={18} color={colors.slate400} style={styles.inputIcon} />
+        <Text style={[styles.textInputStyle, !value && styles.textInputPlaceholder]}>
+          {value || 'Select date…'}
+        </Text>
+        <Ionicons name="chevron-down" size={16} color={colors.slate400} style={{ marginRight: 12 }} />
+      </Pressable>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  )
+}
+
 export default function ProfileScreen({ navigation }) {
+  const { logout } = useAuth()
   const insets = useSafeAreaInsets()
-  const { padBottom, scrollViewProps, keyboardAvoidingViewProps } = useKeyboardAwareScroll({
-    iosHeaderOffset: 0,
-    extraBottomPadding: 28,
-  })
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [locating, setLocating] = useState(false)
@@ -99,6 +184,15 @@ export default function ProfileScreen({ navigation }) {
     referralInfo?.referralSignupBonusAmount ?? DEFAULT_REFERRAL_SIGNUP_BONUS_AMOUNT
 
   const displayAvatarUri = previewLocal || assetUrl(avatarUrl)
+
+  const profileStrength = useMemo(() => {
+    const fields = [name, email, dob, gender, addressText]
+    if (isPhysio) {
+      fields.push(specialization, experience, fees)
+    }
+    const filled = fields.filter((x) => String(x || '').trim() !== '').length
+    return Math.round((filled / fields.length) * 100)
+  }, [name, email, dob, gender, addressText, specialization, experience, fees, isPhysio])
 
   const patchField = useCallback(
     (fieldName, value, extra = {}) => {
@@ -140,6 +234,12 @@ export default function ProfileScreen({ navigation }) {
       setLoading(false)
     }
   }, [])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await load()
+    setRefreshing(false)
+  }, [load])
 
   useEffect(() => {
     load()
@@ -277,41 +377,51 @@ export default function ProfileScreen({ navigation }) {
     })
     if (result.canceled || !result.assets?.[0]) return
     const asset = result.assets[0]
-    if (asset.fileSize != null && asset.fileSize > 2 * 1024 * 1024) {
-      Toast.show({ type: 'error', text1: 'Image must be 2MB or smaller' })
+    if (asset.fileSize != null && asset.fileSize > MAX_UPLOAD_BYTES) {
+      Toast.show({ type: 'error', text1: `Image must be ${MAX_UPLOAD_SIZE_LABEL} or smaller` })
       return
     }
     const uri = asset.uri
-    const mime = asset.mimeType || 'image/jpeg'
-    if (!/^image\/(jpeg|png|webp)$/.test(mime)) {
-      Toast.show({ type: 'error', text1: 'Please choose a JPEG, PNG, or WebP image' })
+    // Normalize mime: iOS returns 'image/heic' for HEIF photos (edited URI is JPEG),
+    // some Android returns 'image/jpg' instead of 'image/jpeg'
+    let mime = asset.mimeType || 'image/jpeg'
+    if (mime === 'image/heic' || mime === 'image/heif') mime = 'image/jpeg'
+    if (mime === 'image/jpg') mime = 'image/jpeg'
+    if (!mime.startsWith('image/')) {
+      Toast.show({ type: 'error', text1: 'Please choose an image file' })
       return
     }
     setPreviewLocal(uri)
     setUploading(true)
     try {
       const fd = new FormData()
+      let next = ''
+
       if (Platform.OS === 'web') {
         const resp = await fetch(uri)
         const blob = await resp.blob()
-        const file = new File([blob], asset.fileName || 'avatar.jpg', { type: mime })
-        fd.append('avatar', file)
+        fd.append('avatar', new File([blob], asset.fileName || 'avatar.jpg', { type: mime }))
+        const res = await api.patch('/profile/avatar', fd)
+        next = res.data?.avatarUrl || ''
       } else {
-        fd.append('avatar', {
-          uri,
-          name: asset.fileName || 'avatar.jpg',
-          type: mime,
+        fd.append('avatar', { uri, name: asset.fileName || 'avatar.jpg', type: mime })
+        const token = getTokenSync()
+        const fetchRes = await fetch(`${api.defaults.baseURL}/profile/avatar`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
         })
+        const json = await fetchRes.json().catch(() => ({}))
+        if (!fetchRes.ok) throw new Error(json?.message || 'Upload failed')
+        next = json?.avatarUrl || ''
       }
-      // Let axios set multipart boundary automatically.
-      const res = await api.patch('/profile/avatar', fd)
-      const next = res.data?.avatarUrl || ''
+
       setAvatarUrl(next)
       setPreviewLocal(null)
       Toast.show({ type: 'success', text1: 'Photo updated' })
     } catch (err) {
       setPreviewLocal(null)
-      Toast.show({ type: 'error', text1: err.response?.data?.message || 'Upload failed' })
+      Toast.show({ type: 'error', text1: err.message || 'Upload failed' })
     } finally {
       setUploading(false)
     }
@@ -332,7 +442,6 @@ export default function ProfileScreen({ navigation }) {
     if (physio) {
       nextErrors.specialization = validateProfileLiveField('specialization', specialization, { isPhysio: true })
       nextErrors.profileExperience = validateProfileLiveField('profileExperience', experience)
-      nextErrors.profileFees = validateProfileLiveField('profileFees', fees)
     }
     setFieldErrors(nextErrors)
     if (Object.values(nextErrors).some(Boolean)) {
@@ -356,7 +465,6 @@ export default function ProfileScreen({ navigation }) {
           ? {
               specialization: specialization.trim(),
               experience: experience === '' ? 0 : Number(experience),
-              fees: fees === '' ? 0 : Number(fees),
             }
           : {}),
       })
@@ -382,6 +490,32 @@ export default function ProfileScreen({ navigation }) {
     }
   }
 
+  function handleDeleteAccount() {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all associated data. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete('/profile')
+              await logout(navigation)
+              Toast.show({ type: 'success', text1: 'Account deleted' })
+            } catch (err) {
+              Toast.show({
+                type: 'error',
+                text1: err.response?.data?.message || 'Could not delete account',
+              })
+            }
+          },
+        },
+      ],
+    )
+  }
+
   const profileSubtitle = useMemo(
     () =>
       isPhysio
@@ -392,107 +526,191 @@ export default function ProfileScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.brand} />
+      <View style={styles.flex}>
+        <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+        <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
+        <View style={[styles.headerBar, { paddingTop: insets.top + 6 }]}>
+          {navigation.canGoBack() ? (
+            <Pressable onPress={() => navigation.goBack()} hitSlop={12} style={styles.backBtn}>
+              <Ionicons name="chevron-back" size={20} color={colors.brand} />
+            </Pressable>
+          ) : <View style={{ width: 36 }} />}
+          <Text style={styles.headerBarTitle}>My Profile</Text>
+          <View style={{ width: 36 }} />
+        </View>
+        <View style={{ flex: 1, padding: 16 }}>
+          <DetailSkeleton />
+        </View>
       </View>
     )
   }
 
   return (
-    <KeyboardAvoidingView {...keyboardAvoidingViewProps}>
+    <View style={styles.flex}>
+      {/* Ambient Top Background Halo Glow */}
+      <View style={styles.ambientHeaderGlow} pointerEvents="none" />
+      <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
+
+      {/* Floating Header Bar */}
+      <View style={[styles.headerBar, { paddingTop: insets.top + 6 }]}>
+        {navigation.canGoBack() ? (
+          <Pressable onPress={() => navigation.goBack()} hitSlop={12} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={20} color={colors.brand} />
+          </Pressable>
+        ) : <View style={{ width: 36 }} />}
+        <Text style={styles.headerBarTitle}>My Profile</Text>
+        <View style={{ width: 36 }} />
+      </View>
+
       <ScrollView
-        {...scrollViewProps}
-        contentContainerStyle={[styles.pad, { paddingBottom: padBottom }]}
+        contentContainerStyle={[styles.pad, { paddingBottom: Math.max(insets.bottom, 20) + 28 }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        bounces={true}
+        alwaysBounceVertical={true}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.brand]}
+            tintColor={colors.brand}
+          />
+        }
       >
-        {/* ── Hero band ─────────────────────────────── */}
-        <View style={[styles.heroBand, { paddingTop: insets.top + 14 }]}>
-          {navigation.canGoBack() ? (
-            <Pressable onPress={() => navigation.goBack()} hitSlop={12} style={styles.backBtn}>
-              <Ionicons name="chevron-back" size={16} color={colors.white} />
+        {/* ── Luxe Profile Card ─────────────────────── */}
+        <View style={styles.profileCard}>
+          <View style={styles.profileCardRow}>
+            {/* Camera avatar container */}
+            <Pressable
+              onPress={pickAvatar}
+              disabled={uploading}
+              style={({ pressed }) => [
+                styles.avatarContainer,
+                pressed && { transform: [{ scale: 0.96 }] }
+              ]}
+            >
+              <View style={styles.avatarRing}>
+                {displayAvatarUri ? (
+                  <Image source={{ uri: displayAvatarUri }} style={styles.avatarImg} resizeMode="cover" />
+                ) : (
+                  <View style={[styles.avatarImg, styles.avatarPlaceholder]}>
+                    <Text style={styles.avatarMonogram}>{(name || phone || '?').slice(0, 1).toUpperCase()}</Text>
+                  </View>
+                )}
+                {uploading && (
+                  <View style={styles.avatarBusy}>
+                    <ActivityIndicator color={colors.white} size="small" />
+                  </View>
+                )}
+              </View>
+              <View style={styles.avatarCameraBadge}>
+                <Ionicons name="camera" size={10} color={colors.white} />
+              </View>
             </Pressable>
-          ) : <View style={styles.backBtnSpacer} />}
-          <View style={styles.heroBandCenter}>
-            <View style={styles.rolePill}>
-              <Text style={styles.rolePillTxt}>{isPhysio ? 'Physiotherapist' : 'Patient'}</Text>
+
+            {/* Profile Text and Role Details */}
+            <View style={styles.profileCardDetails}>
+              <View style={styles.roleRow}>
+                <View style={styles.roleBadge}>
+                  <Text style={styles.roleBadgeTxt}>{isPhysio ? 'Therapist' : 'Patient'}</Text>
+                </View>
+                {phone ? <Text style={styles.rolePhoneSub}>{phone}</Text> : null}
+              </View>
+              <Text style={styles.profileCardName} numberOfLines={1}>{name || 'PhysiOkhom User'}</Text>
+              
+              {/* Profile Strength Progress Bar */}
+              <View style={styles.strengthContainer}>
+                <View style={styles.strengthBarOuter}>
+                  <View style={[styles.strengthBarInner, { width: `${profileStrength}%` }]} />
+                </View>
+                <Text style={styles.strengthText}>{profileStrength}% Complete</Text>
+              </View>
             </View>
-            <Text style={styles.heroTitle}>My Profile</Text>
-            <Text style={styles.heroSub}>{profileSubtitle}</Text>
           </View>
 
-          {/* Avatar floated in the band */}
-          <Pressable onPress={pickAvatar} disabled={uploading} style={styles.avatarOuter}>
-            <View style={styles.avatarRing}>
-              {displayAvatarUri ? (
-                <Image source={{ uri: displayAvatarUri }} style={styles.avatarImg} resizeMode="cover" />
-              ) : (
-                <View style={[styles.avatarImg, styles.avatarPlaceholder]}>
-                  <Text style={styles.avatarMonogram}>{(name || phone || '?').slice(0, 1).toUpperCase()}</Text>
-                </View>
-              )}
-              {uploading ? (
-                <View style={styles.avatarBusy}>
-                  <ActivityIndicator color={colors.white} />
-                </View>
-              ) : null}
+          {/* Quick Metrics Chips Row */}
+          <View style={styles.metricsRow}>
+            <View style={styles.metricChip}>
+              <Ionicons name="calendar-outline" size={13} color={figmaTokens.primary} />
+              <View style={styles.metricTexts}>
+                <Text style={styles.metricLabel}>Joined</Text>
+                <Text style={styles.metricVal}>2026</Text>
+              </View>
             </View>
-            <View style={styles.avatarEditBadge}>
-              <Ionicons name="camera" size={10} color={colors.white} />
+            <View style={styles.metricChip}>
+              <Ionicons name="shield-checkmark-outline" size={13} color={figmaTokens.primary} />
+              <View style={styles.metricTexts}>
+                <Text style={styles.metricLabel}>Status</Text>
+                <Text style={styles.metricVal}>Verified</Text>
+              </View>
             </View>
-          </Pressable>
-          <Text style={styles.avatarHint}>Tap photo to change · JPEG/PNG max 2MB</Text>
+            <View style={styles.metricChip}>
+              <Ionicons name="ribbon-outline" size={13} color={figmaTokens.primary} />
+              <View style={styles.metricTexts}>
+                <Text style={styles.metricLabel}>Account</Text>
+                <Text style={styles.metricVal}>Patient</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
+        {/* ── Refer & Earn Banner ───────────────────── */}
         {!isPhysio ? (
           <Pressable
-            style={styles.referCard}
+            style={({ pressed }) => [
+              styles.referBanner,
+              pressed && { transform: [{ scale: 0.985 }] }
+            ]}
             onPress={() => navigation.getParent()?.navigate('ReferEarn')}
           >
-            <View style={styles.referCardIcon}>
-              <Ionicons name="gift-outline" size={20} color={colors.brand} />
+            <View style={styles.referBannerIconWrap}>
+              <Ionicons name="gift-outline" size={20} color={figmaTokens.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.referCardTitle}>Refer &amp; Earn</Text>
-              <Text style={styles.referCardSub}>
+              <Text style={styles.referBannerTitle}>Refer &amp; Earn Credits</Text>
+              <Text style={styles.referBannerSub}>
                 {friendSignupBonus > 0
                   ? `Friends get ₹${friendSignupBonus} on signup · you earn ₹${referralEarnAmount}`
                   : `Share your code and earn ₹${referralEarnAmount} per friend`}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.slate400} />
+            <Ionicons name="chevron-forward" size={16} color={figmaTokens.primary} />
           </Pressable>
         ) : null}
 
-        {/* ── Contact section ───────────────────────── */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconWrap}>
-              <Ionicons name="person-outline" size={13} color={colors.brand} />
-            </View>
-            <Text style={styles.sectionKicker}>Contact</Text>
+        {/* ── Contact Section ───────────────────────── */}
+        <View style={styles.formCard}>
+          <View style={styles.formSectionHeader}>
+            <View style={styles.sectionHeaderIndicator} />
+            <Ionicons name="person-outline" size={16} color={figmaTokens.primary} style={{ marginRight: 8 }} />
+            <Text style={styles.formSectionTitle}>Account Contact</Text>
           </View>
 
-          <FieldLabel label="Full name" />
-          <TextInput
+          <PremiumInput
+            label={<>Full Name<RequiredMark /></>}
+            icon="person-outline"
             value={name}
             onChangeText={(v) => { setName(v); patchField('name', v) }}
             autoComplete="name"
             placeholder="Your full name"
             placeholderTextColor={colors.slate400}
-            style={[styles.inp, fieldErrors.name && styles.inpErr]}
+            error={fieldErrors.name}
           />
-          {fieldErrors.name ? <Text style={styles.err}>{fieldErrors.name}</Text> : null}
 
           <View style={styles.fieldGap} />
-          <FieldLabel label="Phone" />
-          <View style={styles.inpReadOnly}>
-            <Ionicons name="lock-closed-outline" size={13} color={colors.slate400} />
-            <Text style={styles.inpReadOnlyTxt}>{phone || '—'}</Text>
-          </View>
-          <Text style={styles.helper}>Linked to your login — cannot be changed here.</Text>
+
+          <PremiumReadOnlyInput
+            label="Mobile Number"
+            icon="call-outline"
+            value={phone}
+            helper="Linked to your secure auth login — cannot be edited."
+          />
 
           <View style={styles.fieldGap} />
-          <FieldLabel label="Email" />
-          <TextInput
+
+          <PremiumInput
+            label="Email Address"
+            icon="mail-outline"
             value={email}
             onChangeText={(v) => { setEmail(v); patchField('profileEmail', v) }}
             keyboardType="email-address"
@@ -500,46 +718,67 @@ export default function ProfileScreen({ navigation }) {
             autoCorrect={false}
             placeholder="you@example.com"
             placeholderTextColor={colors.slate400}
-            style={[styles.inp, fieldErrors.profileEmail && styles.inpErr]}
+            error={fieldErrors.profileEmail}
           />
-          {fieldErrors.profileEmail ? <Text style={styles.err}>{fieldErrors.profileEmail}</Text> : null}
         </View>
 
-        {/* ── Address section ───────────────────────── */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconWrap}>
-              <Ionicons name="location-outline" size={13} color={colors.brand} />
-            </View>
-            <Text style={styles.sectionKicker}>Address</Text>
+        {/* ── Address Section ───────────────────────── */}
+        <View style={styles.formCard}>
+          <View style={styles.formSectionHeader}>
+            <View style={styles.sectionHeaderIndicator} />
+            <Ionicons name="location-outline" size={16} color={figmaTokens.primary} style={{ marginRight: 8 }} />
+            <Text style={styles.formSectionTitle}>Service Address</Text>
           </View>
 
           {addressText.trim() || addressLat != null ? (
-            <View style={styles.currentAddr}>
-              <View style={styles.currentAddrIconRow}>
-                <Ionicons name="checkmark-circle" size={14} color={colors.success} />
-                <Text style={styles.currentAddrLabel}>Saved address</Text>
+            <View style={styles.currentAddrCard}>
+              <View style={styles.addressLeftCol}>
+                <View style={styles.addressMapBadge}>
+                  <Ionicons name="map-sharp" size={20} color={figmaTokens.primary} />
+                </View>
               </View>
-              <Text style={styles.currentAddrBody}>{addressText.trim() || '—'}</Text>
-              {addressLat != null && addressLng != null ? (
-                <Text style={styles.coords}>{Number(addressLat).toFixed(5)}, {Number(addressLng).toFixed(5)}</Text>
-              ) : null}
+              <View style={styles.addressRightCol}>
+                <View style={styles.currentAddrHeader}>
+                  <Text style={styles.currentAddrLabel}>Saved Coordinates</Text>
+                  <View style={styles.verifiedIndicator}>
+                    <Ionicons name="checkmark-circle" size={10} color={colors.success} />
+                    <Text style={styles.verifiedTxt}>GPS Set</Text>
+                  </View>
+                </View>
+                <Text style={styles.currentAddrText} numberOfLines={2}>{addressText.trim() || '—'}</Text>
+                {addressLat != null && addressLng != null ? (
+                  <View style={styles.coordsRow}>
+                    <Ionicons name="location-outline" size={11} color={colors.textTertiary} />
+                    <Text style={styles.coordsText}>{Number(addressLat).toFixed(6)}° N, {Number(addressLng).toFixed(6)}° E</Text>
+                  </View>
+                ) : null}
+              </View>
             </View>
           ) : (
-            <Text style={styles.helper}>No address saved yet.</Text>
+            <View style={styles.noAddressCard}>
+              <Text style={styles.noAddressText}>No service address coordinates saved yet.</Text>
+            </View>
           )}
 
-          <View style={styles.locRow}>
+          <View style={styles.tactileLocRow}>
             <Pressable
-              style={[styles.locBtn, locating && styles.locBtnBusy]}
+              style={({ pressed }) => [
+                styles.tactileLocBtn,
+                locating && { opacity: 0.7 },
+                pressed && { transform: [{ scale: 0.97 }] }
+              ]}
               onPress={useDeviceLocation}
               disabled={locating}
             >
-              <Ionicons name="locate-outline" size={13} color={colors.brand} />
-              <Text style={styles.locBtnTxt}>{locating ? 'Locating…' : 'Use GPS'}</Text>
+              <Ionicons name="locate" size={14} color={figmaTokens.primary} />
+              <Text style={styles.tactileLocBtnTxt}>{locating ? 'GPS Searching…' : 'Use Live GPS'}</Text>
             </Pressable>
+            
             <Pressable
-              style={[styles.locBtn, locating && styles.locBtnBusy]}
+              style={({ pressed }) => [
+                styles.tactileLocBtn,
+                pressed && { transform: [{ scale: 0.97 }] }
+              ]}
               onPress={() => {
                 setLocationDraft(addressText || '')
                 setMapPin({
@@ -548,42 +787,40 @@ export default function ProfileScreen({ navigation }) {
                 })
                 setLocationModalOpen(true)
               }}
-              disabled={locating}
             >
-              <Ionicons name="map-outline" size={13} color={colors.brand} />
-              <Text style={styles.locBtnTxt}>Change address</Text>
+              <Ionicons name="map" size={14} color={figmaTokens.primary} />
+              <Text style={styles.tactileLocBtnTxt}>Map Location</Text>
             </Pressable>
           </View>
 
-          <FieldLabel label="Address text" />
-          <TextInput
+          <PremiumInput
+            label={<>Street Address Details<RequiredMark /></>}
+            icon="home-outline"
             value={addressText}
             onChangeText={(v) => { setAddressText(v); patchField('address', v) }}
-            placeholder="Type your address or area"
+            placeholder="Apartment/Flat, Street details, Landmark, Area"
             placeholderTextColor={colors.slate400}
             multiline
-            style={[styles.textArea, fieldErrors.address && styles.inpErr]}
+            editable={false}
+            error={fieldErrors.address || fieldErrors.addressCoords}
           />
-          {fieldErrors.address ? <Text style={styles.err}>{fieldErrors.address}</Text> : null}
-          {fieldErrors.addressCoords ? <Text style={styles.err}>{fieldErrors.addressCoords}</Text> : null}
         </View>
 
-        {/* ── Personal section ──────────────────────── */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionIconWrap}>
-              <Ionicons name="calendar-outline" size={13} color={colors.brand} />
-            </View>
-            <Text style={styles.sectionKicker}>Personal</Text>
+        {/* ── Personal Section ──────────────────────── */}
+        <View style={styles.formCard}>
+          <View style={styles.formSectionHeader}>
+            <View style={styles.sectionHeaderIndicator} />
+            <Ionicons name="sparkles-outline" size={16} color={figmaTokens.primary} style={{ marginRight: 8 }} />
+            <Text style={styles.formSectionTitle}>Personal Details</Text>
           </View>
 
-          <FieldLabel label="Date of birth" />
-          <Pressable style={styles.dateBtn} onPress={() => setDobShow(true)}>
-            <Ionicons name="calendar-outline" size={14} color={colors.slate400} />
-            <Text style={[styles.dateBtnTxt, !dob && styles.dateBtnPlaceholder]}>{dob || 'Select date…'}</Text>
-            <Ionicons name="chevron-down" size={14} color={colors.slate400} />
-          </Pressable>
-          {fieldErrors.dob ? <Text style={styles.err}>{fieldErrors.dob}</Text> : null}
+          <PremiumDateInput
+            label={<>Date of Birth<RequiredMark /></>}
+            value={dob}
+            onPress={() => setDobShow(true)}
+            error={fieldErrors.dob}
+          />
+
           {dobShow && Platform.OS !== 'ios' ? (
             <DateTimePicker
               value={parseYmd(dob)}
@@ -599,6 +836,7 @@ export default function ProfileScreen({ navigation }) {
               }}
             />
           ) : null}
+
           {dobShow && Platform.OS === 'ios' ? (
             <View style={styles.iosPickWrap}>
               <DateTimePicker
@@ -615,82 +853,91 @@ export default function ProfileScreen({ navigation }) {
                 }}
               />
               <Pressable style={styles.doneBtn} onPress={() => setDobShow(false)}>
-                <Text style={styles.doneBtnTxt}>Done</Text>
+                <Text style={styles.doneBtnTxt}>Done Selection</Text>
               </Pressable>
             </View>
           ) : null}
 
           <View style={styles.fieldGap} />
-          <FieldLabel label="Gender" />
-          <View style={styles.genderRow}>
+
+          <Text style={styles.inputLabel}>Gender Profile<RequiredMark /></Text>
+          <View style={styles.genderPillsRow}>
             {GENDERS.map((g) => {
               const on = gender === g.value
               return (
                 <Pressable
                   key={g.value}
-                  style={[styles.genderChip, on && styles.genderChipOn]}
+                  style={({ pressed }) => [
+                    styles.genderPillButton,
+                    on && styles.genderPillButtonActive,
+                    pressed && { transform: [{ scale: 0.95 }] }
+                  ]}
                   onPress={() => { setGender(g.value); patchField('gender', g.value) }}
                 >
-                  {on ? <Ionicons name="checkmark-circle" size={12} color={colors.brand} /> : null}
-                  <Text style={[styles.genderChipTxt, on && styles.genderChipTxtOn]}>{g.label}</Text>
+                  <Ionicons
+                    name={g.icon}
+                    size={14}
+                    color={on ? colors.white : colors.slate500}
+                  />
+                  <Text style={[styles.genderPillTxt, on && styles.genderPillTxtActive]}>{g.label}</Text>
                 </Pressable>
               )
             })}
           </View>
-          {fieldErrors.gender ? <Text style={styles.err}>{fieldErrors.gender}</Text> : null}
+          {fieldErrors.gender ? <Text style={styles.errorText}>{fieldErrors.gender}</Text> : null}
         </View>
 
-        {/* ── Practice section (physio only) ────────── */}
+        {/* ── Practice Section (physio only) ────────── */}
         {isPhysio ? (
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionIconWrap}>
-                <Ionicons name="medical-outline" size={13} color={colors.brand} />
-              </View>
-              <Text style={styles.sectionKicker}>Practice</Text>
+          <View style={styles.formCard}>
+            <View style={styles.formSectionHeader}>
+              <View style={styles.sectionHeaderIndicator} />
+              <Ionicons name="medical-outline" size={16} color={figmaTokens.primary} style={{ marginRight: 8 }} />
+              <Text style={styles.formSectionTitle}>Practice Credentials</Text>
             </View>
 
-            <FieldLabel label="Specialization" />
-            <TextInput
+            <PremiumInput
+              label={<>Medical Specialization<RequiredMark /></>}
+              icon="ribbon-outline"
               value={specialization}
               onChangeText={(v) => { setSpecialization(v); patchField('specialization', v) }}
-              placeholder="e.g. Orthopedic, Sports rehab"
+              placeholder="e.g. Orthopedic Rehab, Neurological Care"
               placeholderTextColor={colors.slate400}
-              style={[styles.inp, fieldErrors.specialization && styles.inpErr]}
+              error={fieldErrors.specialization}
             />
-            {fieldErrors.specialization ? <Text style={styles.err}>{fieldErrors.specialization}</Text> : null}
 
             <View style={styles.fieldGap} />
+
             <View style={styles.twoCol}>
               <View style={styles.twoColItem}>
-                <FieldLabel label="Experience (years)" />
-                <TextInput
+                <PremiumInput
+                  label="Experience (Yrs)"
+                  icon="briefcase-outline"
                   value={experience}
                   onChangeText={(v) => { setExperience(v); patchField('profileExperience', v) }}
                   keyboardType="number-pad"
                   placeholder="0"
                   placeholderTextColor={colors.slate400}
-                  style={[styles.inp, fieldErrors.profileExperience && styles.inpErr]}
+                  error={fieldErrors.profileExperience}
                 />
-                {fieldErrors.profileExperience ? <Text style={styles.err}>{fieldErrors.profileExperience}</Text> : null}
               </View>
               <View style={styles.twoColItem}>
-                <FieldLabel label="Fee / session (₹)" />
-                <TextInput
+                <PremiumInput
+                  label="Fees / Session (admin)"
+                  icon="card-outline"
                   value={fees}
-                  onChangeText={(v) => { setFees(v); patchField('profileFees', v) }}
+                  editable={false}
                   keyboardType="decimal-pad"
-                  placeholder="0"
+                  placeholder="₹0"
                   placeholderTextColor={colors.slate400}
-                  style={[styles.inp, fieldErrors.profileFees && styles.inpErr]}
                 />
-                {fieldErrors.profileFees ? <Text style={styles.err}>{fieldErrors.profileFees}</Text> : null}
+                <Text style={styles.hintMuted}>Set by admin only</Text>
               </View>
             </View>
           </View>
         ) : null}
 
-        {/* ── Save CTA ──────────────────────────────── */}
+        {/* ── Floating Action Save ──────────────────── */}
         <Pressable
           accessibilityRole="button"
           style={({ pressed }) => [
@@ -705,15 +952,41 @@ export default function ProfileScreen({ navigation }) {
             <ActivityIndicator color={colors.white} size="small" />
           ) : (
             <>
-              <Ionicons name="cloud-upload-outline" size={16} color={colors.white} />
-              <Text style={styles.saveCtaTxt}>Save changes</Text>
+              <Ionicons name="cloud-upload" size={18} color={colors.white} />
+              <Text style={styles.saveCtaTxt}>Save Changes</Text>
             </>
           )}
         </Pressable>
-        <View style={{ height: 8 }} />
+
+        {!isPhysio ? (
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.deleteAccountBtn,
+              pressed && { opacity: 0.7 },
+            ]}
+            onPress={handleDeleteAccount}
+          >
+            <Ionicons name="trash-outline" size={13} color={colors.red500 ?? '#ef4444'} />
+            <Text style={styles.deleteAccountTxt}>Delete Account</Text>
+          </Pressable>
+        ) : null}
+
+        <Pressable
+          accessibilityRole="button"
+          style={({ pressed }) => [
+            styles.privacyLink,
+            pressed && { opacity: 0.7 }
+          ]}
+          onPress={() => WebBrowser.openBrowserAsync('https://physiokhom.com/privacy-policy')}
+        >
+          <Ionicons name="shield-checkmark-outline" size={13} color={colors.slate500} />
+          <Text style={styles.privacyLinkTxt}>Privacy Policy</Text>
+        </Pressable>
+        <View style={{ height: 16 }} />
       </ScrollView>
 
-      {/* ── Location modal ────────────────────────── */}
+      {/* ── Location Modal ────────────────────────── */}
       <Modal transparent visible={locationModalOpen} animationType="fade" onRequestClose={() => setLocationModalOpen(false)}>
         <View style={styles.modalRoot}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setLocationModalOpen(false)} />
@@ -723,37 +996,46 @@ export default function ProfileScreen({ navigation }) {
                 <Ionicons name="map-outline" size={18} color={colors.brand} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>Set location</Text>
-                <Text style={styles.modalSub}>Search, use GPS, or drop a pin.</Text>
+                <Text style={styles.modalTitle}>Set Address Pin</Text>
+                <Text style={styles.modalSub}>Locate address via GPS or manually drop a pin.</Text>
               </View>
             </View>
-            <FieldLabel label="Address" />
-            <TextInput
+            
+            <PremiumInput
+              label="Address Text"
+              icon="search-outline"
               value={locationDraft}
               onChangeText={setLocationDraft}
-              placeholder="Enter address"
+              placeholder="Enter location detail"
               placeholderTextColor={colors.slate400}
-              style={styles.inp}
             />
-            <View style={{ height: 10 }} />
-            <Pressable style={styles.modalOutlineBtn} onPress={() => setMapPickerOpen(true)}>
-              <Ionicons name="map-outline" size={14} color={colors.brand} />
-              <Text style={styles.modalOutlineBtnTxt}>Select on map</Text>
-            </Pressable>
-            <View style={{ height: 8 }} />
-            <Pressable
-              style={[styles.modalOutlineBtn, locating && { opacity: 0.6 }]}
-              onPress={useLocationForModal}
-              disabled={locating}
-            >
-              <Ionicons name="locate-outline" size={14} color={colors.brand} />
-              <Text style={styles.modalOutlineBtnTxt}>{locating ? 'Locating…' : 'Use my location'}</Text>
-            </Pressable>
-            <View style={{ height: 10 }} />
+            
+            <View style={{ height: 12 }} />
+            
+            <View style={styles.modalOptionsRow}>
+              <Pressable style={styles.modalOutlineBtn} onPress={() => setMapPickerOpen(true)}>
+                <Ionicons name="pin" size={14} color={colors.brand} />
+                <Text style={styles.modalOutlineBtnTxt}>Set Map Pin</Text>
+              </Pressable>
+              
+              <Pressable
+                style={[styles.modalOutlineBtn, locating && { opacity: 0.6 }]}
+                onPress={useLocationForModal}
+                disabled={locating}
+              >
+                <Ionicons name="locate-outline" size={14} color={colors.brand} />
+                <Text style={styles.modalOutlineBtnTxt}>{locating ? 'Locating…' : 'Use GPS'}</Text>
+              </Pressable>
+            </View>
+            
+            <View style={{ height: 16 }} />
+            
             <Pressable style={styles.modalPrimaryBtn} onPress={applyAddressDraft}>
-              <Text style={styles.modalPrimaryBtnTxt}>Use this location</Text>
+              <Text style={styles.modalPrimaryBtnTxt}>Apply Address Coordinates</Text>
             </Pressable>
+            
             <View style={{ height: 8 }} />
+            
             <Pressable style={styles.modalCancelBtn} onPress={() => setLocationModalOpen(false)}>
               <Text style={styles.modalCancelBtnTxt}>Cancel</Text>
             </Pressable>
@@ -770,329 +1052,601 @@ export default function ProfileScreen({ navigation }) {
         onUseMyLocation={useLocationForModal}
         onUseLocation={applyMapPinToDraft}
       />
-    </KeyboardAvoidingView>
+    </View>
   )
 }
 
-function FieldLabel({ label }) {
-  return <Text style={styles.label}>{label}</Text>
-}
-
-const CARD_SHADOW = {
-  shadowColor: '#0f172a',
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.05,
-  shadowRadius: 4,
-  elevation: 1,
-}
-
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.canvas },
-  pad: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 8 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.canvas },
-
-  // ── Hero band ──────────────────────────────────
-  heroBand: {
-    backgroundColor: colors.brand,
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-    marginHorizontal: -16,
-    marginBottom: 14,
-    gap: 10,
-  },
-  backBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  flex: { flex: 1, backgroundColor: figmaTokens.canvas, position: 'relative' },
+  pad: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, zIndex: 2 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: figmaTokens.canvas },
+  deleteAccountBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'flex-start',
-  },
-  backBtnSpacer: { height: 32 },
-  heroBandCenter: { gap: 4 },
-  rolePill: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  rolePillTxt: {
-    fontFamily: font.bold,
-    fontSize: 9,
-    letterSpacing: 0.9,
-    color: colors.white,
-    textTransform: 'uppercase',
-  },
-  heroTitle: { fontFamily: font.bold, fontSize: 22, color: colors.white, letterSpacing: -0.3, lineHeight: 28 },
-  heroSub: { fontFamily: font.regular, fontSize: type.sm, color: 'rgba(255,255,255,0.8)', lineHeight: 19 },
-
-  // Avatar
-  avatarOuter: {
-    alignSelf: 'center',
+    paddingVertical: 12,
     marginTop: 8,
+    gap: 6,
+  },
+  deleteAccountTxt: {
+    fontFamily: font.bold,
+    fontSize: type.xs,
+    color: colors.red500,
+    textDecorationLine: 'underline',
+  },
+  privacyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 4,
+    gap: 6,
+  },
+  privacyLinkTxt: {
+    fontFamily: font.bold,
+    fontSize: type.xs,
+    color: colors.slate500,
+    textDecorationLine: 'underline',
+  },
+
+  // Ambient Header glows
+  ambientHeaderGlow: {
+    position: 'absolute',
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(162, 240, 239, 0.15)',
+    zIndex: 0,
+  },
+  ambientHeaderGlow2: {
+    position: 'absolute',
+    top: -50,
+    left: '20%',
+    width: '60%',
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(13, 107, 107, 0.04)',
+    zIndex: 0,
+  },
+
+  // Floating Header Navigation Bar
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    backgroundColor: 'transparent',
+    zIndex: 2,
+  },
+  headerBarTitle: {
+    fontFamily: font.bold,
+    fontSize: type.lg,
+    color: colors.textPrimary,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...figmaShadowCard,
+  },
+
+  // Profile Card Header Section
+  profileCard: {
+    backgroundColor: colors.white,
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...figmaShadowCard,
+  },
+  profileCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  avatarContainer: {
+    position: 'relative',
   },
   avatarRing: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: 'rgba(13, 107, 107, 0.15)',
     overflow: 'hidden',
-    backgroundColor: colors.brandSoft,
+    backgroundColor: figmaTokens.mintSoft,
   },
   avatarImg: { width: '100%', height: '100%' },
   avatarPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  avatarMonogram: { fontFamily: font.bold, fontSize: 22, color: colors.brand },
+  avatarMonogram: { fontFamily: font.bold, fontSize: type['2xl'], color: figmaTokens.primary },
   avatarBusy: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(15,23,42,0.4)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarEditBadge: {
+  avatarCameraBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.brandHover,
+    bottom: -2,
+    right: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: figmaTokens.primary,
     borderWidth: 2,
-    borderColor: colors.brand,
+    borderColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarHint: {
-    marginTop: 10,
-    fontFamily: font.regular,
+  profileCardDetails: {
+    flex: 1,
+    gap: 4,
+  },
+  roleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  roleBadge: {
+    backgroundColor: figmaTokens.mintSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 107, 107, 0.25)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  roleBadgeTxt: {
+    fontFamily: font.bold,
+    fontSize: 9,
+    color: figmaTokens.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  rolePhoneSub: {
+    fontFamily: font.medium,
     fontSize: type.xs,
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
+    color: colors.textTertiary,
+  },
+  profileCardName: {
+    fontFamily: font.bold,
+    fontSize: type.lg,
+    color: colors.textPrimary,
   },
 
-  referCard: {
+  // Strength Indicator
+  strengthContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  strengthBarOuter: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(13, 107, 107, 0.08)',
+    overflow: 'hidden',
+  },
+  strengthBarInner: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: colors.success,
+  },
+  strengthText: {
+    fontFamily: font.semiBold,
+    fontSize: 9,
+    color: colors.success,
+  },
+
+  // Metrics Grid Row
+  metricsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 16,
+    width: '100%',
+  },
+  metricChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: figmaTokens.mintSoft,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 107, 107, 0.12)',
+  },
+  metricTexts: {
+    flexDirection: 'column',
+  },
+  metricLabel: {
+    fontFamily: font.regular,
+    fontSize: 8,
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  metricVal: {
+    fontFamily: font.bold,
+    fontSize: 10,
+    color: colors.textPrimary,
+  },
+
+  // Refer banner card
+  referBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 10,
-    marginTop: -8,
-    padding: 16,
-    backgroundColor: colors.white,
-    borderRadius: 16,
+    backgroundColor: figmaTokens.mintSoft,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    ...CARD_SHADOW,
-  },
-  referCardIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.brandSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  referCardTitle: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.textPrimary },
-  referCardSub: { fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary, marginTop: 2 },
-
-  // ── Section cards ──────────────────────────────
-  sectionCard: {
-    backgroundColor: colors.white,
+    borderColor: 'rgba(13, 107, 107, 0.25)',
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    padding: 16,
-    marginBottom: 10,
-    ...CARD_SHADOW,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    padding: 14,
     marginBottom: 14,
+    ...figmaShadowCard,
   },
-  sectionIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: colors.teal50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionKicker: {
-    fontFamily: font.bold,
-    fontSize: type.xs,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    color: colors.textSecondary,
-  },
-
-  // ── Form fields ────────────────────────────────
-  label: {
-    marginBottom: 6,
-    fontFamily: font.semiBold,
-    fontSize: type.sm,
-    color: colors.textPrimary,
-  },
-  fieldGap: { height: 14 },
-  helper: { marginTop: 5, fontFamily: font.regular, fontSize: type.xs, color: colors.textTertiary, lineHeight: leading.xs },
-  err: { marginTop: 5, fontFamily: font.semiBold, fontSize: type.xs, color: colors.danger },
-
-  inp: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 44,
-    fontFamily: font.regular,
-    fontSize: type.sm,
-    color: colors.textPrimary,
-    backgroundColor: colors.canvas,
-  },
-  inpErr: { borderColor: colors.danger },
-  inpReadOnly: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 44,
-    backgroundColor: colors.slate50,
-  },
-  inpReadOnlyTxt: { fontFamily: font.regular, fontSize: type.sm, color: colors.textSecondary, flex: 1 },
-
-  textArea: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    minHeight: 88,
-    fontFamily: font.regular,
-    fontSize: type.sm,
-    color: colors.textPrimary,
-    backgroundColor: colors.canvas,
-    textAlignVertical: 'top',
-  },
-
-  // Address
-  currentAddr: {
-    marginBottom: 12,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: colors.teal50,
-    borderWidth: 1,
-    borderColor: colors.brandSoft,
-    gap: 4,
-  },
-  currentAddrIconRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  currentAddrLabel: { fontFamily: font.semiBold, fontSize: type.xs, color: colors.success },
-  currentAddrBody: { fontFamily: font.regular, fontSize: type.sm, color: colors.slate700, lineHeight: 18 },
-  coords: { fontFamily: font.medium, fontSize: type.xs, color: colors.textTertiary },
-
-  locRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  locBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  referBannerIconWrap: {
+    width: 38,
+    height: 38,
     borderRadius: 10,
     backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: colors.brandSoft,
+    borderColor: 'rgba(13, 107, 107, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  locBtnBusy: { opacity: 0.6 },
-  locBtnTxt: { fontFamily: font.semiBold, fontSize: type.xs, color: colors.brand },
+  referBannerTitle: {
+    fontFamily: font.bold,
+    fontSize: type.sm,
+    color: colors.textPrimary,
+  },
+  referBannerSub: {
+    fontFamily: font.medium,
+    fontSize: 10,
+    color: colors.textSecondary,
+    marginTop: 2,
+    lineHeight: 13,
+  },
 
-  // DOB
-  dateBtn: {
+  // Form Section cards
+  formCard: {
+    backgroundColor: colors.white,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 16,
+    marginBottom: 14,
+    ...figmaShadowCard,
+  },
+  formSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    marginBottom: 18,
+  },
+  sectionHeaderIndicator: {
+    width: 3,
+    height: 14,
+    backgroundColor: figmaTokens.primary,
+    borderRadius: 1.5,
+    marginRight: 6,
+  },
+  formSectionTitle: {
+    fontFamily: font.bold,
+    fontSize: type.sm,
+    color: colors.textPrimary,
+    letterSpacing: -0.1,
+  },
+
+  // Fields and Labels styling
+  inputWrapper: {
+    width: '100%',
+  },
+  inputLabel: {
+    fontFamily: font.semiBold,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 44,
-    backgroundColor: colors.canvas,
+    backgroundColor: figmaTokens.canvas,
+    height: 48,
   },
-  dateBtnTxt: { flex: 1, fontFamily: font.regular, fontSize: type.sm, color: colors.textPrimary },
-  dateBtnPlaceholder: { color: colors.slate400 },
-  iosPickWrap: { marginTop: 8, gap: 8 },
+  textAreaContainer: {
+    height: 96,
+    alignItems: 'flex-start',
+  },
+  inputContainerFocused: {
+    borderColor: figmaTokens.primary,
+    backgroundColor: colors.white,
+  },
+  inputContainerError: {
+    borderColor: colors.danger,
+    backgroundColor: colors.dangerBg,
+  },
+  inputIcon: {
+    marginLeft: 12,
+    marginRight: 8,
+    flexShrink: 0,
+  },
+  textInput: {
+    flex: 1,
+    fontFamily: font.medium,
+    fontSize: type.sm,
+    color: colors.textPrimary,
+    height: '100%',
+    paddingRight: 12,
+  },
+  textInputStyle: {
+    flex: 1,
+    fontFamily: font.medium,
+    fontSize: type.sm,
+    color: colors.textPrimary,
+    paddingRight: 12,
+  },
+  textInputPlaceholder: {
+    color: colors.slate400,
+  },
+  textInputMultiline: {
+    height: '100%',
+    paddingTop: 12,
+    paddingBottom: 12,
+    textAlignVertical: 'top',
+  },
+  errorText: {
+    fontFamily: font.semiBold,
+    fontSize: 10,
+    color: colors.danger,
+    marginTop: 4,
+  },
+  fieldGap: {
+    height: 16,
+  },
+
+  // Read-only specific components
+  inputContainerReadOnly: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: 12,
+    backgroundColor: colors.slate100,
+    height: 48,
+  },
+  textInputReadOnly: {
+    flex: 1,
+    fontFamily: font.medium,
+    fontSize: type.sm,
+    color: colors.textSecondary,
+  },
+  inputHelperText: {
+    fontFamily: font.regular,
+    fontSize: 10,
+    color: colors.textTertiary,
+    marginTop: 4,
+    lineHeight: 13,
+  },
+
+  // Address sub-layout cards
+  currentAddrCard: {
+    flexDirection: 'row',
+    gap: 12,
+    backgroundColor: figmaTokens.mintSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 107, 107, 0.15)',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+  },
+  addressLeftCol: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addressMapBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 107, 107, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...figmaShadowCard,
+  },
+  addressRightCol: {
+    flex: 1,
+    gap: 2,
+  },
+  currentAddrHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  currentAddrLabel: {
+    fontFamily: font.bold,
+    fontSize: type.xs,
+    color: colors.textPrimary,
+  },
+  verifiedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  verifiedTxt: {
+    fontFamily: font.bold,
+    fontSize: 8,
+    color: colors.success,
+  },
+  currentAddrText: {
+    fontFamily: font.medium,
+    fontSize: type.xs,
+    color: colors.textSecondary,
+    lineHeight: 15,
+  },
+  coordsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  coordsText: {
+    fontFamily: font.bold,
+    fontSize: 9,
+    color: colors.textTertiary,
+  },
+  noAddressCard: {
+    backgroundColor: colors.slate100,
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  noAddressText: {
+    fontFamily: font.medium,
+    fontSize: type.xs,
+    color: colors.textTertiary,
+  },
+  tactileLocRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  tactileLocBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 107, 107, 0.25)',
+    backgroundColor: colors.white,
+  },
+  tactileLocBtnTxt: {
+    fontFamily: font.bold,
+    fontSize: type.xs,
+    color: figmaTokens.primary,
+  },
+
+  // Personal DOB / Gender specifics
+  iosPickWrap: {
+    marginTop: 8,
+    gap: 8,
+    backgroundColor: colors.slate50,
+    borderRadius: 12,
+    padding: 8,
+  },
   doneBtn: {
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: colors.brand,
+    backgroundColor: figmaTokens.primary,
     alignItems: 'center',
   },
   doneBtnTxt: { fontFamily: font.bold, fontSize: type.sm, color: colors.white },
 
-  // Gender
-  genderRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  genderChip: {
+  genderPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  genderPillButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.white,
   },
-  genderChipOn: { borderColor: colors.brand, backgroundColor: colors.teal50 },
-  genderChipTxt: { fontFamily: font.semiBold, fontSize: type.xs, color: colors.textSecondary },
-  genderChipTxtOn: { color: colors.brand },
+  genderPillButtonActive: {
+    borderColor: figmaTokens.primary,
+    backgroundColor: figmaTokens.primary,
+  },
+  genderPillTxt: {
+    fontFamily: font.bold,
+    fontSize: type.xs,
+    color: colors.slate700,
+  },
+  genderPillTxtActive: {
+    color: colors.white,
+  },
 
-  // Practice (physio)
-  twoCol: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-  twoColItem: { flex: 1, minWidth: 140 },
+  // Practice specifics
+  twoCol: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  twoColItem: {
+    flex: 1,
+  },
+  hintMuted: {
+    marginTop: 4,
+    fontFamily: font.medium,
+    fontSize: type.xs,
+    color: colors.slate400,
+  },
 
-  // Save CTA
+  // Bottom Save Changes CTA
   saveCta: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    minHeight: 50,
-    borderRadius: 14,
-    backgroundColor: colors.brand,
-    marginHorizontal: 0,
-    marginBottom: 4,
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
-    elevation: 5,
+    gap: 10,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: figmaTokens.primary,
+    marginTop: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    shadowColor: figmaTokens.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 6,
+    zIndex: 2,
   },
   saveCtaPressed: { opacity: 0.9 },
   saveCtaDisabled: { opacity: 0.45, shadowOpacity: 0 },
   saveCtaTxt: { fontFamily: font.bold, fontSize: type.base, color: colors.white },
 
-  // Location modal
+  // Location modal layout
   modalRoot: {
     flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.45)',
+    backgroundColor: 'rgba(15,23,42,0.4)',
     justifyContent: 'center',
-    padding: 20,
+    padding: 16,
   },
   modalCard: {
-    borderRadius: 20,
+    borderRadius: 24,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     padding: 20,
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 12,
+    overflow: 'hidden',
+    ...figmaShadowCard,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1103,32 +1657,38 @@ const styles = StyleSheet.create({
   modalIconWrap: {
     width: 38,
     height: 38,
-    borderRadius: 11,
-    backgroundColor: colors.teal50,
+    borderRadius: 10,
+    backgroundColor: figmaTokens.mintSoft,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   modalTitle: { fontFamily: font.bold, fontSize: type.lg, color: colors.textPrimary },
   modalSub: { marginTop: 2, fontFamily: font.regular, fontSize: type.sm, color: colors.textSecondary },
+  modalOptionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
   modalOutlineBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    borderRadius: 11,
+    justifyContent: 'center',
+    gap: 6,
+    height: 38,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.brandSoft,
-    backgroundColor: colors.teal50,
+    borderColor: 'rgba(13, 107, 107, 0.25)',
+    backgroundColor: figmaTokens.mintSoft,
   },
-  modalOutlineBtnTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand },
+  modalOutlineBtnTxt: { fontFamily: font.bold, fontSize: type.xs, color: figmaTokens.primary },
   modalPrimaryBtn: {
-    paddingVertical: 13,
+    height: 46,
     borderRadius: 12,
-    backgroundColor: colors.brand,
+    backgroundColor: figmaTokens.primary,
     alignItems: 'center',
-    shadowColor: colors.brand,
+    justifyContent: 'center',
+    shadowColor: figmaTokens.primary,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.22,
     shadowRadius: 6,
@@ -1136,11 +1696,13 @@ const styles = StyleSheet.create({
   },
   modalPrimaryBtnTxt: { fontFamily: font.bold, fontSize: type.sm, color: colors.white },
   modalCancelBtn: {
-    paddingVertical: 11,
-    borderRadius: 11,
+    height: 42,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
   },
-  modalCancelBtnTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.textPrimary },
+  modalCancelBtnTxt: { fontFamily: font.bold, fontSize: type.sm, color: colors.textPrimary },
 })

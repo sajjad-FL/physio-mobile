@@ -1,14 +1,15 @@
-import DateTimePicker from '@react-native-community/datetimepicker'
 import { Ionicons } from '@expo/vector-icons'
 import { useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { DAILY_SLOTS } from '../../constants/slots'
+import { PLAN_TIERS, PLAN_TIER_OPTIONS } from '../../constants/planTiers'
 import { colors } from '../../theme/colors'
 import { font, type } from '../../theme/typography'
 import { formatBookingTimeSlot } from '../../utils/date'
 import { paymentAmountLabel } from '../../utils/bookingDisplay'
-import { formatPhysioSessionFeeLabel } from '../../utils/physioSessionFee'
 import DropdownField from '../ui/DropdownField'
+import RequiredMark from '../ui/RequiredMark'
+import { usePricingSettings } from '../../api/queries'
 
 function round2(n) {
   return Math.round((Number(n) + Number.EPSILON) * 100) / 100
@@ -39,42 +40,179 @@ const SESSION_TIME_OPTIONS = DAILY_SLOTS.map((slot) => ({
   label: formatBookingTimeSlot(slot),
 }))
 
-function CardHeader({ icon, title, badge, hint }) {
+const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
+/** Inline multi-date calendar grid — select/deselect by tapping individual days */
+function MultiDateCalendar({ selectedDates, maxDates, minDate, onChange }) {
+  const todayYMD = toYMD(minDate || new Date())
+
+  const [viewYear, setViewYear] = useState(() => (minDate || new Date()).getFullYear())
+  const [viewMonth, setViewMonth] = useState(() => (minDate || new Date()).getMonth())
+
+  const selectedSet = useMemo(() => new Set(selectedDates.map(toYMD)), [selectedDates])
+
+  // Build rows of 7 cells (null = blank leading/trailing cell)
+  const rows = useMemo(() => {
+    const firstDow = new Date(viewYear, viewMonth, 1).getDay()
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+    const flat = []
+    for (let i = 0; i < firstDow; i++) flat.push(null)
+    for (let d = 1; d <= daysInMonth; d++) flat.push(d)
+    // pad to full weeks
+    while (flat.length % 7 !== 0) flat.push(null)
+    const result = []
+    for (let i = 0; i < flat.length; i += 7) result.push(flat.slice(i, i + 7))
+    return result
+  }, [viewYear, viewMonth])
+
+  function prevMonth() {
+    if (viewMonth === 0) { setViewYear((y) => y - 1); setViewMonth(11) }
+    else setViewMonth((m) => m - 1)
+  }
+  function nextMonth() {
+    if (viewMonth === 11) { setViewYear((y) => y + 1); setViewMonth(0) }
+    else setViewMonth((m) => m + 1)
+  }
+
+  function toggleDay(day) {
+    const ymd = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    if (ymd < todayYMD) return
+    const d = new Date(viewYear, viewMonth, day)
+    d.setHours(0, 0, 0, 0)
+    if (selectedSet.has(ymd)) {
+      onChange(selectedDates.filter((x) => toYMD(x) !== ymd))
+    } else {
+      if (selectedDates.length >= maxDates) return
+      onChange([...selectedDates, d].sort((a, b) => a - b))
+    }
+  }
+
+  const today = minDate || new Date()
+  const canGoPrev = viewYear > today.getFullYear() || viewMonth > today.getMonth()
+
+  return (
+    <View style={calStyles.root}>
+      {/* Month nav */}
+      <View style={calStyles.navRow}>
+        <Pressable
+          style={[calStyles.navBtn, !canGoPrev && calStyles.navBtnOff]}
+          onPress={canGoPrev ? prevMonth : undefined}
+          disabled={!canGoPrev}
+        >
+          <Ionicons name="chevron-back" size={16} color={canGoPrev ? colors.brand : colors.slate300} />
+        </Pressable>
+        <Text style={calStyles.monthLabel}>{MONTH_NAMES[viewMonth]} {viewYear}</Text>
+        <Pressable style={calStyles.navBtn} onPress={nextMonth}>
+          <Ionicons name="chevron-forward" size={16} color={colors.brand} />
+        </Pressable>
+      </View>
+
+      {/* Day-of-week header row */}
+      <View style={calStyles.weekRow}>
+        {DAY_LABELS.map((l) => (
+          <View key={l} style={calStyles.headerCell}>
+            <Text style={calStyles.headerTxt}>{l}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Calendar rows — each row is exactly 7 equal cells */}
+      <View style={calStyles.body}>
+        {rows.map((row, ri) => (
+          <View key={ri} style={calStyles.row}>
+            {row.map((day, ci) => {
+              if (!day) return <View key={`e-${ri}-${ci}`} style={calStyles.cell} />
+              const ymd = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+              const isPast = ymd < todayYMD
+              const isSelected = selectedSet.has(ymd)
+              const isAtMax = selectedDates.length >= maxDates && !isSelected
+              const disabled = isPast || isAtMax
+              return (
+                <Pressable
+                  key={ymd}
+                  style={[calStyles.cell, isSelected && calStyles.cellSelected, disabled && calStyles.cellDisabled]}
+                  onPress={() => toggleDay(day)}
+                  disabled={disabled}
+                >
+                  <Text style={[
+                    calStyles.cellTxt,
+                    isSelected && calStyles.cellTxtSelected,
+                    isPast && calStyles.cellTxtPast,
+                    isAtMax && calStyles.cellTxtDim,
+                  ]}>
+                    {day}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+function CardHeader({ icon, title, badge, right, required = false }) {
   return (
     <View style={styles.cardTitleRow}>
       <View style={styles.cardIconBadge}>
-        <Ionicons name={icon} size={14} color={colors.brand} />
+        <Ionicons name={icon} size={13} color={colors.brand} />
       </View>
-      <Text style={styles.cardTitle}>{title}</Text>
+      <Text style={styles.cardTitle}>
+        {title}
+        {required ? <RequiredMark /> : null}
+      </Text>
       {badge ? <View style={styles.fixedBadge}><Text style={styles.fixedBadgeTxt}>{badge}</Text></View> : null}
-      {hint ? <Text style={styles.cardTitleHint}>{hint}</Text> : null}
+      {right ?? null}
     </View>
   )
 }
 
 export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
+  const { data: pricingSettings } = usePricingSettings()
+  const maxDiscountPercent = Number(pricingSettings?.homePlanMaxDiscountPercent) || 15
+  const tierBySessions = useMemo(() => {
+    const map = new Map()
+    for (const tier of pricingSettings?.planTiers || PLAN_TIERS) {
+      map.set(Number(tier.sessions), tier)
+    }
+    return map
+  }, [pricingSettings?.planTiers])
+
   const physio = booking?.physioId
   const feeLo = Number(physio?.pricePerSession)
   const fixedFee = Number.isFinite(feeLo) && feeLo > 0
   const defaultSlot = booking?.timeSlot && DAILY_SLOTS.includes(booking.timeSlot) ? booking.timeSlot : DAILY_SLOTS[0]
-  const defaultAmount = booking?.physioId?.pricePerSession != null ? String(booking.physioId.pricePerSession) : ''
+  const sessionFee = fixedFee ? feeLo : 500
   const defaultPrimaryDate = useMemo(() => parseBookingPrimaryDate(booking?.date), [booking?.date])
 
-  const [sessions, setSessions] = useState(1)
-  const [amountPerSession, setAmountPerSession] = useState(defaultAmount)
-  const [discount, setDiscount] = useState(0)
+  const [selectedTierValue, setSelectedTierValue] = useState(PLAN_TIERS[0].value)
+  const selectedTier = PLAN_TIERS.find((t) => t.value === selectedTierValue) ?? PLAN_TIERS[0]
+  const sessions = selectedTier.sessions
+
+  const [billingType, setBillingType] = useState('installment')
+  const discountPercent = useMemo(() => {
+    if (billingType !== 'full') return 0
+    const tier = tierBySessions.get(sessions)
+    const raw = Number(tier?.defaultDiscountPercent)
+    if (!Number.isFinite(raw) || raw < 0) return 0
+    return Math.round(raw * 100) / 100
+  }, [billingType, sessions, tierBySessions])
+
   const [sessionTime, setSessionTime] = useState(defaultSlot)
-  const [paymentMode, setPaymentMode] = useState('online')
+  const [paymentMode, setPaymentMode] = useState('offline')
   const [selectedDates, setSelectedDates] = useState(() => (defaultPrimaryDate ? [defaultPrimaryDate] : []))
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [tempDate, setTempDate] = useState(() => defaultPrimaryDate || new Date())
 
   useEffect(() => {
-    setAmountPerSession(defaultAmount)
     setSessionTime(defaultSlot)
     setSelectedDates(defaultPrimaryDate ? [defaultPrimaryDate] : [])
-  }, [booking._id, defaultAmount, defaultSlot, defaultPrimaryDate])
+  }, [booking._id, defaultSlot, defaultPrimaryDate])
 
+  // Trim excess dates when tier changes to a smaller plan
   useEffect(() => {
     setSelectedDates((prev) => {
       if (prev.length <= sessions) return prev
@@ -85,26 +223,23 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
   const perVisitTravel = round2(Math.max(0, Number(booking?.distanceSurchargeAmount) || 0))
 
   const totals = useMemo(() => {
-    const n = Number(amountPerSession)
-    const s = Number(sessions) || 0
-    const dPct = Math.min(15, Math.max(0, Number(discount) || 0))
-    if (!Number.isFinite(n) || n <= 0 || s < 1) {
-      return { subtotal: 0, discountAmount: 0, linePerSession: 0, discountPct: dPct, patientPays: 0 }
+    const n = sessionFee
+    const s = sessions
+    const dPct = discountPercent
+    if (n <= 0 || s < 1) {
+      return { subtotal: 0, discountAmount: 0, patientPays: 0, perDay: 0 }
     }
     const linePerSession = round2(n + perVisitTravel)
     const subtotal = round2(s * linePerSession)
     const discountAmount = round2(subtotal * (dPct / 100))
     const patientPays = round2(subtotal - discountAmount)
-    return { subtotal, discountAmount, linePerSession, discountPct: dPct, patientPays }
-  }, [amountPerSession, sessions, discount, perVisitTravel])
+    const perDay = s > 0 ? round2(patientPays / s) : 0
+    return { subtotal, discountAmount, patientPays, perDay }
+  }, [sessionFee, sessions, discountPercent, perVisitTravel])
 
   const showAssignmentPricing = Boolean(
     booking && (booking.totalAmount != null || booking.distanceKmAtAssign != null || Number(booking.distanceSurchargeAmount) > 0),
   )
-
-  const dateMismatch = selectedDates.length !== Number(sessions)
-  const feeOk = !fixedFee || Number(amountPerSession) === feeLo
-  const canSubmit = Number(sessions) >= 1 && Number(amountPerSession) > 0 && feeOk && !dateMismatch && totals.patientPays > 0 && !busy
 
   const today = useMemo(() => {
     const t = new Date()
@@ -112,17 +247,9 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
     return t
   }, [booking._id])
 
-  function addPicked(date) {
-    const d = new Date(date)
-    d.setHours(0, 0, 0, 0)
-    if (d.getTime() < today.getTime()) return
-    setSelectedDates((prev) => {
-      const uniq = [...prev.filter((x) => toYMD(x) !== toYMD(d)), d]
-      uniq.sort((a, b) => a - b)
-      if (uniq.length > sessions) return uniq.slice(0, sessions)
-      return uniq
-    })
-  }
+  const allDatesFilled = selectedDates.length === sessions
+  const datesLeft = sessions - selectedDates.length
+  const canSubmit = allDatesFilled && totals.patientPays > 0 && !busy
 
   function removeDate(d) {
     setSelectedDates((prev) => prev.filter((x) => toYMD(x) !== toYMD(d)))
@@ -132,9 +259,10 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
     if (!canSubmit) return
     const sorted = [...selectedDates].sort((a, b) => a - b)
     onSubmit({
-      sessions: Number(sessions),
-      amountPerSession: Number(amountPerSession),
-      discountPercent: totals.discountPct,
+      sessions,
+      amountPerSession: sessionFee,
+      discountPercent,
+      billingType,
       paymentMode,
       schedule: sorted.map((d) => ({ date: toYMD(d), time: sessionTime })),
     })
@@ -143,78 +271,194 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
   return (
     <View style={styles.root}>
 
-      {/* ── Sessions stepper ────────────────────── */}
+      {/* ── 1. Plan selector ─────────────────────── */}
       <View style={styles.card}>
-        <CardHeader icon="layers-outline" title="Number of sessions" />
-        <View style={styles.stepperRow}>
-          <Pressable
-            style={[styles.stepBtn, sessions <= 1 && styles.stepBtnOff]}
-            onPress={() => setSessions((s) => Math.max(1, s - 1))}
-            disabled={sessions <= 1}
-          >
-            <Ionicons name="remove" size={22} color={sessions <= 1 ? colors.slate300 : colors.brand} />
-          </Pressable>
-          <View style={styles.stepValWrap}>
-            <Text style={styles.stepVal}>{sessions}</Text>
-            <Text style={styles.stepValSub}>session{sessions !== 1 ? 's' : ''}</Text>
-          </View>
-          <Pressable style={styles.stepBtn} onPress={() => setSessions((s) => s + 1)}>
-            <Ionicons name="add" size={22} color={colors.brand} />
-          </Pressable>
-        </View>
-      </View>
-
-      {/* ── Fee per session ─────────────────────── */}
-      <View style={styles.card}>
-        <CardHeader
-          icon="cash-outline"
-          title="Fee per session"
-          badge={fixedFee ? 'Fixed rate' : null}
+        <CardHeader icon="layers-outline" title="Select plan" required />
+        <DropdownField
+          label={null}
+          value={selectedTierValue}
+          placeholder="Choose a plan"
+          options={PLAN_TIER_OPTIONS}
+          onSelect={(v) => setSelectedTierValue(Number(v))}
+          variant="inline"
+          required
         />
+
+        <View style={styles.planSummaryBox}>
+          <View style={styles.planSummaryRow}>
+            <Text style={styles.planSummaryKey}>Sessions</Text>
+            <Text style={styles.planSummaryVal}>{sessions}</Text>
+          </View>
+          <View style={styles.planSummaryRow}>
+            <Text style={styles.planSummaryKey}>Rate per session</Text>
+            <Text style={styles.planSummaryVal}>₹{sessionFee.toFixed(2)}</Text>
+          </View>
+          {perVisitTravel > 0 ? (
+            <View style={styles.planSummaryRow}>
+              <Text style={styles.planSummaryKey}>Travel surcharge / session</Text>
+              <Text style={styles.planSummaryVal}>₹{perVisitTravel.toFixed(2)}</Text>
+            </View>
+          ) : null}
+          <View style={styles.planSummaryRow}>
+            <Text style={styles.planSummaryKey}>Subtotal</Text>
+            <Text style={styles.planSummaryVal}>₹{totals.subtotal.toFixed(2)}</Text>
+          </View>
+          {discountPercent > 0 ? (
+            <View style={styles.planSummaryRow}>
+              <View style={styles.discountLabelWrap}>
+                <Text style={styles.planSummaryKey}>Discount</Text>
+                <View style={styles.discountBadge}>
+                  <Text style={styles.discountBadgeTxt}>{discountPercent}% off</Text>
+                </View>
+              </View>
+              <Text style={styles.planSummarySavings}>− ₹{totals.discountAmount.toFixed(2)}</Text>
+            </View>
+          ) : null}
+          <View style={[styles.planSummaryRow, styles.planSummaryTotalRow]}>
+            <Text style={styles.planSummaryTotalKey}>Patient pays</Text>
+            <Text style={styles.planSummaryTotalVal}>₹{totals.patientPays.toFixed(2)}</Text>
+          </View>
+          <View style={[styles.planSummaryRow, { borderBottomWidth: 0 }]}>
+            <Text style={styles.planSummaryKey}>Per day</Text>
+            <Text style={styles.planSummaryVal}>≈ ₹{totals.perDay.toFixed(0)}</Text>
+          </View>
+        </View>
+
         {fixedFee ? (
-          <View style={styles.inpRO}>
-            <Text style={styles.inpROAmt}>₹{round2(feeLo + perVisitTravel).toFixed(2)}</Text>
-            {perVisitTravel > 0 ? (
-              <Text style={styles.inpROHint}>Includes ₹{perVisitTravel.toFixed(2)} travel surcharge</Text>
-            ) : null}
+          <View style={styles.fixedRateNote}>
+            <Ionicons name="lock-closed-outline" size={11} color={colors.brand} />
+            <Text style={styles.fixedRateNoteTxt}>Session rate set by admin: ₹{feeLo}</Text>
           </View>
-        ) : (
-          <View style={styles.inpWrap}>
-            <Text style={styles.inpPrefix}>₹</Text>
-            <TextInput
-              style={styles.inp}
-              keyboardType="decimal-pad"
-              value={amountPerSession}
-              onChangeText={setAmountPerSession}
-              placeholder="0.00"
-              placeholderTextColor={colors.slate400}
-            />
-          </View>
-        )}
-        {perVisitTravel > 0 && !fixedFee ? (
-          <Text style={styles.fieldHint}>+ ₹{perVisitTravel.toFixed(2)} travel surcharge added per session</Text>
         ) : null}
       </View>
 
-      {/* ── Discount ────────────────────────────── */}
+      {/* ── 2. Payment type ───────────────────────── */}
       <View style={styles.card}>
-        <CardHeader icon="pricetag-outline" title="Discount" hint="max 15%" />
-        <View style={styles.inpWrap}>
-          <TextInput
-            style={styles.inp}
-            keyboardType="decimal-pad"
-            value={String(discount)}
-            onChangeText={(t) => setDiscount(Math.min(15, Math.max(0, Number(t) || 0)))}
-            placeholder="0"
-            placeholderTextColor={colors.slate400}
-          />
-          <Text style={styles.inpSuffix}>%</Text>
+        <CardHeader icon="wallet-outline" title="Payment type" />
+        <View style={styles.modeRow}>
+          {[
+            { id: 'full', label: 'Full payment', sub: 'Entire plan upfront — admin discount applies' },
+            { id: 'installment', label: 'Installment', sub: 'Pay over milestones — no discount' },
+          ].map(({ id, label, sub }) => {
+            const on = billingType === id
+            return (
+              <Pressable
+                key={id}
+                style={[styles.modeCard, on && styles.modeCardOn]}
+                onPress={() => setBillingType(id)}
+              >
+                <View style={[styles.modeIconWrap, on && styles.modeIconWrapOn]}>
+                  <Ionicons
+                    name={id === 'full' ? 'cash-outline' : 'calendar-outline'}
+                    size={18}
+                    color={on ? colors.white : colors.slate400}
+                  />
+                </View>
+                <Text style={[styles.modeTxt, on && styles.modeTxtOn]}>{label}</Text>
+                <Text style={[styles.modeSubTxt, on && styles.modeSubTxtOn]}>{sub}</Text>
+                {on ? (
+                  <View style={styles.modeCheckWrap}>
+                    <Ionicons name="checkmark-circle" size={16} color={colors.brand} />
+                  </View>
+                ) : null}
+              </Pressable>
+            )
+          })}
+        </View>
+        <View style={styles.fixedRateNote}>
+          <Ionicons name="information-circle-outline" size={11} color={colors.brand} />
+          <Text style={styles.fixedRateNoteTxt}>
+            Discount: {discountPercent}% ({billingType === 'full' ? 'admin full-payment rate' : 'installment — none'})
+          </Text>
         </View>
       </View>
 
-      {/* ── Session time slot ────────────────────── */}
+      {/* ── 3. Payment mode ───────────────────────── */}
       <View style={styles.card}>
-        <CardHeader icon="time-outline" title="Session time slot" />
+        <CardHeader icon="card-outline" title="Payment mode" />
+        <View style={styles.modeRow}>
+          {['offline', 'online'].map((mode) => {
+            const on = paymentMode === mode
+            return (
+              <Pressable
+                key={mode}
+                style={[styles.modeCard, on && styles.modeCardOn]}
+                onPress={() => setPaymentMode(mode)}
+              >
+                <View style={[styles.modeIconWrap, on && styles.modeIconWrapOn]}>
+                  <Ionicons
+                    name={mode === 'online' ? 'phone-portrait-outline' : 'cash-outline'}
+                    size={18}
+                    color={on ? colors.white : colors.slate400}
+                  />
+                </View>
+                <Text style={[styles.modeTxt, on && styles.modeTxtOn]}>
+                  {mode === 'online' ? 'Online' : 'Offline'}
+                </Text>
+                <Text style={[styles.modeSubTxt, on && styles.modeSubTxtOn]}>
+                  {mode === 'online' ? 'Patient pays via app' : 'Cash / UPI hand-off'}
+                </Text>
+                {on ? <View style={styles.modeCheckWrap}><Ionicons name="checkmark-circle" size={16} color={colors.brand} /></View> : null}
+              </Pressable>
+            )
+          })}
+        </View>
+      </View>
+
+      {/* ── 4. Session dates — inline multi-select calendar ── */}
+      <View style={styles.card}>
+        <CardHeader
+          icon="calendar-outline"
+          title="Session dates"
+          required
+          right={
+            <View style={[styles.dateCountBadge, allDatesFilled && styles.dateCountBadgeFull]}>
+              <Text style={[styles.dateCountTxt, allDatesFilled && styles.dateCountTxtFull]}>
+                {selectedDates.length}/{sessions}
+              </Text>
+            </View>
+          }
+        />
+
+        {/* Status hint */}
+        {allDatesFilled ? (
+          <View style={styles.successRow}>
+            <Ionicons name="checkmark-circle-outline" size={13} color={colors.success} />
+            <Text style={styles.successTxt}>All {sessions} dates selected — tap any date to remove it.</Text>
+          </View>
+        ) : (
+          <View style={styles.infoRow}>
+            <Ionicons name="information-circle-outline" size={13} color={colors.brand} />
+            <Text style={styles.infoTxt}>
+              Tap {datesLeft} date{datesLeft !== 1 ? 's' : ''} on the calendar below.
+            </Text>
+          </View>
+        )}
+
+        {/* Selected chips (tappable to remove) */}
+        {selectedDates.length > 0 ? (
+          <View style={styles.dateChipsWrap}>
+            {[...selectedDates].sort((a, b) => a - b).map((d) => (
+              <Pressable key={toYMD(d)} style={styles.dateChip} onPress={() => removeDate(d)}>
+                <Text style={styles.dateChipTxt}>{formatDateChip(d)}</Text>
+                <Ionicons name="close" size={9} color={colors.brand} />
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
+        {/* Inline calendar grid */}
+        <MultiDateCalendar
+          selectedDates={selectedDates}
+          maxDates={sessions}
+          minDate={today}
+          onChange={setSelectedDates}
+        />
+      </View>
+
+      {/* ── 4. Session time slot ──────────────────── */}
+      <View style={styles.card}>
+        <CardHeader icon="time-outline" title="Session time slot" required />
         <DropdownField
           label={null}
           value={sessionTime}
@@ -222,82 +466,16 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
           options={SESSION_TIME_OPTIONS}
           onSelect={setSessionTime}
           variant="inline"
+          required
         />
-      </View>
-
-      {/* ── Payment mode ─────────────────────────── */}
-      <View style={styles.card}>
-        <CardHeader icon="card-outline" title="Payment mode" />
-        <View style={styles.modeRow}>
-          <Pressable
-            style={[styles.modeCard, paymentMode === 'online' && styles.modeCardOn]}
-            onPress={() => setPaymentMode('online')}
-          >
-            <View style={[styles.modeIconWrap, paymentMode === 'online' && styles.modeIconWrapOn]}>
-              <Ionicons name="phone-portrait-outline" size={20} color={paymentMode === 'online' ? colors.white : colors.slate400} />
-            </View>
-            <Text style={[styles.modeTxt, paymentMode === 'online' && styles.modeTxtOn]}>Online</Text>
-            <Text style={[styles.modeSubTxt, paymentMode === 'online' && styles.modeSubTxtOn]}>Patient pays via app</Text>
-            {paymentMode === 'online' ? (
-              <View style={styles.modeCheckWrap}>
-                <Ionicons name="checkmark-circle" size={16} color={colors.brand} />
-              </View>
-            ) : null}
-          </Pressable>
-          <Pressable
-            style={[styles.modeCard, paymentMode === 'offline' && styles.modeCardOn]}
-            onPress={() => setPaymentMode('offline')}
-          >
-            <View style={[styles.modeIconWrap, paymentMode === 'offline' && styles.modeIconWrapOn]}>
-              <Ionicons name="cash-outline" size={20} color={paymentMode === 'offline' ? colors.white : colors.slate400} />
-            </View>
-            <Text style={[styles.modeTxt, paymentMode === 'offline' && styles.modeTxtOn]}>Offline</Text>
-            <Text style={[styles.modeSubTxt, paymentMode === 'offline' && styles.modeSubTxtOn]}>Cash / UPI hand-off</Text>
-            {paymentMode === 'offline' ? (
-              <View style={styles.modeCheckWrap}>
-                <Ionicons name="checkmark-circle" size={16} color={colors.brand} />
-              </View>
-            ) : null}
-          </Pressable>
-        </View>
-      </View>
-
-      {/* ── Session dates ─────────────────────────── */}
-      <View style={styles.card}>
-        <CardHeader
-          icon="calendar-outline"
-          title="Session dates"
-          hint={`${selectedDates.length}/${sessions} selected`}
-        />
-        {selectedDates.length > 0 ? (
-          <View style={styles.dateChipsWrap}>
-            {[...selectedDates].sort((a, b) => a - b).map((d) => (
-              <View key={toYMD(d)} style={styles.dateChip}>
-                <Text style={styles.dateChipTxt}>{formatDateChip(d)}</Text>
-                <Pressable onPress={() => removeDate(d)} hitSlop={6} style={styles.dateChipRemove}>
-                  <Ionicons name="close" size={11} color={colors.brand} />
-                </Pressable>
-              </View>
-            ))}
-          </View>
-        ) : null}
-        {dateMismatch ? (
-          <View style={styles.warnRow}>
-            <Ionicons name="warning-outline" size={13} color={colors.amber800} />
-            <Text style={styles.warnTxt}>Select exactly {sessions} date{sessions === 1 ? '' : 's'}.</Text>
-          </View>
-        ) : null}
-        <Pressable style={styles.addDateBtn} onPress={() => setPickerOpen(true)}>
-          <Ionicons name="add-circle-outline" size={16} color={colors.brand} />
-          <Text style={styles.addDateBtnTxt}>{selectedDates.length === 0 ? 'Add dates' : 'Add / change dates'}</Text>
-        </Pressable>
+        <Text style={styles.timeSlotHint}>All {sessions} sessions will use this time slot.</Text>
       </View>
 
       {/* ── Assignment pricing reference ─────────── */}
       {showAssignmentPricing ? (
         <View style={styles.assignBox}>
           <View style={styles.assignIconWrap}>
-            <Ionicons name="information-circle-outline" size={14} color={colors.amber800} />
+            <Ionicons name="information-circle-outline" size={13} color={colors.amber800} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.assignTitle}>Booking reference</Text>
@@ -305,36 +483,6 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
           </View>
         </View>
       ) : null}
-
-      {/* ── Cost summary ─────────────────────────── */}
-      <View style={styles.costCard}>
-        <View style={styles.cardTitleRow}>
-          <View style={[styles.cardIconBadge, styles.costIconBadge]}>
-            <Ionicons name="calculator-outline" size={14} color={colors.blue600} />
-          </View>
-          <Text style={[styles.cardTitle, styles.costCardTitle]}>Cost summary</Text>
-        </View>
-        <View style={styles.costRows}>
-          <View style={styles.costRow}>
-            <Text style={styles.costK}>
-              {sessions} × ₹{Number(amountPerSession || 0).toFixed(2)}
-              {perVisitTravel > 0 ? ` + ₹${perVisitTravel.toFixed(2)} travel` : ''}
-            </Text>
-            <Text style={styles.costV}>₹{totals.subtotal.toFixed(2)}</Text>
-          </View>
-          {totals.discountPct > 0 ? (
-            <View style={styles.costRow}>
-              <Text style={styles.costK}>Discount ({totals.discountPct}%)</Text>
-              <Text style={[styles.costV, styles.costVDiscount]}>− ₹{totals.discountAmount.toFixed(2)}</Text>
-            </View>
-          ) : null}
-          <View style={styles.costDivider} />
-          <View style={styles.costTotalRow}>
-            <Text style={styles.costTotalK}>Patient pays</Text>
-            <Text style={styles.costTotalV}>₹{totals.patientPays.toFixed(2)}</Text>
-          </View>
-        </View>
-      </View>
 
       {/* ── Submit CTA ───────────────────────────── */}
       <Pressable
@@ -352,250 +500,306 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
         )}
       </Pressable>
 
-      {/* ── Date picker Android ───────────────────── */}
-      {pickerOpen && Platform.OS === 'android' ? (
-        <DateTimePicker
-          value={tempDate}
-          mode="date"
-          display="default"
-          minimumDate={today}
-          onChange={(e, date) => {
-            setPickerOpen(false)
-            if (e?.type === 'dismissed' || !date) return
-            setTempDate(date)
-            addPicked(date)
-          }}
-        />
-      ) : null}
-
-      {/* ── Date picker iOS sheet ─────────────────── */}
-      {Platform.OS === 'ios' ? (
-        <Modal transparent visible={pickerOpen} animationType="slide">
-          <View style={styles.modalRoot}>
-            <Pressable style={styles.modalBackdrop} onPress={() => setPickerOpen(false)} />
-            <View style={styles.modalSheet}>
-              <View style={styles.modalSheetBar}>
-                <Pressable onPress={() => setPickerOpen(false)}>
-                  <Text style={styles.modalCancelTxt}>Cancel</Text>
-                </Pressable>
-                <Text style={styles.modalSheetTitle}>Pick a date</Text>
-                <Pressable onPress={() => { addPicked(tempDate); setPickerOpen(false) }}>
-                  <Text style={styles.modalDoneTxt}>Add</Text>
-                </Pressable>
-              </View>
-              <DateTimePicker
-                value={tempDate}
-                mode="date"
-                display="spinner"
-                themeVariant="light"
-                minimumDate={today}
-                onChange={(_, d) => d && setTempDate(d)}
-              />
-            </View>
-          </View>
-        </Modal>
-      ) : null}
-
     </View>
   )
 }
 
+// ── Calendar styles ──────────────────────────────────────────────────────────
+const calStyles = StyleSheet.create({
+  root: {
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.65)',
+  },
+
+  // Month nav bar
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(13, 148, 136, 0.10)',
+  },
+  navBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(13, 148, 136, 0.07)',
+  },
+  navBtnOff: { opacity: 0.3 },
+  monthLabel: { fontFamily: font.bold, fontSize: type.base, color: colors.textPrimary },
+
+  // Day-of-week header row
+  weekRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 8,
+    paddingTop: 10,
+    paddingBottom: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(13, 148, 136, 0.07)',
+  },
+  headerCell: { flex: 1, alignItems: 'center' },
+  headerTxt: {
+    fontFamily: font.bold,
+    fontSize: type.xs,
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+
+  // Grid body
+  body: { paddingHorizontal: 8, paddingVertical: 8, gap: 4 },
+
+  // Each week row
+  row: { flexDirection: 'row', alignItems: 'center' },
+
+  // Individual day cell — flex:1 ensures all 7 columns are identical width
+  cell: {
+    flex: 1,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    margin: 2,
+  },
+  cellSelected: {
+    backgroundColor: colors.brand,
+  },
+  cellDisabled: { opacity: 0.3 },
+  cellTxt: {
+    fontFamily: font.medium,
+    fontSize: type.base,
+    color: colors.textPrimary,
+  },
+  cellTxtSelected: {
+    fontFamily: font.bold,
+    color: colors.white,
+  },
+  cellTxtPast: { color: colors.slate300 },
+  cellTxtDim: { color: colors.slate300 },
+})
+
+// ── Card/form styles ─────────────────────────────────────────────────────────
+const cardSurface = Platform.select({
+  web: {
+    backgroundColor: 'rgba(240, 253, 250, 0.88)',
+    boxShadow: '0px 2px 8px rgba(13, 148, 136, 0.08)',
+  },
+  default: {
+    backgroundColor: 'rgba(240, 253, 250, 0.88)',
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+})
+
 const styles = StyleSheet.create({
   root: { gap: 10 },
 
-  // ── Card shell ──────────────────────────────
   card: {
+    ...cardSurface,
     borderRadius: 16,
-    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
   },
-  cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   cardIconBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: colors.teal50,
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    backgroundColor: 'rgba(13, 148, 136, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   cardTitle: { fontFamily: font.bold, fontSize: type.base, color: colors.textPrimary, flex: 1 },
-  cardTitleHint: { fontFamily: font.medium, fontSize: type.xs, color: colors.textTertiary },
   fixedBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
     backgroundColor: colors.teal50,
     borderWidth: 1,
-    borderColor: colors.brandSoft,
+    borderColor: 'rgba(13, 148, 136, 0.2)',
   },
   fixedBadgeTxt: { fontFamily: font.semiBold, fontSize: 10, color: colors.brand },
 
-  // ── Sessions stepper ────────────────────────
-  stepperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 16,
-  },
-  stepBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 15,
-    borderWidth: 1.5,
-    borderColor: colors.brandSoft,
-    backgroundColor: colors.teal50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepBtnOff: { borderColor: colors.borderSubtle, backgroundColor: colors.canvas, opacity: 0.5 },
-  stepValWrap: { flex: 1, alignItems: 'center' },
-  stepVal: { fontFamily: font.bold, fontSize: 40, color: colors.textPrimary, lineHeight: 46 },
-  stepValSub: { fontFamily: font.regular, fontSize: type.xs, color: colors.textTertiary, marginTop: 2 },
-
-  // ── Input with prefix/suffix ─────────────────
-  inpWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
+  // Plan summary
+  planSummaryBox: {
+    marginTop: 12,
     borderRadius: 12,
-    backgroundColor: colors.canvas,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.12)',
     overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.55)',
   },
-  inpPrefix: {
-    paddingLeft: 14,
-    paddingRight: 4,
-    fontFamily: font.semiBold,
-    fontSize: type.lg,
-    color: colors.textSecondary,
-  },
-  inpSuffix: {
-    paddingRight: 14,
-    paddingLeft: 4,
-    fontFamily: font.semiBold,
-    fontSize: type.lg,
-    color: colors.textSecondary,
-  },
-  inp: {
-    flex: 1,
+  planSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontFamily: font.semiBold,
-    fontSize: type.xl,
-    color: colors.textPrimary,
+    paddingVertical: 9,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(13, 148, 136, 0.08)',
   },
-  inpRO: {
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: colors.canvas,
+  planSummaryKey: { fontFamily: font.regular, fontSize: type.sm, color: colors.textSecondary },
+  planSummaryVal: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.textPrimary },
+  planSummarySavings: { fontFamily: font.bold, fontSize: type.sm, color: '#16a34a' },
+  planSummaryTotalRow: { backgroundColor: 'rgba(13, 148, 136, 0.07)', paddingVertical: 11 },
+  planSummaryTotalKey: { fontFamily: font.bold, fontSize: type.sm, color: colors.teal800 },
+  planSummaryTotalVal: { fontFamily: font.bold, fontSize: type.md, color: colors.brand },
+  discountLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  discountBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: '#dcfce7',
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: '#a7f3d0',
   },
-  inpROAmt: { fontFamily: font.bold, fontSize: type.xl, color: colors.textPrimary },
-  inpROHint: { marginTop: 4, fontFamily: font.regular, fontSize: type.xs, color: colors.textTertiary },
-  fieldHint: { marginTop: 6, fontFamily: font.regular, fontSize: type.xs, color: colors.textTertiary },
+  discountBadgeTxt: { fontFamily: font.bold, fontSize: 9, color: '#15803d', textTransform: 'uppercase' },
+  fixedRateNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 10,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(13, 148, 136, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
+  },
+  fixedRateNoteTxt: { fontFamily: font.regular, fontSize: type.xs, color: colors.teal800 },
 
-  // ── Payment mode cards ───────────────────────
+  // Payment mode
   modeRow: { flexDirection: 'row', gap: 10 },
   modeCard: {
     flex: 1,
     alignItems: 'center',
-    padding: 14,
-    borderRadius: 14,
+    padding: 12,
+    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.canvas,
+    borderColor: 'rgba(13, 148, 136, 0.12)',
+    backgroundColor: 'rgba(255,255,255,0.55)',
     gap: 6,
   },
-  modeCardOn: { borderColor: colors.brand, backgroundColor: colors.teal50 },
+  modeCardOn: {
+    borderColor: colors.brand,
+    backgroundColor: 'rgba(13, 148, 136, 0.08)',
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 2px 8px rgba(13, 148, 136, 0.15)' }
+      : {
+          shadowColor: colors.brand,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.12,
+          shadowRadius: 6,
+          elevation: 2,
+        }),
+  },
   modeIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: colors.borderSubtle,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: 'rgba(13, 148, 136, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   modeIconWrapOn: { backgroundColor: colors.brand },
   modeTxt: { fontFamily: font.bold, fontSize: type.sm, color: colors.slate500 },
   modeTxtOn: { color: colors.brand },
-  modeSubTxt: { fontFamily: font.regular, fontSize: 10, color: colors.textTertiary, textAlign: 'center' },
+  modeSubTxt: { fontFamily: font.regular, fontSize: 9.5, color: colors.textTertiary, textAlign: 'center' },
   modeSubTxtOn: { color: colors.teal800 },
   modeCheckWrap: { position: 'absolute', top: 10, right: 10 },
 
-  // ── Date chips ───────────────────────────────
-  dateChipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  // Date count badge
+  dateCountBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    backgroundColor: 'rgba(13, 148, 136, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
+  },
+  dateCountBadgeFull: { backgroundColor: '#dcfce7', borderColor: '#a7f3d0' },
+  dateCountTxt: { fontFamily: font.bold, fontSize: 10, color: colors.slate500 },
+  dateCountTxtFull: { color: '#15803d' },
+
+  // Selected date chips
+  dateChipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 8, marginTop: 4 },
   dateChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingLeft: 12,
-    paddingRight: 8,
-    paddingVertical: 7,
-    borderRadius: 10,
-    backgroundColor: colors.teal50,
+    gap: 5,
+    paddingLeft: 8,
+    paddingRight: 6,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(13, 148, 136, 0.08)',
     borderWidth: 1,
-    borderColor: colors.brandSoft,
+    borderColor: 'rgba(13, 148, 136, 0.2)',
   },
   dateChipTxt: { fontFamily: font.semiBold, fontSize: type.xs, color: colors.brand },
-  dateChipRemove: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.brandSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  warnRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: colors.warningBg,
-    borderWidth: 1,
-    borderColor: colors.warningBorder,
-  },
-  warnTxt: { fontFamily: font.medium, fontSize: type.xs, color: colors.amber800 },
-  addDateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: colors.brandSoft,
-    backgroundColor: colors.teal50,
-  },
-  addDateBtnTxt: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.brand },
 
-  // ── Assignment reference box ─────────────────
+  // Status rows
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(13, 148, 136, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
+  },
+  infoTxt: { fontFamily: font.medium, fontSize: type.xs, color: colors.teal800 },
+  successRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+  },
+  successTxt: { fontFamily: font.medium, fontSize: type.xs, color: colors.success },
+
+  // Time slot hint
+  timeSlotHint: {
+    marginTop: 8,
+    fontFamily: font.regular,
+    fontSize: type.xs,
+    color: colors.textTertiary,
+    lineHeight: 16,
+  },
+
+  // Assignment reference
   assignBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    padding: 12,
+    padding: 10,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.warningBorder,
     backgroundColor: colors.warningBg,
   },
   assignIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: colors.amber50,
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: colors.amber100,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -603,64 +807,26 @@ const styles = StyleSheet.create({
   assignTitle: { fontFamily: font.bold, fontSize: type.xs, color: colors.amber800, textTransform: 'uppercase', letterSpacing: 0.5 },
   assignSub: { marginTop: 4, fontFamily: font.regular, fontSize: type.sm, color: colors.amber800 },
 
-  // ── Cost summary card ────────────────────────
-  costCard: {
-    borderRadius: 16,
-    backgroundColor: colors.blue50,
-    borderWidth: 1.5,
-    borderColor: '#bfdbfe',
-    padding: 16,
-  },
-  costIconBadge: { backgroundColor: '#dbeafe' },
-  costCardTitle: { color: colors.blue700 },
-  costRows: { gap: 10 },
-  costRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  costK: { fontFamily: font.regular, fontSize: type.sm, color: colors.slate600, flex: 1 },
-  costV: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.slate700 },
-  costVDiscount: { color: '#16a34a' },
-  costDivider: { height: StyleSheet.hairlineWidth, backgroundColor: '#bfdbfe', marginVertical: 2 },
-  costTotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  costTotalK: { fontFamily: font.bold, fontSize: type.base, color: colors.blue700 },
-  costTotalV: { fontFamily: font.bold, fontSize: type.xl, color: colors.blue700 },
-
-  // ── Submit CTA ───────────────────────────────
+  // Submit
   submitBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 15,
-    borderRadius: 14,
+    paddingVertical: 14,
+    borderRadius: 12,
     backgroundColor: colors.brand,
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
-    elevation: 5,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 4px 12px rgba(13, 148, 136, 0.25)' }
+      : {
+          shadowColor: colors.brand,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.22,
+          shadowRadius: 8,
+          elevation: 4,
+        }),
     marginTop: 4,
   },
-  submitBtnOff: { opacity: 0.5, shadowOpacity: 0 },
+  submitBtnOff: { opacity: 0.45 },
   submitBtnTxt: { fontFamily: font.bold, fontSize: type.base, color: colors.white },
-
-  // ── iOS date modal ───────────────────────────
-  modalRoot: { flex: 1, justifyContent: 'flex-end' },
-  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.4)' },
-  modalSheet: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 20,
-  },
-  modalSheetBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-  },
-  modalSheetTitle: { fontFamily: font.bold, fontSize: type.base, color: colors.textPrimary },
-  modalCancelTxt: { fontFamily: font.medium, fontSize: type.base, color: colors.textSecondary },
-  modalDoneTxt: { fontFamily: font.bold, fontSize: type.base, color: colors.brand },
 })

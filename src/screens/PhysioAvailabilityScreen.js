@@ -1,9 +1,10 @@
 import * as Location from 'expo-location'
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
+import { DetailSkeleton } from '../components/ui/skeletons'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 
@@ -11,6 +12,7 @@ export default function PhysioAvailabilityScreen() {
   const [availability, setAvailability] = useState(true)
   const [coords, setCoords] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [updatingLocation, setUpdatingLocation] = useState(false)
 
   const load = useCallback(async () => {
@@ -27,6 +29,12 @@ export default function PhysioAvailabilityScreen() {
       setLoading(false)
     }
   }, [])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await load()
+    setRefreshing(false)
+  }, [load])
 
   useEffect(() => { load() }, [load])
 
@@ -63,14 +71,27 @@ export default function PhysioAvailabilityScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.brand} />
+      <View style={{ flex: 1, padding: 16, backgroundColor: colors.canvas }}>
+        <DetailSkeleton />
       </View>
     )
   }
 
   return (
-    <View style={styles.root}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.canvas }}
+      contentContainerStyle={styles.root}
+      bounces={true}
+      alwaysBounceVertical={true}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[colors.brand]}
+          tintColor={colors.brand}
+        />
+      }
+    >
 
       {/* ── Availability toggle card ──────────────── */}
       <View style={[styles.statusCard, availability ? styles.statusCardOnline : styles.statusCardOffline]}>
@@ -150,12 +171,12 @@ export default function PhysioAvailabilityScreen() {
         </Text>
       </View>
 
-    </View>
+    </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.canvas, padding: 16, gap: 12 },
+  root: { padding: 16, gap: 12 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.canvas },
 
   // Status card

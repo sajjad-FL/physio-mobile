@@ -1,15 +1,22 @@
 import { createContext, useContext, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePhysioMe, usePhysioBookings, usePhysioDisputes } from '../api/queries'
+import { isAwaitingPatientConsent, isPlanLive, isManagerOwnedBooking } from '../utils/planStatus'
 
 const BADGE_PARAMS = { page: 1, limit: 100 }
 
 function bookingNeedsPhysioAction(b) {
   if (!b) return false
+  if (isManagerOwnedBooking(b)) return false
   if (b.status === 'assigned') return true
   if (b.serviceType !== 'home') return false
   if (b.status !== 'accepted' && b.status !== 'scheduled') return false
-  if (b.planStatus === 'proposed' || b.planStatus === 'approved') return false
+  if (
+    isAwaitingPatientConsent(b.planStatus) ||
+    isPlanLive(b.planStatus)
+  ) {
+    return false
+  }
   return true
 }
 

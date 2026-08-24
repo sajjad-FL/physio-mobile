@@ -1,7 +1,23 @@
 import { useEffect, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Platform, StyleSheet, Text, View } from 'react-native'
 import { colors } from '../../theme/colors'
+import { font, type } from '../../theme/typography'
 import { getSessionMilestoneMessage, getSessionProgress } from '../../utils/sessionProgress'
+
+const cardSurface = Platform.select({
+  web: {
+    backgroundColor: '#ffffff',
+    boxShadow: '0px 2px 10px rgba(15, 23, 42, 0.08)',
+  },
+  default: {
+    backgroundColor: colors.white,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+})
 
 export default function SessionProgressPhysio({ booking }) {
   const { completed, total, percent, tier, isComplete } = getSessionProgress(booking)
@@ -22,7 +38,7 @@ export default function SessionProgressPhysio({ booking }) {
         <View>
           <Text style={styles.h3}>Session progress</Text>
           <Text style={styles.big}>{label}</Text>
-          <Text style={styles.sub}>{Math.round(percent)}% of your plan</Text>
+          <Text style={styles.sub}>{Math.round(percent)}% of the care plan</Text>
         </View>
         {isComplete ? (
           <View style={styles.donePill}>
@@ -46,32 +62,32 @@ function getProgressTierColors(tier) {
 
 const styles = StyleSheet.create({
   card: {
+    ...cardSurface,
     borderRadius: 16,
-    padding: 18,
+    padding: 16,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    backgroundColor: colors.white,
   },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
-  h3: { fontSize: 14, fontWeight: '700', color: colors.slate900 },
-  big: { marginTop: 6, fontSize: 18, fontWeight: '800', color: colors.slate900 },
-  sub: { marginTop: 4, fontSize: 13, color: colors.slate500 },
+  h3: { fontFamily: font.bold, fontSize: type.xs, color: colors.slate500, textTransform: 'uppercase', letterSpacing: 0.7 },
+  big: { marginTop: 4, fontFamily: font.bold, fontSize: type.md, color: colors.slate900 },
+  sub: { marginTop: 2, fontFamily: font.medium, fontSize: type.xs, color: colors.slate500 },
   donePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
     backgroundColor: colors.emerald50,
     borderWidth: 1,
     borderColor: '#a7f3d0',
   },
-  doneTxt: { fontSize: 10, fontWeight: '800', color: colors.emerald900, textTransform: 'uppercase' },
+  doneTxt: { fontFamily: font.bold, fontSize: 9, color: colors.emerald900, textTransform: 'uppercase' },
   track: {
-    marginTop: 16,
-    height: 10,
-    borderRadius: 999,
+    marginTop: 10,
+    height: 6,
+    borderRadius: 3,
     borderWidth: 1,
     overflow: 'hidden',
   },
-  fill: { height: '100%', borderRadius: 999 },
-  msg: { marginTop: 12, fontSize: 13, color: colors.slate600, lineHeight: 18 },
+  fill: { height: '100%', borderRadius: 3 },
+  msg: { marginTop: 8, fontFamily: font.regular, fontSize: type.xs, color: colors.slate500, lineHeight: 14 },
 })

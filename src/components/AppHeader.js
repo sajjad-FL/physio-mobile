@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../theme/colors'
@@ -22,7 +22,17 @@ function AppHeader({ title, onBack, right }) {
             <Text style={styles.backTxt} numberOfLines={1}>{title || 'Back'}</Text>
           </Pressable>
         ) : (
-          <Text style={styles.brand} numberOfLines={1}>PhysioKhom</Text>
+          <View style={styles.brandRow} accessibilityRole="header" accessibilityLabel="PhysiOkhom">
+            <Image
+              source={require('../../assets/images/logo.png')}
+              style={styles.logoMark}
+              resizeMode="contain"
+            />
+            <Text numberOfLines={1}>
+              <Text style={styles.brandPhysio}>Physi</Text>
+              <Text style={styles.brandKhom}>Okhom</Text>
+            </Text>
+          </View>
         )}
         {right ? <View style={styles.trailing}>{right}</View> : null}
       </View>
@@ -41,7 +51,13 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 36 },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, marginRight: 12 },
   backTxt: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textPrimary, flexShrink: 1 },
-  brand: { flex: 1, fontFamily: font.bold, fontSize: type.md, color: colors.textPrimary, letterSpacing: -0.3 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
+  logoMark: {
+    width: 40,
+    height: 40,
+  },
+  brandPhysio: { fontFamily: font.bold, fontSize: type.lg, color: '#0f172a', letterSpacing: -0.3 },
+  brandKhom: { fontFamily: font.bold, fontSize: type.lg, color: colors.brand, letterSpacing: -0.3 },
   trailing: { flexShrink: 0, alignItems: 'flex-end' },
 })
 

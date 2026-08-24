@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { AttachStep } from 'react-native-spotlight-tour'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../theme/colors'
 import { font, type } from '../theme/typography'
@@ -8,10 +9,11 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets()
 
   return (
-    <View
-      style={[styles.bar, { paddingBottom: (insets.bottom || 0) + 4 }]}
-      onLayout={(event) => setBottomTabBarHeight(event.nativeEvent.layout.height)}
-    >
+    <AttachStep index={2} fill>
+      <View
+        style={[styles.bar, { paddingBottom: (insets.bottom || 0) + 4 }]}
+        onLayout={(event) => setBottomTabBarHeight(event.nativeEvent.layout.height)}
+      >
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key]
         const focused = state.index === index
@@ -55,7 +57,8 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
           </Pressable>
         )
       })}
-    </View>
+      </View>
+    </AttachStep>
   )
 }
 

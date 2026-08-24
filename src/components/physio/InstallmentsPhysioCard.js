@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors } from '../../theme/colors'
 
 function formatRupees(n) {
@@ -34,14 +34,20 @@ export default function InstallmentsPhysioCard({
   summary,
   payments,
   emptyMessage,
+  onRowPress,
   children,
 }) {
   const s = summary || {}
   const totalAmount = Number(s.totalAmount || 0)
   const totalPaid = Number(s.totalPaid || 0)
-  const outstanding = Number(s.outstanding || Math.max(0, totalAmount - totalPaid))
-  const coveredSessions = Number(s.coveredSessions || 0)
-  const sessionsCount = Number(s.sessionsCount || 0)
+  const totalCollected = Number(s.totalCollected || 0)
+  const effectivePaid = totalPaid + totalCollected
+  const outstanding = Math.max(0, totalAmount - effectivePaid)
+  const milestoneStatus = Array.isArray(s.milestoneStatus) ? s.milestoneStatus : null
+  const paidPct = totalAmount > 0 ? effectivePaid / totalAmount : 0
+  const nextMilestone = milestoneStatus ? milestoneStatus.find((m) => !m.met) : null
+  const allMet = milestoneStatus ? milestoneStatus.every((m) => m.met) : false
+
   const rows = Array.isArray(payments)
     ? [...payments].sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0))
     : []
@@ -59,7 +65,7 @@ export default function InstallmentsPhysioCard({
         <View style={styles.sumBox}>
           <Text style={styles.sumL}>Paid</Text>
           <Text style={styles.sumV}>
-            {formatRupees(totalPaid)}{' '}
+            {formatRupees(effectivePaid)}{' '}
             <Text style={styles.sumMuted}>of {formatRupees(totalAmount)}</Text>
           </Text>
         </View>
@@ -67,11 +73,23 @@ export default function InstallmentsPhysioCard({
           <Text style={styles.sumL}>Outstanding</Text>
           <Text style={styles.sumV}>{formatRupees(outstanding)}</Text>
         </View>
-        <View style={styles.sumBox}>
-          <Text style={styles.sumL}>Sessions covered</Text>
-          <Text style={styles.sumV}>
-            {coveredSessions} <Text style={styles.sumMuted}>of {sessionsCount || '—'}</Text>
-          </Text>
+        <View style={[styles.sumBox, allMet && styles.sumBoxMet]}>
+          <Text style={styles.sumL}>Next milestone</Text>
+          {milestoneStatus ? (
+            allMet ? (
+              <Text style={[styles.sumV, styles.sumVMet]}>All met</Text>
+            ) : (
+              <Text style={styles.sumV}>
+                Session {nextMilestone.bySession}{'\n'}
+                <Text style={styles.sumMuted}>{Math.round(nextMilestone.requiredPct * 100)}% required</Text>
+              </Text>
+            )
+          ) : (
+            <Text style={styles.sumV}>
+              {Math.round(paidPct * 100)}%
+              <Text style={styles.sumMuted}> paid</Text>
+            </Text>
+          )}
         </View>
       </View>
 
@@ -81,8 +99,18 @@ export default function InstallmentsPhysioCard({
         </View>
       ) : (
         rows.map((p) => (
-          <View key={p._id} style={styles.line}>
+          <Pressable
+            key={p._id}
+            onPress={onRowPress ? () => onRowPress(p) : undefined}
+            disabled={!onRowPress}
+            style={styles.line}
+          >
             <Text style={styles.lineWhen}>{formatDt(p.verifiedAt || p.collectedAt || p.createdAt)}</Text>
+            {p.sessionOrdinal ? (
+              <Text style={styles.lineSession}>Session {p.sessionOrdinal}</Text>
+            ) : (
+              <Text style={styles.lineSessionGeneral}>General</Text>
+            )}
             <Text style={styles.lineMode}>{p.mode ? String(p.mode) : '—'}</Text>
             <Text style={styles.lineAmt}>{formatRupees(p.amount)}</Text>
             <Text style={styles.lineSt}>{STATUS_LABEL[p.status] || p.status}</Text>
@@ -90,7 +118,7 @@ export default function InstallmentsPhysioCard({
               <Text style={styles.reject}>{p.rejectReason}</Text>
             ) : null}
             {p.note ? <Text style={styles.note}>{p.note}</Text> : null}
-          </View>
+          </Pressable>
         ))
       )}
     </View>
@@ -118,8 +146,10 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSubtle,
     backgroundColor: colors.slate50,
   },
+  sumBoxMet: { borderColor: '#a7f3d0', backgroundColor: '#f0fdf4' },
   sumL: { fontSize: 10, fontWeight: '700', color: colors.slate500, textTransform: 'uppercase' },
   sumV: { marginTop: 6, fontSize: 15, fontWeight: '700', color: colors.slate900 },
+  sumVMet: { color: '#15803d' },
   sumMuted: { fontSize: 12, fontWeight: '400', color: colors.slate500 },
   empty: {
     marginTop: 14,
@@ -138,6 +168,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderSubtle,
   },
   lineWhen: { fontSize: 13, fontWeight: '600', color: colors.slate900 },
+  lineSession: { marginTop: 4, fontSize: 11, fontWeight: '700', color: colors.brand },
+  lineSessionGeneral: { marginTop: 4, fontSize: 11, fontWeight: '600', color: colors.slate500 },
   lineMode: { marginTop: 4, fontSize: 12, color: colors.slate600, textTransform: 'capitalize' },
   lineAmt: { marginTop: 4, fontSize: 14, fontWeight: '700', color: colors.slate900 },
   lineSt: { marginTop: 6, fontSize: 12, fontWeight: '600', color: colors.slate700 },

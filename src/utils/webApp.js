@@ -12,9 +12,47 @@ export function getWebLoginUrl() {
   return base ? `${base}/login` : ''
 }
 
+export function getWebManagerUrl() {
+  const base = getWebSiteBaseUrl()
+  return base ? `${base}/manager` : ''
+}
+
+export function getWebClinicUrl() {
+  const base = getWebSiteBaseUrl()
+  return base ? `${base}/clinic` : ''
+}
+
 /** Opens web app sign-in in the system browser (admin/staff use the web dashboard). */
 export async function openWebLoginInBrowser() {
   const url = getWebLoginUrl()
+  if (!url) return false
+  try {
+    const supported = await Linking.canOpenURL(url)
+    if (!supported) return false
+    await Linking.openURL(url)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Opens care manager dashboard in the system browser. */
+export async function openWebManagerInBrowser() {
+  const url = getWebManagerUrl()
+  if (!url) return false
+  try {
+    const supported = await Linking.canOpenURL(url)
+    if (!supported) return false
+    await Linking.openURL(url)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Opens clinic staff dashboard in the system browser. */
+export async function openWebClinicInBrowser() {
+  const url = getWebClinicUrl()
   if (!url) return false
   try {
     const supported = await Linking.canOpenURL(url)

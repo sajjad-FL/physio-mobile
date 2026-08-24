@@ -2,16 +2,13 @@ import { Platform } from 'react-native'
 import { colors } from './colors'
 
 /** Matches LoginScreen form card (white surface + shadow). */
-export const authFormCardShadow = Platform.select({
-  ios: {
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-  },
-  android: { elevation: 4 },
-  default: {},
-})
+export const authFormCardShadow = {
+  shadowColor: colors.brand,
+  shadowOffset: { width: 0, height: 10 },
+  shadowOpacity: 0.08,
+  shadowRadius: 20,
+  elevation: Platform.OS === 'android' ? 0 : 4,
+}
 
 export const authFormCard = {
   backgroundColor: colors.white,
@@ -19,5 +16,6 @@ export const authFormCard = {
   padding: 20,
   borderWidth: 1,
   borderColor: colors.borderSubtle,
+  overflow: 'hidden',
   ...authFormCardShadow,
 }

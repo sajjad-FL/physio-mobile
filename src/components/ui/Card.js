@@ -30,6 +30,7 @@ const styles = StyleSheet.create({
   base: {
     borderRadius: r.xl,
     backgroundColor: colors.white,
+    overflow: 'hidden',
   },
 
   // Padding variants

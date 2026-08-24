@@ -17,6 +17,7 @@ function Input({
   inputStyle,
   variant = 'default',
   signupMutedBg = false,
+  required = false,
   ...props
 }) {
   const isPasswordField = props.secureTextEntry === true
@@ -46,6 +47,7 @@ function Input({
           ]}
         >
           {label}
+          {required ? <Text style={styles.req}> *</Text> : null}
         </Text>
       ) : null}
       {description && isSignup ? <Text style={styles.descriptionSignup}>{description}</Text> : null}
@@ -64,7 +66,7 @@ function Input({
             isPasswordField && (isSignup || isLogin ? styles.inputWithEyeSignup : styles.inputWithEye),
             inputStyle,
           ]}
-          {...props}
+                    {...props}
           secureTextEntry={secureTextEntry}
         />
         {isPasswordField ? (
@@ -96,6 +98,7 @@ const styles = StyleSheet.create({
     fontSize: type.sm,
     color: colors.slate700,
   },
+  req: { color: colors.danger || '#ef4444' },
   labelSignup: {
     marginBottom: 6,
     fontFamily: font.medium,
@@ -117,26 +120,29 @@ const styles = StyleSheet.create({
   },
   inputWrap: { position: 'relative' },
   input: {
-    minHeight: 42,
+    minHeight: 46,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: r.md,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
+    borderRadius: 12,
     paddingHorizontal: 12,
     fontFamily: font.regular,
     fontSize: type.base,
     color: colors.textPrimary,
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
   },
   inputSignup: {
-    minHeight: 42,
+    minHeight: 46,
     paddingVertical: 10,
-    borderColor: su.inputBorder,
-    borderRadius: r.md,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    fontFamily: font.regular,
     fontSize: signupType.input,
     lineHeight: signupLeading.input,
     color: su.ink,
-    backgroundColor: su.surface,
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
   },
   inputSignupMuted: {
     backgroundColor: su.inputMutedBg,
@@ -149,41 +155,58 @@ const styles = StyleSheet.create({
     color: lu.ink,
   },
   inputLogin: {
-    minHeight: 42,
+    minHeight: 46,
     paddingVertical: 10,
-    borderColor: lu.inputBorder,
-    borderRadius: r.md,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
     fontSize: loginType.input,
     lineHeight: loginLeading.input,
     color: lu.ink,
-    backgroundColor: lu.inputMutedBg,
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
   },
   inputFocused: {
-    borderColor: colors.borderFocus,
+    borderColor: colors.brand,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
   },
   inputFocusedSignup: {
-    borderColor: su.inputFocus,
+    borderColor: colors.brand,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
   },
   inputFocusedLogin: {
-    borderColor: lu.inputFocus,
+    borderColor: colors.brand,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
   },
   inputWithEye: { paddingRight: 40 },
   inputWithEyeSignup: { paddingRight: 40 },
   eyeBtn: {
     position: 'absolute',
-    right: 2,
-    top: 2,
-    width: 36,
-    height: 36,
-    borderRadius: r.md,
+    right: 4,
+    top: 3,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   eyeBtnSignup: {
-    top: 4,
+    top: 3,
   },
   eyeBtnLogin: {
-    top: 4,
+    top: 3,
   },
   inputErr: { borderColor: colors.danger },
   hint: { marginTop: 5, fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },

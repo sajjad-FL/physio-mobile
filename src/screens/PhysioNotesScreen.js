@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native'
 import KeyboardAwareScrollView from '../components/ui/KeyboardAwareScrollView'
 import { Ionicons } from '@expo/vector-icons'
 import Toast from 'react-native-toast-message'
 import { api } from '../api/client'
+import { DetailSkeleton } from '../components/ui/skeletons'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { formatBookingDateAndSlot } from '../utils/date'
@@ -18,9 +19,11 @@ const FIELDS = [
 export default function PhysioNotesScreen() {
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [forms, setForms] = useState({})
   const [busyId, setBusyId] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
+  const [focusedField, setFocusedField] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -53,6 +56,12 @@ export default function PhysioNotesScreen() {
     }
   }, [])
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await load()
+    setRefreshing(false)
+  }, [load])
+
   useEffect(() => { load() }, [load])
 
   function setField(bookingId, key, value) {
@@ -80,31 +89,52 @@ export default function PhysioNotesScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.brand} />
+      <View style={styles.container}>
+        <View style={styles.ambientHeaderGlow} />
+        <View style={styles.ambientHeaderGlow2} />
+        <View style={{ padding: 16 }}>
+          <DetailSkeleton />
+        </View>
       </View>
     )
   }
 
   if (bookings.length === 0) {
     return (
-      <View style={styles.emptyRoot}>
-        <View style={styles.emptyIconWrap}>
-          <Ionicons name="document-text-outline" size={32} color={colors.slate300} />
+      <View style={styles.container}>
+        <View style={styles.ambientHeaderGlow} />
+        <View style={styles.ambientHeaderGlow2} />
+        <View style={styles.emptyRoot}>
+          <View style={styles.emptyIconWrap}>
+            <Ionicons name="document-text-outline" size={32} color={colors.brand} />
+          </View>
+          <Text style={styles.emptyTitle}>No bookings to document</Text>
+          <Text style={styles.emptySub}>Clinical notes will appear here once you have assigned bookings.</Text>
         </View>
-        <Text style={styles.emptyTitle}>No bookings to document</Text>
-        <Text style={styles.emptySub}>Clinical notes will appear here once you have assigned bookings.</Text>
       </View>
     )
   }
 
   return (
-    <KeyboardAwareScrollView
-      contentContainerStyle={styles.scroll}
-      style={styles.root}
-      iosHeaderOffset={0}
-      extraBottomPadding={44}
-    >
+    <View style={styles.container}>
+      <View style={styles.ambientHeaderGlow} />
+      <View style={styles.ambientHeaderGlow2} />
+      <KeyboardAwareScrollView
+        contentContainerStyle={styles.scroll}
+        style={styles.root}
+        iosHeaderOffset={0}
+        extraBottomPadding={44}
+        bounces={true}
+        alwaysBounceVertical={true}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.brand]}
+            tintColor={colors.brand}
+          />
+        }
+      >
       {bookings.map((bk) => {
         const isExpanded = expandedId === bk._id
         const f = forms[bk._id] || {}
@@ -156,13 +186,18 @@ export default function PhysioNotesScreen() {
                       <Text style={styles.fieldLabelTxt}>{label}</Text>
                     </View>
                     <TextInput
-                      style={styles.textarea}
+                      style={[
+                        styles.textarea,
+                        focusedField === `${bk._id}-${k}` && styles.textareaFocused
+                      ]}
                       multiline
                       value={f[k] ?? ''}
                       onChangeText={(v) => setField(bk._id, k, v)}
                       placeholder={placeholder}
                       placeholderTextColor={colors.slate300}
                       textAlignVertical="top"
+                      onFocus={() => setFocusedField(`${bk._id}-${k}`)}
+                      onBlur={() => setFocusedField(null)}
                     />
                   </View>
                 ))}
@@ -186,21 +221,22 @@ export default function PhysioNotesScreen() {
           </View>
         )
       })}
-    </KeyboardAwareScrollView>
+      </KeyboardAwareScrollView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.canvas },
+  root: { flex: 1, backgroundColor: 'transparent' },
   scroll: { padding: 16, paddingBottom: 40, gap: 10 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.canvas },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
 
-  emptyRoot: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 10, backgroundColor: colors.canvas },
+  emptyRoot: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 10, backgroundColor: 'transparent' },
   emptyIconWrap: {
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: colors.slate50,
+    backgroundColor: 'rgba(13, 148, 136, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
@@ -211,15 +247,15 @@ const styles = StyleSheet.create({
   // Card
   card: {
     borderRadius: 16,
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(240, 253, 250, 0.88)',
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -228,13 +264,13 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 10,
   },
-  cardHeaderPressed: { backgroundColor: colors.slate50 },
+  cardHeaderPressed: { backgroundColor: 'rgba(13, 148, 136, 0.05)' },
   cardHeaderLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 11, minWidth: 0 },
   cardAvatar: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: colors.slate50,
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -248,7 +284,7 @@ const styles = StyleSheet.create({
   savedDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.brand },
 
   // Form
-  formDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.borderSubtle, marginHorizontal: 14 },
+  formDivider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(13, 148, 136, 0.1)', marginHorizontal: 14 },
   formBody: { paddingBottom: 16 },
   fieldWrap: { paddingHorizontal: 14, paddingTop: 14, gap: 7 },
   fieldLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -261,15 +297,19 @@ const styles = StyleSheet.create({
   },
   textarea: {
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: 'rgba(13, 148, 136, 0.15)',
     borderRadius: 10,
     padding: 12,
     minHeight: 72,
     fontFamily: font.regular,
     fontSize: type.sm,
     color: colors.textPrimary,
-    backgroundColor: colors.canvas,
+    backgroundColor: 'rgba(241, 245, 249, 0.6)',
     lineHeight: leading.sm,
+  },
+  textareaFocused: {
+    borderColor: colors.brand,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
   },
 
   saveBtn: {
@@ -291,4 +331,32 @@ const styles = StyleSheet.create({
   saveBtnBusy: { opacity: 0.7 },
   saveBtnPressed: { opacity: 0.85 },
   saveBtnTxt: { fontFamily: font.semiBold, fontSize: type.base, color: colors.white },
+
+  // New backgrounds/glows
+  container: {
+    flex: 1,
+    backgroundColor: '#e8f8f6',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  ambientHeaderGlow: {
+    position: 'absolute',
+    top: -120,
+    left: -60,
+    right: -60,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(162, 240, 239, 0.15)',
+    zIndex: 0,
+  },
+  ambientHeaderGlow2: {
+    position: 'absolute',
+    top: -50,
+    left: '20%',
+    width: '60%',
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(13, 107, 107, 0.04)',
+    zIndex: 0,
+  },
 })

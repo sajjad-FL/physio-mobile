@@ -1,11 +1,13 @@
 import { memo, useMemo, useState } from 'react'
-import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { Image, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { AttachStep } from 'react-native-spotlight-tour'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../../theme/colors'
 import { font, type } from '../../theme/typography'
 import { r } from '../../theme/radius'
 import { useBottomTabBarHeight } from '../../navigation/tabBarMetrics'
+import { figmaTokens } from '../../theme/figmaTokens'
 
 const ROUTE_ICONS = {
   PhysioDashboard: 'calendar-outline',
@@ -31,6 +33,7 @@ function TopNavHeader({
   onNavigate,
   onLogout,
   showBookCta = false,
+  headerAccessory = null,
 }) {
   const insets = useSafeAreaInsets()
   const { height } = useWindowDimensions()
@@ -52,15 +55,17 @@ function TopNavHeader({
     <View style={[styles.wrap, { paddingTop: topPad }]}>
       <View style={styles.inner}>
         {/* Brand menu button */}
-        <Pressable
-          style={styles.brandBtn}
-          onPress={() => setSideOpen((v) => !v)}
-          hitSlop={4}
-          accessibilityRole="button"
-          accessibilityLabel="Menu"
-        >
-          <Ionicons name="menu" size={18} color={colors.white} />
-        </Pressable>
+        <AttachStep index={3}>
+          <Pressable
+            style={styles.brandBtn}
+            onPress={() => setSideOpen((v) => !v)}
+            hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel="Menu"
+          >
+            <Ionicons name="menu" size={18} color={colors.white} />
+          </Pressable>
+        </AttachStep>
 
         {/* Title area */}
         <View style={styles.titleArea}>
@@ -70,11 +75,14 @@ function TopNavHeader({
 
         {/* Right actions */}
         <View style={styles.rightGroup}>
+          {headerAccessory}
           {showBookCta ? (
-            <Pressable style={styles.bookBtn} onPress={() => nav('PhysioList')}>
-              <Ionicons name="add" size={14} color={colors.white} />
-              <Text style={styles.bookTxt}>Book</Text>
-            </Pressable>
+            <AttachStep index={4}>
+              <Pressable style={styles.bookBtn} onPress={() => nav('PhysioList')}>
+                <Ionicons name="add" size={14} color={colors.white} />
+                <Text style={styles.bookTxt}>Book</Text>
+              </Pressable>
+            </AttachStep>
           ) : null}
           <Pressable
             style={styles.avatarWrap}
@@ -107,7 +115,7 @@ function TopNavHeader({
           <View style={styles.dropCard}>
             <View style={styles.dropHead}>
               <View style={styles.dropHeadIconWrap}>
-                <Ionicons name="person-circle-outline" size={17} color={colors.brand} />
+                <Ionicons name="person-circle-outline" size={17} color={figmaTokens.primary} />
               </View>
               <Text style={styles.dropHeadTxt}>Account</Text>
               <Pressable onPress={() => setMenuOpen(false)} hitSlop={10} style={styles.dropClose}>
@@ -126,7 +134,7 @@ function TopNavHeader({
                   <Ionicons
                     name={ROUTE_ICONS[it.route] || 'chevron-forward-outline'}
                     size={13}
-                    color={it.route === '__noop' ? colors.textTertiary : colors.brand}
+                    color={it.route === '__noop' ? colors.textTertiary : figmaTokens.primary}
                   />
                 </View>
                 <Text style={[styles.dropTxt, it.route === '__noop' && styles.dropNoopTxt]}>
@@ -163,11 +171,16 @@ function TopNavHeader({
           <View style={[styles.sideDrawer, { marginTop: drawerTop, height: drawerHeight }]}>
             {/* Brand header */}
             <View style={styles.drawerHead}>
-              <View style={styles.drawerLogoRow}>
-                <View style={styles.drawerLogoMark}>
-                  <Ionicons name="pulse" size={16} color={colors.white} />
-                </View>
-                <Text style={styles.drawerLogoTxt}>PhysioKhom</Text>
+              <View style={styles.drawerLogoRow} accessibilityRole="header" accessibilityLabel="PhysiOkhom">
+                <Image
+                  source={require('../../../assets/images/logo.png')}
+                  style={styles.drawerLogoImg}
+                  resizeMode="contain"
+                />
+                <Text style={styles.drawerLogoTxt} numberOfLines={1}>
+                  <Text style={styles.drawerLogoPhysi}>Physi</Text>
+                  <Text style={styles.drawerLogoOkhom}>Okhom</Text>
+                </Text>
               </View>
               {subtitle ? (
                 <Text style={styles.drawerSubTxt}>{subtitle}</Text>
@@ -182,7 +195,7 @@ function TopNavHeader({
                     <Ionicons
                       name={ROUTE_ICONS[it.route] || 'chevron-forward-outline'}
                       size={15}
-                      color={colors.brand}
+                      color={figmaTokens.primary}
                     />
                   </View>
                   <Text style={styles.drawerItemTxt}>{it.label}</Text>
@@ -234,17 +247,17 @@ const styles = StyleSheet.create({
   inner: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   titleArea: { flex: 1, minWidth: 0 },
   title: { fontFamily: font.bold, fontSize: type.lg, color: colors.textPrimary },
-  sub: { marginTop: 1, fontFamily: font.medium, fontSize: type.xs, color: colors.brand },
+  sub: { marginTop: 1, fontFamily: font.medium, fontSize: type.xs, color: figmaTokens.primary },
 
   // Brand hamburger button
   brandBtn: {
     height: 36,
     width: 36,
     borderRadius: 10,
-    backgroundColor: colors.brand,
+    backgroundColor: figmaTokens.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.brand,
+    shadowColor: figmaTokens.primary,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
@@ -265,10 +278,10 @@ const styles = StyleSheet.create({
     height: 34,
     width: 34,
     borderRadius: 17,
-    backgroundColor: colors.brand,
+    backgroundColor: figmaTokens.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.brand,
+    shadowColor: figmaTokens.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 5,
@@ -280,7 +293,7 @@ const styles = StyleSheet.create({
     height: 34,
     paddingHorizontal: 12,
     borderRadius: r.lg,
-    backgroundColor: colors.brand,
+    backgroundColor: figmaTokens.primary,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -318,7 +331,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 6,
-    backgroundColor: colors.teal50,
+    backgroundColor: figmaTokens.mintSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -337,7 +350,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 6,
-    backgroundColor: colors.teal50,
+    backgroundColor: figmaTokens.mintSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -367,21 +380,25 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
   drawerHead: {
-    backgroundColor: colors.brand,
+    backgroundColor: figmaTokens.primary,
     paddingHorizontal: 20,
     paddingTop: 22,
     paddingBottom: 22,
   },
-  drawerLogoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  drawerLogoMark: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  drawerLogoRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
-  drawerLogoTxt: { fontFamily: font.bold, fontSize: type.xl, color: colors.white },
+  drawerLogoImg: { width: 40, height: 40 },
+  drawerLogoTxt: { fontFamily: font.bold, fontSize: type.lg },
+  drawerLogoPhysi: { fontFamily: font.bold, fontSize: type.lg, color: '#0f172a' },
+  drawerLogoOkhom: { fontFamily: font.bold, fontSize: type.lg, color: figmaTokens.primary },
   drawerSubTxt: {
     marginTop: 6,
     fontFamily: font.medium,
@@ -402,7 +419,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 9,
-    backgroundColor: colors.teal50,
+    backgroundColor: figmaTokens.mintSoft,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,

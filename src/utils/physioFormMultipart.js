@@ -1,7 +1,10 @@
 /**
  * Normalize expo-document-picker assets and build multipart parts multer will accept.
  * Android often sends application/octet-stream or omits name/mime.
+ * Web must append real File/Blob parts — { uri, name, type } objects become "[object Object]" text.
  */
+
+import { Platform } from 'react-native'
 
 const EXT_RE = /\.(pdf|jpe?g|jpeg|png|gif|webp|heic|heif|bmp)$/i
 
@@ -11,7 +14,7 @@ const EXT_RE = /\.(pdf|jpe?g|jpeg|png|gif|webp|heic|heif|bmp)$/i
  */
 function ensureMultipartFilename(n) {
   let name = String(n.name || '').trim() || 'upload'
-  let type = String(n.mimeType || '').trim().toLowerCase()
+  let type = String(n.mimeType || n.type || '').trim().toLowerCase()
 
   if (!type || type === 'application/octet-stream') {
     if (name.toLowerCase().endsWith('.pdf')) type = 'application/pdf'
@@ -36,11 +39,24 @@ function ensureMultipartFilename(n) {
 
 export function normalizePickedDocument(raw) {
   if (!raw || typeof raw !== 'object') return null
+
+  if (typeof File !== 'undefined' && raw instanceof File) {
+    return {
+      uri: typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(raw) : '',
+      name: raw.name || 'upload',
+      mimeType: raw.type || '',
+      size: raw.size || 0,
+      file: raw,
+    }
+  }
+
+  const embeddedFile = typeof File !== 'undefined' && raw.file instanceof File ? raw.file : null
   const uri = typeof raw.uri === 'string' ? raw.uri.trim() : String(raw.uri || '').trim()
-  if (!uri) return null
+  if (!uri && !embeddedFile) return null
 
   let name = raw.name != null ? String(raw.name).trim() : ''
-  if (!name) {
+  if (!name && embeddedFile) name = embeddedFile.name || ''
+  if (!name && uri) {
     const tail = uri.replace(/[/\\?#]+$/, '').split(/[/\\]/).pop() || ''
     try {
       name = decodeURIComponent(tail.replace(/\+/g, ' ')).trim()
@@ -50,8 +66,8 @@ export function normalizePickedDocument(raw) {
     if (!name) name = 'document'
   }
 
-  const size = Number(raw.size ?? raw.fileSize ?? 0) || 0
-  let mimeType = String(raw.mimeType || '').trim().toLowerCase()
+  const size = Number(raw.size ?? raw.fileSize ?? embeddedFile?.size ?? 0) || 0
+  let mimeType = String(raw.mimeType || embeddedFile?.type || '').trim().toLowerCase()
   const lowerName = name.toLowerCase()
 
   if (!mimeType || mimeType === 'application/octet-stream') {
@@ -62,12 +78,57 @@ export function normalizePickedDocument(raw) {
     }
   }
 
-  return { uri, name, mimeType, size }
+  return {
+    uri: uri || (embeddedFile && typeof URL !== 'undefined' ? URL.createObjectURL(embeddedFile) : ''),
+    name,
+    mimeType,
+    size,
+    ...(embeddedFile ? { file: embeddedFile } : {}),
+  }
 }
 
-export function appendFormDataFile(fd, field, asset) {
+export function isUploadableDocument(asset) {
   const n = normalizePickedDocument(asset)
-  if (!n?.uri) return
+  if (!n) return false
+  if (n.file instanceof File) return true
+  return Boolean(n.uri)
+}
+
+async function resolveFormDataPart(asset) {
+  const n = normalizePickedDocument(asset)
+  if (!n) return null
+
+  if (n.file instanceof File) {
+    const { name, type } = ensureMultipartFilename(n)
+    if (n.file.name === name && n.file.type === type) return n.file
+    return new File([n.file], name, { type })
+  }
+
+  if (Platform.OS === 'web') {
+    if (!n.uri) return null
+    const resp = await fetch(n.uri)
+    const blob = await resp.blob()
+    const { name, type } = ensureMultipartFilename(n)
+    return new File([blob], name, { type })
+  }
+
   const { uri, name, type } = ensureMultipartFilename(n)
-  fd.append(field, { uri, name, type })
+  if (!uri) return null
+  return { uri, name, type }
+}
+
+export async function appendFormDataFile(fd, field, asset) {
+  const part = await resolveFormDataPart(asset)
+  if (!part) return false
+  fd.append(field, part)
+  return true
+}
+
+export async function appendFormDataFiles(fd, field, assets) {
+  if (!Array.isArray(assets)) return 0
+  let count = 0
+  for (const asset of assets) {
+    if (await appendFormDataFile(fd, field, asset)) count += 1
+  }
+  return count
 }

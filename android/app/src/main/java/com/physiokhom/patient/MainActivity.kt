@@ -1,4 +1,4 @@
-package com.physiokhom.app
+package com.physiokhom.patient
 
 import android.os.Build
 import android.os.Bundle

@@ -1,10 +1,13 @@
-/** Same as client/src/constants/issues.js */
 export const ISSUE_OPTIONS = [
-  'Back Pain',
-  'Neck Pain',
-  'Knee Pain',
-  'Post Surgery Rehab',
-  'Stroke/Paralysis',
+  'Lower Back Pain',
+  'Knee & Joint Pain',
+  'Neck & Spine Pain',
+  'Stroke / Paralysis',
+  'Orthopedic Care',
+  'Neuro Rehab',
+  'Pediatric Rehab',
+  'Post-Op Rehab',
+  'Elderly Care',
 ]
 
 export const ISSUE_OTHER_VALUE = '__other__'

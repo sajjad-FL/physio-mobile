@@ -1,4 +1,4 @@
-import { normalizeSessionRows, todayYmd } from './physioBookingHelpers'
+import { normalizeSessionRows } from './physioBookingHelpers'
 
 export function getSessionProgress(booking) {
   if (!booking) {
@@ -7,7 +7,6 @@ export function getSessionProgress(booking) {
 
   const rows = normalizeSessionRows(booking)
   const total = Math.max(1, Number(booking.sessions) || rows.length || 1)
-  const today = todayYmd()
 
   if (booking.sessionStatus === 'completed') {
     return {
@@ -21,7 +20,7 @@ export function getSessionProgress(booking) {
 
   let completed = 0
   for (const r of rows) {
-    if (String(r.date) < today) completed++
+    if (r.status === 'completed') completed++
   }
   completed = Math.min(completed, total)
 

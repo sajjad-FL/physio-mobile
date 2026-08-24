@@ -18,7 +18,11 @@ export function useMyDisputes(params = { page: 1, limit: 8 }, opts = {}) {
     queryKey: ['myDisputes', params],
     queryFn: async () => {
       const res = await api.get('/disputes/my', { params })
-      return { rows: listData(res), totalPages: Math.max(1, Number(res.data?.totalPages) || 1) }
+      return {
+        rows: listData(res),
+        totalPages: Math.max(1, Number(res.data?.totalPages) || 1),
+        total: Number(res.data?.total) || 0,
+      }
     },
     ...opts,
   })
@@ -28,6 +32,56 @@ export function useProfile(opts = {}) {
   return useQuery({
     queryKey: ['profile'],
     queryFn: async () => (await api.get('/profile')).data || {},
+    ...opts,
+  })
+}
+
+export function useShopProducts(params = { page: 1, limit: 50 }, opts = {}) {
+  return useQuery({
+    queryKey: ['shopProducts', params],
+    queryFn: async () => {
+      const res = await api.get('/shop/products', { params })
+      return { rows: listData(res), totalPages: Math.max(1, Number(res.data?.totalPages) || 1) }
+    },
+    ...opts,
+  })
+}
+
+export function useShopProduct(id, opts = {}) {
+  return useQuery({
+    queryKey: ['shopProduct', id],
+    enabled: Boolean(id),
+    queryFn: async () => (await api.get(`/shop/products/${id}`)).data || {},
+    ...opts,
+  })
+}
+
+export function useShopCart(opts = {}) {
+  return useQuery({
+    queryKey: ['shopCart'],
+    queryFn: async () => (await api.get('/shop/cart')).data || { items: [], itemCount: 0, subtotal: 0 },
+    staleTime: 0,
+    refetchOnMount: 'always',
+    ...opts,
+  })
+}
+
+export function useShopOrders(params = { page: 1, limit: 10 }, opts = {}) {
+  return useQuery({
+    queryKey: ['shopOrders', params],
+    queryFn: async () => {
+      const res = await api.get('/shop/orders', { params })
+      return { rows: listData(res), totalPages: Math.max(1, Number(res.data?.totalPages) || 1) }
+    },
+    ...opts,
+  })
+}
+
+export function useShopOrder(id, opts = {}) {
+  return useQuery({
+    queryKey: ['shopOrder', id],
+    enabled: Boolean(id),
+    queryFn: async () => (await api.get(`/shop/orders/${id}`)).data || {},
     ...opts,
   })
 }
@@ -116,6 +170,63 @@ export function useReferralStats(opts = {}) {
   })
 }
 
+export const FALLBACK_PRICING_SETTINGS = {
+  defaultBookingAmountRupees: 500,
+  platformCommissionPerSessionRupees: 100,
+  platformCommissionPercent: 20,
+  distanceSurchargeBaseKm: 5,
+  distanceSurchargePerKmRupees: 5,
+  homePlanMaxDiscountPercent: 15,
+  defaultPhysioPricePerSession: 500,
+  techniquePrices: {
+    'Cupping Therapy': 800,
+    'Dry Needling': 1000,
+    'Kinesio Taping': 700,
+    IASTM: 900,
+  },
+  allowedPlanSessionCounts: [7, 15, 30],
+  planTiers: [
+    {
+      sessions: 7,
+      defaultDiscountPercent: 0,
+      label: '7-Day Plan',
+      badge: 'STARTER',
+      description: '7 daily home sessions. Pay 1 session upfront, 100% by session 5.',
+    },
+    {
+      sessions: 15,
+      defaultDiscountPercent: 3.33,
+      label: '15-Day Plan',
+      badge: 'MOST POPULAR',
+      description: '15 sessions. Pay 50% by session 5, 100% by session 12.',
+    },
+    {
+      sessions: 30,
+      defaultDiscountPercent: 4.67,
+      label: '30-Day Plan',
+      badge: 'BEST VALUE',
+      description: '30 sessions. Pay 50% by session 10, 75% by session 20, 100% by session 25.',
+    },
+  ],
+  planMilestones: {},
+}
+
+export function usePricingSettings(opts = {}) {
+  return useQuery({
+    queryKey: ['pricingSettings'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/platform/pricing-settings')
+        return res.data && typeof res.data === 'object' ? res.data : FALLBACK_PRICING_SETTINGS
+      } catch {
+        return FALLBACK_PRICING_SETTINGS
+      }
+    },
+    staleTime: 60_000,
+    ...opts,
+  })
+}
+
 export function useBookingDetail(id, opts = {}) {
   return useQuery({
     queryKey: ['bookingDetail', id],
@@ -130,6 +241,14 @@ export function usePhysioBookingDetail(id, opts = {}) {
     queryKey: ['physioBookingDetail', id],
     enabled: Boolean(id),
     queryFn: async () => (await api.get(`/physio/bookings/${id}`)).data || {},
+    ...opts,
+  })
+}
+
+export function useWalletSummary(opts = {}) {
+  return useQuery({
+    queryKey: ['walletSummary'],
+    queryFn: async () => (await api.get('/profile/wallet-summary')).data || {},
     ...opts,
   })
 }

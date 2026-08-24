@@ -1,30 +1,22 @@
-import { memo, useEffect, useRef } from 'react'
-import { Animated, StyleSheet, View } from 'react-native'
+import { memo } from 'react'
+import { StyleSheet, View } from 'react-native'
 import { colors } from '../../theme/colors'
 import { r } from '../../theme/radius'
+import { Skeleton } from './skeletons'
 
+/** Single pulsing list-row skeleton (legacy API). Prefer ListSkeleton for screens. */
 function SkeletonRow({ lines = 1 }) {
-  const opacity = useRef(new Animated.Value(1)).current
-
-  useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.4, duration: 700, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
-      ]),
-    )
-    anim.start()
-    return () => anim.stop()
-  }, [opacity])
-
   return (
-    <Animated.View style={[styles.row, { opacity }]}>
-      <View style={styles.left} />
-      <View style={styles.rightGroup}>
-        <View style={styles.right} />
-        {lines > 1 ? <View style={[styles.right, styles.rightSm]} /> : null}
+    <View style={styles.row}>
+      <View style={styles.left}>
+        <Skeleton height={11} width="70%" />
+        {lines > 1 ? <Skeleton height={9} width="45%" style={{ marginTop: 6 }} /> : null}
       </View>
-    </Animated.View>
+      <View style={styles.rightGroup}>
+        <Skeleton height={10} width={72} />
+        {lines > 1 ? <Skeleton height={8} width={50} style={{ marginTop: 5 }} /> : null}
+      </View>
+    </View>
   )
 }
 
@@ -42,10 +34,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     gap: 12,
   },
-  left: { flex: 1, height: 11, borderRadius: r.sm, backgroundColor: colors.slate300 },
-  rightGroup: { alignItems: 'flex-end', gap: 5 },
-  right: { width: 72, height: 10, borderRadius: r.sm, backgroundColor: colors.slate300 },
-  rightSm: { width: 50, height: 8 },
+  left: { flex: 1 },
+  rightGroup: { alignItems: 'flex-end' },
 })
 
 export default memo(SkeletonRow)
