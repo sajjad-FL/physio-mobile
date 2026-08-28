@@ -8,6 +8,40 @@ export function todayYmd() {
   return ymdFromDate(new Date())
 }
 
+export function normalizeScheduleDate(date) {
+  return String(date || '').trim()
+}
+
+/** Returns duplicate YYYY-MM-DD values (empty when all dates are unique). */
+export function findDuplicateScheduleDates(dates) {
+  const seen = new Set()
+  const dupes = new Set()
+  for (const raw of dates || []) {
+    const d = normalizeScheduleDate(raw)
+    if (!d) continue
+    if (seen.has(d)) dupes.add(d)
+    else seen.add(d)
+  }
+  return [...dupes]
+}
+
+export const DUPLICATE_SCHEDULE_DATE_MESSAGE =
+  'Each session must be on a unique date. Another session is already scheduled on this date.'
+
+/** True when another session row on the booking already uses `date`. */
+export function bookingSessionDateTaken(booking, date, { excludeSessionId, excludeKey } = {}) {
+  const target = normalizeScheduleDate(date)
+  if (!target || !booking) return false
+
+  return normalizeSessionRows(booking).some((row) => {
+    if (excludeSessionId != null && row.sessionId != null && String(row.sessionId) === String(excludeSessionId)) {
+      return false
+    }
+    if (excludeKey && row.key === excludeKey) return false
+    return normalizeScheduleDate(row.date) === target
+  })
+}
+
 /** Manager-led home bookings include a complimentary assessment on booking.date. */
 export function hasComplimentaryAssessmentVisit(b) {
   if (b?.carePath === 'technique_managed' || b?.carePath === 'technique_direct') return false

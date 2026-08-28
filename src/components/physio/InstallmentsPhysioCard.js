@@ -74,14 +74,17 @@ export default function InstallmentsPhysioCard({
           <Text style={styles.sumV}>{formatRupees(outstanding)}</Text>
         </View>
         <View style={[styles.sumBox, allMet && styles.sumBoxMet]}>
-          <Text style={styles.sumL}>Next milestone</Text>
+          <Text style={styles.sumL}>Next payment</Text>
           {milestoneStatus ? (
             allMet ? (
-              <Text style={[styles.sumV, styles.sumVMet]}>All met</Text>
+              <Text style={[styles.sumV, styles.sumVMet]}>All paid</Text>
             ) : (
               <Text style={styles.sumV}>
-                Session {nextMilestone.bySession}{'\n'}
-                <Text style={styles.sumMuted}>{Math.round(nextMilestone.requiredPct * 100)}% required</Text>
+                Before visit #{nextMilestone.bySession}
+                {'\n'}
+                <Text style={styles.sumMuted}>
+                  {Math.round(nextMilestone.requiredPct * 100)}% of plan total
+                </Text>
               </Text>
             )
           ) : (

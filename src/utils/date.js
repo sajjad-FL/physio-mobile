@@ -5,6 +5,36 @@ const TIME_OPTIONS = {
   hour12: true,
 }
 
+const MIN_AGE_YEARS = 18
+const MAX_AGE_YEARS = 100
+
+function startOfDay(date) {
+  const d = date instanceof Date ? new Date(date) : new Date(date)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+function subtractYears(date, years) {
+  const d = startOfDay(date)
+  d.setFullYear(d.getFullYear() - years)
+  return d
+}
+
+/** Earliest selectable DOB in onboarding/profile pickers (max age). */
+export const DOB_PICKER_MIN = subtractYears(new Date(), MAX_AGE_YEARS)
+
+/** Latest selectable DOB for adults (min age 18). */
+export function dobPickerMaxDate(from = new Date()) {
+  return subtractYears(from, MIN_AGE_YEARS)
+}
+
+/** Sensible initial wheel position when opening a DOB picker (~25 years old). */
+export function defaultDobPickerDate(maxDate = new Date()) {
+  const cappedMax = dobPickerMaxDate(maxDate)
+  const candidate = subtractYears(cappedMax, 7)
+  return candidate.getTime() < DOB_PICKER_MIN.getTime() ? new Date(DOB_PICKER_MIN) : candidate
+}
+
 export function formatTime(date) {
   if (date == null || date === '') return '—'
   const d = date instanceof Date ? date : new Date(date)

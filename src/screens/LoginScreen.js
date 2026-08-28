@@ -240,7 +240,7 @@ export default function LoginScreen({ navigation }) {
             </View>
 
             {/* Password field */}
-            <View ref={passwordBlockRef} style={[styles.fieldBlock, styles.fieldGap]}>
+            <View ref={passwordBlockRef} collapsable={false} style={[styles.fieldBlock, styles.fieldGap]}>
               <Pressable
                 onPress={() => {
                   passwordRef.current?.focus()
