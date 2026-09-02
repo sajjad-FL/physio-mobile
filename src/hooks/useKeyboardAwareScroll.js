@@ -22,11 +22,28 @@ export function useKeyboardAwareScroll({
 } = {}) {
   const insets = useSafeAreaInsets()
   const scrollRef = useRef(null)
+  const scrollYRef = useRef(0)
   const [keyboardHeight, setKeyboardHeight] = useState(0)
 
   const scrollBottomIntoView = useCallback(() => {
     requestAnimationFrame(() => {
       scrollRef.current?.scrollToEnd({ animated: true })
+    })
+  }, [])
+
+  /** Scroll so `targetRef` sits `offset` px below the top of the ScrollView viewport. */
+  const scrollIntoView = useCallback((targetRef, { offset = 0 } = {}) => {
+    requestAnimationFrame(() => {
+      const scroll = scrollRef.current
+      const target = targetRef?.current ?? targetRef
+      if (!scroll || !target?.measureInWindow || !scroll.measureInWindow) return
+
+      target.measureInWindow((_tx, ty) => {
+        scroll.measureInWindow((_sx, sy) => {
+          const nextY = Math.max(0, scrollYRef.current + (ty - sy) - offset)
+          scroll.scrollTo({ y: nextY, animated: true })
+        })
+      })
     })
   }, [])
 
@@ -63,6 +80,10 @@ export function useKeyboardAwareScroll({
     keyboardDismissMode: 'on-drag',
     showsVerticalScrollIndicator: false,
     automaticallyAdjustKeyboardInsets: Platform.OS === 'ios',
+    scrollEventThrottle: 16,
+    onScroll: (e) => {
+      scrollYRef.current = e.nativeEvent.contentOffset.y
+    },
   }
 
   const keyboardAvoidingViewProps = {
@@ -78,5 +99,6 @@ export function useKeyboardAwareScroll({
     keyboardVerticalOffset,
     scrollViewProps,
     keyboardAvoidingViewProps,
+    scrollIntoView,
   }
 }

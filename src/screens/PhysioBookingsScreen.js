@@ -20,7 +20,7 @@ import { usePhysioBookings } from '../api/queries'
 import { colors } from '../theme/colors'
 import { font, type, leading } from '../theme/typography'
 import { formatBookingDateAndSlot } from '../utils/date'
-import { physioListStatusLabel } from '../utils/bookingDisplay'
+import { physioListStatusLabel, resolveBookingActiveDisplayVisit } from '../utils/bookingDisplay'
 import { normalizeIndianPhone } from '../utils/phoneIndia'
 import { matchesFilters } from '../utils/physioBookingHelpers'
 import { isAwaitingPatientConsent, isPlanLive, isManagerOwnedBooking } from '../utils/planStatus'
@@ -354,7 +354,8 @@ export default function PhysioBookingsScreen({ navigation }) {
           const svc = serviceChipColors(b)
           const st = statusChipColors(b)
           const accent = statusAccent(b)
-          const dateObj = b.date ? new Date(b.date + 'T00:00:00') : new Date()
+          const activeVisit = resolveBookingActiveDisplayVisit(b)
+          const dateObj = activeVisit.date ? new Date(activeVisit.date + 'T00:00:00') : new Date()
           const dayNum = dateObj.getDate()
           const monStr = dateObj.toLocaleDateString('en-IN', { month: 'short' }).toUpperCase()
 
@@ -382,7 +383,7 @@ export default function PhysioBookingsScreen({ navigation }) {
                   <Text style={styles.cardIssue} numberOfLines={1}>{b.issue}</Text>
                 ) : null}
                 <Text style={styles.cardTimeText} numberOfLines={1}>
-                  {formatBookingDateAndSlot(b.date, b.timeSlot)}
+                  {formatBookingDateAndSlot(activeVisit.date, activeVisit.time)}
                 </Text>
                 <View style={styles.cardPills}>
                   <View style={[styles.pill, { backgroundColor: svc.bg, borderColor: svc.border }]}>

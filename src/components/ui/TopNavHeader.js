@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../../theme/colors'
 import { font, type } from '../../theme/typography'
 import { r } from '../../theme/radius'
-import { useBottomTabBarHeight } from '../../navigation/tabBarMetrics'
 import { figmaTokens } from '../../theme/figmaTokens'
 
 const ROUTE_ICONS = {
@@ -37,13 +36,9 @@ function TopNavHeader({
 }) {
   const insets = useSafeAreaInsets()
   const { height } = useWindowDimensions()
-  const bottomTabBarHeight = useBottomTabBarHeight()
   const [menuOpen, setMenuOpen] = useState(false)
   const [sideOpen, setSideOpen] = useState(false)
   const topPad = useMemo(() => Math.max(insets.top, 8) + 4, [insets.top])
-  const drawerTop = topPad + 6
-  const drawerBottomGap = bottomTabBarHeight + 12
-  const drawerHeight = Math.max(280, height - drawerTop - drawerBottomGap)
 
   function nav(route) {
     setMenuOpen(false)
@@ -168,9 +163,9 @@ function TopNavHeader({
         onRequestClose={() => setSideOpen(false)}
       >
         <View style={styles.drawerOverlay}>
-          <View style={[styles.sideDrawer, { marginTop: drawerTop, height: drawerHeight }]}>
+          <View style={[styles.sideDrawer, { height }]}>
             {/* Brand header */}
-            <View style={styles.drawerHead}>
+            <View style={[styles.drawerHead, { paddingTop: Math.max(insets.top, 12) + 16 }]}>
               <View style={styles.drawerLogoRow} accessibilityRole="header" accessibilityLabel="PhysiOkhom">
                 <Image
                   source={require('../../../assets/images/logo.png')}
@@ -205,7 +200,7 @@ function TopNavHeader({
             </View>
 
             {/* Drawer footer */}
-            <View style={styles.drawerFooter}>
+            <View style={[styles.drawerFooter, { paddingBottom: Math.max(insets.bottom, 14) }]}>
               <Pressable
                 style={styles.drawerLogoutBtn}
                 onPress={() => {
@@ -367,23 +362,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15,23,42,0.45)',
   },
   sideDrawer: {
-    width: 264,
-    marginBottom: 20,
+    width: 280,
     backgroundColor: colors.white,
-    borderRadius: 20,
     overflow: 'hidden',
     flexDirection: 'column',
     shadowColor: '#0f172a',
-    shadowOffset: { width: 6, height: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 20,
+    shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 24,
   },
   drawerHead: {
     backgroundColor: figmaTokens.primary,
     paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 22,
+    paddingBottom: 20,
   },
   drawerLogoRow: {
     flexDirection: 'row',
@@ -434,7 +426,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingTop: 14,
     gap: 8,
   },
   drawerLogoutBtn: {

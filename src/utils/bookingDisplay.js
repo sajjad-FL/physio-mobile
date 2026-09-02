@@ -1,4 +1,5 @@
 import { formatBookingDateAndSlot } from './date'
+import { normalizeSessionRows } from './physioBookingHelpers'
 import { isPlanLive, isAwaitingPatientConsent, isManagerOwnedBooking } from './planStatus'
 
 export function paymentAmountLabel(b) {
@@ -87,6 +88,27 @@ export function resolveBookingDisplayVisit(b) {
       time: first?.time || b.timeSlot,
     }
   }
+  return { date: b.date, time: b.timeSlot }
+}
+
+/**
+ * Next visit the client/physio should focus on: earliest session not completed or
+ * marked no-show. Falls back to the last session when the plan is fully done.
+ */
+export function resolveBookingActiveDisplayVisit(b) {
+  if (!b || typeof b !== 'object') return { date: undefined, time: undefined }
+
+  const rows = normalizeSessionRows(b)
+  const activeRow = rows.find((r) => r.status !== 'completed' && r.status !== 'no_show')
+  const row = activeRow || rows[rows.length - 1]
+
+  if (row) {
+    return {
+      date: row.date || b.date,
+      time: row.time || b.timeSlot,
+    }
+  }
+
   return { date: b.date, time: b.timeSlot }
 }
 

@@ -6,6 +6,7 @@ import { PLAN_TIERS, PLAN_TIER_OPTIONS } from '../../constants/planTiers'
 import { colors } from '../../theme/colors'
 import { font, type } from '../../theme/typography'
 import { formatBookingTimeSlot } from '../../utils/date'
+import { DUPLICATE_SCHEDULE_DATE_MESSAGE, findDuplicateScheduleDates } from '../../utils/physioBookingHelpers'
 import { paymentAmountLabel } from '../../utils/bookingDisplay'
 import DropdownField from '../ui/DropdownField'
 import RequiredMark from '../ui/RequiredMark'
@@ -206,10 +207,12 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
   const [sessionTime, setSessionTime] = useState(defaultSlot)
   const [paymentMode, setPaymentMode] = useState('offline')
   const [selectedDates, setSelectedDates] = useState(() => (defaultPrimaryDate ? [defaultPrimaryDate] : []))
+  const [submitError, setSubmitError] = useState('')
 
   useEffect(() => {
     setSessionTime(defaultSlot)
     setSelectedDates(defaultPrimaryDate ? [defaultPrimaryDate] : [])
+    setSubmitError('')
   }, [booking._id, defaultSlot, defaultPrimaryDate])
 
   // Trim excess dates when tier changes to a smaller plan
@@ -258,13 +261,19 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
   function submitForm() {
     if (!canSubmit) return
     const sorted = [...selectedDates].sort((a, b) => a - b)
+    const scheduleDates = sorted.map((d) => toYMD(d))
+    if (findDuplicateScheduleDates(scheduleDates).length > 0) {
+      setSubmitError(DUPLICATE_SCHEDULE_DATE_MESSAGE)
+      return
+    }
+    setSubmitError('')
     onSubmit({
       sessions,
       amountPerSession: sessionFee,
       discountPercent,
       billingType,
       paymentMode,
-      schedule: sorted.map((d) => ({ date: toYMD(d), time: sessionTime })),
+      schedule: scheduleDates.map((date) => ({ date, time: sessionTime })),
     })
   }
 
@@ -452,7 +461,10 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
           selectedDates={selectedDates}
           maxDates={sessions}
           minDate={today}
-          onChange={setSelectedDates}
+          onChange={(dates) => {
+            setSubmitError('')
+            setSelectedDates(dates)
+          }}
         />
       </View>
 
@@ -485,6 +497,12 @@ export default function HomePlanFormPhysio({ booking, busy, onSubmit }) {
       ) : null}
 
       {/* ── Submit CTA ───────────────────────────── */}
+      {submitError ? (
+        <View style={styles.submitErrorBox}>
+          <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
+          <Text style={styles.submitErrorTxt}>{submitError}</Text>
+        </View>
+      ) : null}
       <Pressable
         style={[styles.submitBtn, (!canSubmit || busy) && styles.submitBtnOff]}
         disabled={!canSubmit || busy}
@@ -806,6 +824,24 @@ const styles = StyleSheet.create({
   },
   assignTitle: { fontFamily: font.bold, fontSize: type.xs, color: colors.amber800, textTransform: 'uppercase', letterSpacing: 0.5 },
   assignSub: { marginTop: 4, fontFamily: font.regular, fontSize: type.sm, color: colors.amber800 },
+
+  submitErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.dangerBorder,
+    backgroundColor: colors.dangerBg,
+  },
+  submitErrorTxt: {
+    flex: 1,
+    fontFamily: font.medium,
+    fontSize: type.xs,
+    color: colors.danger,
+    lineHeight: 16,
+  },
 
   // Submit
   submitBtn: {

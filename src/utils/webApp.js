@@ -1,10 +1,31 @@
 import { Linking } from 'react-native'
+import { resolveDevAccessibleUrl } from './resolveDevAccessibleUrl'
+
+function trimBase(url) {
+  return String(url || '').trim().replace(/\/+$/, '')
+}
+
+/** Local dev serves the web client on Vite (5173); API stays on 5001. */
+function normalizeLocalDevSiteUrl(url) {
+  if (!__DEV__ || !url) return url
+  try {
+    const parsed = new URL(url.includes('://') ? url : `http://${url}`)
+    const isLocal = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1'
+    if (isLocal && parsed.port === '5001') {
+      parsed.port = '5173'
+    }
+    return trimBase(parsed.toString())
+  } catch {
+    return url
+  }
+}
 
 /** Base URL of the web client (same origin as Vite/React app). Set `EXPO_PUBLIC_SITE_URL` in `.env`. */
 export function getWebSiteBaseUrl() {
-  const u = process.env.EXPO_PUBLIC_SITE_URL
-  if (typeof u === 'string' && u.trim()) return u.trim().replace(/\/+$/, '')
-  return ''
+  const configured = trimBase(process.env.EXPO_PUBLIC_SITE_URL)
+  if (!configured) return ''
+  const normalized = normalizeLocalDevSiteUrl(configured)
+  return resolveDevAccessibleUrl(normalized) || normalized
 }
 
 export function getWebLoginUrl() {

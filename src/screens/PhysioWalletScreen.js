@@ -118,24 +118,22 @@ const BreakdownRow = memo(function BreakdownRow({ type, label, count, vol, detai
   const p = typePalette(type, {})
   return (
     <View style={[styles.bdRow, last && styles.bdRowLast]}>
-      <View style={styles.bdLeft}>
-        <View style={[styles.bdTag, { backgroundColor: p.bg, borderColor: p.bd }]}>
-          <Text style={[styles.bdTagTxt, { color: p.fg }]}>{label}</Text>
+      <View style={[styles.bdTag, { backgroundColor: p.bg, borderColor: p.bd }]}>
+        <Text style={[styles.bdTagTxt, { color: p.fg }]}>{label}</Text>
+      </View>
+
+      <View style={styles.bdStatsGrid}>
+        <View style={styles.bdStatCell}>
+          <Text style={styles.bdMetaLabel}>Events</Text>
+          <Text style={styles.bdMetaValue}>{count ?? 0}</Text>
+        </View>
+        <View style={styles.bdStatCell}>
+          <Text style={styles.bdMetaLabel}>Volume</Text>
+          <Text style={styles.bdMetaValue} numberOfLines={1}>{formatInr(vol)}</Text>
         </View>
       </View>
-      <View style={styles.bdRight}>
-        <View style={styles.bdMetaRow}>
-          <View style={styles.bdMeta}>
-            <Text style={styles.bdMetaLabel}>Events</Text>
-            <Text style={styles.bdMetaValue}>{count ?? 0}</Text>
-          </View>
-          <View style={styles.bdMeta}>
-            <Text style={styles.bdMetaLabel}>Volume</Text>
-            <Text style={styles.bdMetaValue}>{formatInr(vol)}</Text>
-          </View>
-        </View>
-        {detail ? <Text style={styles.bdDetail}>{detail}</Text> : null}
-      </View>
+
+      {detail ? <Text style={styles.bdDetail}>{detail}</Text> : null}
     </View>
   )
 })
@@ -484,22 +482,37 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   bdRow: {
-    flexDirection: 'row',
-    gap: 14,
     padding: 14,
+    gap: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(13, 148, 136, 0.08)',
   },
   bdRowLast: { borderBottomWidth: 0 },
-  bdLeft: { flexShrink: 0, paddingTop: 2 },
-  bdTag: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
-  bdTagTxt: { fontFamily: font.bold, fontSize: 10 },
-  bdRight: { flex: 1, gap: 8 },
-  bdMetaRow: { flexDirection: 'row', gap: 20 },
-  bdMeta: { gap: 2 },
+  bdTag: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  bdTagTxt: { fontFamily: font.bold, fontSize: 11 },
+  bdStatsGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  bdStatCell: {
+    flex: 1,
+    gap: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.08)',
+  },
   bdMetaLabel: { fontFamily: font.regular, fontSize: type.xs, color: colors.textSecondary },
-  bdMetaValue: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.textPrimary },
-  bdDetail: { fontFamily: font.regular, fontSize: type.xs, color: colors.slate500, lineHeight: leading.xs },
+  bdMetaValue: { fontFamily: font.semiBold, fontSize: type.base, color: colors.textPrimary },
+  bdDetail: { fontFamily: font.regular, fontSize: type.xs, color: colors.slate500, lineHeight: leading.sm },
 
   // Transactions
   txRow: {

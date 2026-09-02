@@ -44,7 +44,7 @@ import {
 import { appendFormDataFile, appendFormDataFiles, normalizePickedDocument } from '../utils/physioFormMultipart'
 import { pickMultipleDocuments } from '../utils/physioDocumentPicker'
 import { formatPhysioDisplayName, stripPhysioNameAffixes } from '../utils/physioDisplayName'
-import { DOB_PICKER_MIN, defaultDobPickerDate } from '../utils/date'
+import { DOB_PICKER_MIN, defaultDobPickerDate, dobPickerMaxDate } from '../utils/date'
 
 const STEPS = [
   { n: 1, title: 'Basic info' },
@@ -212,8 +212,8 @@ export default function PhysioOnboardingScreen({ navigation }) {
 
   const [pickModal, setPickModal] = useState(null)
   const [dobPickerVisible, setDobPickerVisible] = useState(false)
-  const maxDob = useMemo(() => new Date(), [])
-  const [pickerTempDate, setPickerTempDate] = useState(() => defaultDobPickerDate(new Date()))
+  const maxDob = useMemo(() => dobPickerMaxDate(), [])
+  const [pickerTempDate, setPickerTempDate] = useState(() => defaultDobPickerDate(maxDob))
 
   const clearErrors = useCallback(() => {
     setFieldErrors({})

@@ -222,6 +222,10 @@ const HealthHubCard = memo(function HealthHubCard({ token, navigation, openWhats
   const [consultationClaimed, setConsultationClaimed] = useState(false)
 
   const handleClaimConsultation = () => {
+    if (!token) {
+      navigation.navigate('Login')
+      return
+    }
     setConsultationClaimed(true)
     Alert.alert(
       'Consultation Claimed!',

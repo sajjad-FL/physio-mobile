@@ -17,11 +17,17 @@ import {
   paymentAmountLabel,
   paymentModeLabel,
   paymentStatusLabel,
+  resolveBookingActiveDisplayVisit,
   sessionStatusLabel,
 } from '../utils/bookingDisplay'
 import { formatBookingDateAndSlot, formatBookingTimeSlot } from '../utils/date'
 import { openGoogleMapsDestination } from '../utils/googleMaps'
-import { normalizeSessionRows } from '../utils/physioBookingHelpers'
+import {
+  bookingSessionDateTaken,
+  DUPLICATE_SCHEDULE_DATE_MESSAGE,
+  findDuplicateScheduleDates,
+  normalizeSessionRows,
+} from '../utils/physioBookingHelpers'
 import { isAwaitingPatientConsent, isPlanLive, isManagerOwnedBooking } from '../utils/planStatus'
 import DropdownField from '../components/ui/DropdownField'
 import RequiredMark from '../components/ui/RequiredMark'
@@ -96,6 +102,31 @@ const TabBar = memo(function TabBar({ activeTab, onChange, tabs, badges = {} }) 
 
 function roundMoney2(n) {
   return Math.round((Number(n) + Number.EPSILON) * 100) / 100
+}
+
+function formatInrShort(n) {
+  return `₹${Math.ceil(Number(n) || 0).toLocaleString('en-IN')}`
+}
+
+/** Plain-language copy for the next installment payment gate. */
+function nextMilestoneNotice(milestone, totalAmount, paidSoFar) {
+  const visit = milestone?.bySession
+  const neededTotal = Math.ceil((milestone?.requiredPct || 0) * totalAmount)
+  const stillOwed = Math.max(0, neededTotal - paidSoFar)
+  return {
+    title: `Payment needed before visit #${visit}`,
+    body:
+      stillOwed > 0
+        ? `Ask the patient to pay ${formatInrShort(stillOwed)} more. ${formatInrShort(neededTotal)} must be paid before visit #${visit}.`
+        : `${formatInrShort(neededTotal)} must be paid before visit #${visit}.`,
+    stillOwed,
+  }
+}
+
+function sessionPaymentBlockMessage(milestone, totalAmount, paidSoFar) {
+  const { stillOwed } = nextMilestoneNotice(milestone, totalAmount, paidSoFar)
+  if (stillOwed <= 0) return 'Patient payment is still pending for this visit'
+  return `Collect ${formatInrShort(stillOwed)} from the patient before marking this visit complete`
 }
 
 function ymdFromDate(d) {
@@ -346,6 +377,14 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
   const outstanding = Math.max(0, totalAmount - effectivePaid)
   const paidPercent = totalAmount > 0 ? Math.min(100, (effectivePaid / totalAmount) * 100) : 0
   const milestoneStatus = paymentSummary?.milestoneStatus ?? null
+  const nextPaymentMilestone = useMemo(
+    () => (Array.isArray(milestoneStatus) ? milestoneStatus.find((m) => !m.met) : null),
+    [milestoneStatus],
+  )
+  const allPaymentMilestonesMet = useMemo(
+    () => Array.isArray(milestoneStatus) && milestoneStatus.length > 0 && milestoneStatus.every((m) => m.met),
+    [milestoneStatus],
+  )
   const showInstallments =
     isPlanLive(booking?.planStatus) || booking?.serviceType === 'online' || paymentsList.length > 0
 
@@ -481,6 +520,17 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
   }
 
   async function createPlan(bookingId, payload) {
+    const scheduleDates = Array.isArray(payload?.schedule) ? payload.schedule.map((s) => s?.date) : []
+    const dupes = findDuplicateScheduleDates(scheduleDates)
+    if (dupes.length > 0) {
+      Toast.show({
+        type: 'error',
+        text1: 'Duplicate session dates',
+        text2: DUPLICATE_SCHEDULE_DATE_MESSAGE,
+      })
+      return
+    }
+
     setBusyId(bookingId)
     try {
       await api.patch(`/bookings/${bookingId}/create-plan`, payload)
@@ -548,9 +598,24 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
 
   async function saveReschedule() {
     if (!booking || !rescheduleRow) return
+
+    const newDate = ymdFromDate(rescheduleDate)
+    const dateTaken = bookingSessionDateTaken(booking, newDate, {
+      excludeSessionId: rescheduleRow.sessionId,
+      excludeKey: rescheduleRow.key,
+    })
+    if (dateTaken) {
+      Toast.show({
+        type: 'error',
+        text1: 'Date already booked',
+        text2: DUPLICATE_SCHEDULE_DATE_MESSAGE,
+      })
+      return
+    }
+
     setRescheduleBusy(true)
     try {
-      const payload = { date: ymdFromDate(rescheduleDate), timeSlot: rescheduleSlot }
+      const payload = { date: newDate, timeSlot: rescheduleSlot }
       if (rescheduleRow?.sessionId && String(rescheduleRow.sessionId) !== String(booking._id)) {
         payload.sessionId = rescheduleRow.sessionId
       }
@@ -564,6 +629,15 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
       setRescheduleBusy(false)
     }
   }
+
+  const rescheduleDateYmd = ymdFromDate(rescheduleDate)
+  const rescheduleDateConflict = useMemo(() => {
+    if (!booking || !rescheduleRow) return false
+    return bookingSessionDateTaken(booking, rescheduleDateYmd, {
+      excludeSessionId: rescheduleRow.sessionId,
+      excludeKey: rescheduleRow.key,
+    })
+  }, [booking, rescheduleRow, rescheduleDateYmd])
 
   const rescheduleMinDate = useMemo(() => startOfToday(), [])
   const noteRows = useMemo(() => (booking ? normalizeSessionRows(booking) : []), [booking])
@@ -613,6 +687,8 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
   }
 
   const b = booking
+  const activeVisit = resolveBookingActiveDisplayVisit(b)
+  const activeVisitLabel = formatBookingDateAndSlot(activeVisit.date, activeVisit.time)
   const busy = busyId === b._id
   const managerOwned = isManagerOwnedBooking(b)
   const isAssigned = false
@@ -625,7 +701,7 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
       navigation={navigation}
       insetsTop={insets.top}
       title={isAssigned ? 'Assignment Pending' : (b.userId?.name || 'Booking')}
-      subtitle={formatBookingDateAndSlot(b.date, b.timeSlot)}
+      subtitle={activeVisitLabel}
     >
       <ScrollView
         style={styles.scroll}
@@ -710,7 +786,7 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
           <View style={styles.premiumHeroDivider} />
           <View style={styles.premiumHeroDateRow}>
             <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.65)" />
-            <Text style={styles.premiumHeroDateText}>{formatBookingDateAndSlot(b.date, b.timeSlot)}</Text>
+            <Text style={styles.premiumHeroDateText}>{activeVisitLabel}</Text>
           </View>
 
           {/* Action pill bar — hidden until assignment is accepted */}
@@ -821,26 +897,33 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                 hint="Tap any session card to expand clinical notes and actions."
                 icon="calendar-outline"
               />
-              {/* Milestone payment progress */}
-              {milestoneStatus && milestoneStatus.length > 0 ? (
+              {/* Next installment due — not the same as session completion */}
+              {nextPaymentMilestone ? (
                 <View style={styles.milestoneStrip}>
-                  {milestoneStatus.map((m) => {
-                    const reqAmt = Math.ceil(m.requiredPct * totalAmount)
-                    const remainingToPay = Math.max(0, reqAmt - effectivePaid)
+                  {(() => {
+                    const notice = nextMilestoneNotice(nextPaymentMilestone, totalAmount, effectivePaid)
                     return (
-                      <View key={m.bySession} style={[styles.milestoneRow, m.met && styles.milestoneRowMet]}>
-                        <Ionicons
-                          name={m.met ? 'checkmark-circle' : 'ellipse-outline'}
-                          size={13}
-                          color={m.met ? colors.success : colors.amber800}
-                        />
-                        <Text style={[styles.milestoneTxt, m.met && styles.milestoneTxtMet]}>
-                          {`Session ${m.bySession}: ₹${reqAmt.toLocaleString('en-IN')} required — `}
-                          {m.met ? 'met' : `pending (Patient needs to pay ₹${remainingToPay.toLocaleString('en-IN')})`}
-                        </Text>
+                      <View style={styles.milestoneRow}>
+                        <Ionicons name="wallet-outline" size={15} color={colors.amber800} />
+                        <View style={styles.milestoneCopy}>
+                          <Text style={styles.milestoneTitle}>{notice.title}</Text>
+                          <Text style={styles.milestoneBody}>{notice.body}</Text>
+                        </View>
                       </View>
                     )
-                  })}
+                  })()}
+                </View>
+              ) : allPaymentMilestonesMet ? (
+                <View style={styles.milestoneStrip}>
+                  <View style={[styles.milestoneRow, styles.milestoneRowMet]}>
+                    <Ionicons name="checkmark-circle" size={15} color={colors.success} />
+                    <View style={styles.milestoneCopy}>
+                      <Text style={[styles.milestoneTitle, styles.milestoneTxtMet]}>Payments are up to date</Text>
+                      <Text style={[styles.milestoneBody, styles.milestoneTxtMet]}>
+                        The patient has paid what is needed for upcoming visits.
+                      </Text>
+                    </View>
+                  </View>
                 </View>
               ) : null}
 
@@ -869,10 +952,11 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                     ? milestoneStatus.find((m) => m.bySession <= r.n && !m.met)
                     : null
                   const milestoneMsg = milestoneNeeded
-                    ? `₹${Math.ceil(
-                        (milestoneNeeded.requiredPct * (paymentSummary?.totalAmount ?? 0)) -
-                        ((paymentSummary?.totalPaid ?? 0) + (paymentSummary?.totalCollected ?? 0))
-                      )} payment required first`
+                    ? sessionPaymentBlockMessage(
+                        milestoneNeeded,
+                        paymentSummary?.totalAmount ?? totalAmount,
+                        effectivePaid,
+                      )
                     : ''
 
                   const blockedReason = b.status === 'assigned'
@@ -931,17 +1015,27 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                         ]}
                       >
                         <View style={styles.stepperCardHeader}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.stepperSessionNum, rowDone && styles.stepperSessionNumDone]}>
-                              Session #{r.n}
-                            </Text>
-                            <Text style={styles.stepperSessionDate}>
-                              {formatBookingDateAndSlot(r.date, r.time)}
-                            </Text>
+                          <View style={styles.stepperCardTitleRow}>
+                            <View style={styles.stepperCardTitleGroup}>
+                              <Text
+                                style={[styles.stepperSessionNum, rowDone && styles.stepperSessionNumDone]}
+                                numberOfLines={1}
+                              >
+                                {r.complimentary ? 'Assessment' : r.n != null ? `Session #${r.n}` : 'Session'}
+                              </Text>
+                              <Text style={styles.stepperSessionDate} numberOfLines={2}>
+                                {formatBookingDateAndSlot(r.date, r.time)}
+                              </Text>
+                            </View>
+                            <Ionicons
+                              name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                              size={14}
+                              color={colors.slate400}
+                              style={styles.stepperCardChevron}
+                            />
                           </View>
 
-                          <View style={styles.stepperCardHeaderRight}>
-                            {/* Status badge */}
+                          <View style={styles.stepperCardBadgeRow}>
                             <View style={[
                               styles.stepperStatusBadge,
                               rowDone && styles.stepperStatusBadgeDone,
@@ -980,12 +1074,6 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                                 </Text>
                               </View>
                             ) : null}
-                            {/* Expand/collapse chevron */}
-                            <Ionicons
-                              name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                              size={14}
-                              color={colors.slate400}
-                            />
                           </View>
                         </View>
 
@@ -1223,8 +1311,8 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                 title={isOfflinePlan ? 'Collections' : 'Installments'}
                 subtitle={
                   isOfflinePlan
-                    ? 'Record each cash/UPI hand-off.'
-                    : 'Patient pays online per installment; each verified payment counts toward your payment milestones.'
+                    ? 'Log each cash or UPI payment you receive from the patient.'
+                    : 'Each online payment the patient makes is listed here.'
                 }
                 summary={paymentSummary}
                 payments={paymentsList}
@@ -1503,6 +1591,13 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                 </>
               )}
 
+              {rescheduleDateConflict ? (
+                <View style={styles.rescheduleConflictBox}>
+                  <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
+                  <Text style={styles.rescheduleConflictTxt}>{DUPLICATE_SCHEDULE_DATE_MESSAGE}</Text>
+                </View>
+              ) : null}
+
               <Text style={[styles.rescheduleLabel, { marginTop: 18 }]}>New time slot<RequiredMark /></Text>
               <DropdownField
                 label={null}
@@ -1519,9 +1614,9 @@ export default function PhysioBookingDetailScreen({ route, navigation }) {
                   <Text style={styles.modalCancelTxt}>Cancel</Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.modalPrimaryBtn, rescheduleBusy && styles.modalBtnBusy]}
+                  style={[styles.modalPrimaryBtn, (rescheduleBusy || rescheduleDateConflict) && styles.modalBtnBusy]}
                   onPress={saveReschedule}
-                  disabled={rescheduleBusy}
+                  disabled={rescheduleBusy || rescheduleDateConflict}
                 >
                   {rescheduleBusy ? (
                     <ActivityIndicator size="small" color={colors.white} />
@@ -2027,12 +2122,15 @@ const styles = StyleSheet.create({
   },
   milestoneRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 3,
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 2,
     paddingHorizontal: 2,
   },
   milestoneRowMet: {},
+  milestoneCopy: { flex: 1, gap: 4 },
+  milestoneTitle: { fontFamily: font.semiBold, fontSize: type.sm, color: colors.amber800, lineHeight: 18 },
+  milestoneBody: { fontFamily: font.regular, fontSize: type.xs, color: colors.amber800, lineHeight: 16 },
   milestoneTxt: { flex: 1, fontFamily: font.medium, fontSize: 11, color: colors.amber800, lineHeight: 15 },
   milestoneTxtMet: { color: colors.success },
 
@@ -2267,6 +2365,24 @@ const styles = StyleSheet.create({
     borderColor: colors.warningBorder,
   },
   reschedulePrev: { fontFamily: font.medium, fontSize: type.xs, color: colors.amber800 },
+  rescheduleConflictBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.dangerBorder,
+    backgroundColor: colors.dangerBg,
+  },
+  rescheduleConflictTxt: {
+    flex: 1,
+    fontFamily: font.medium,
+    fontSize: type.xs,
+    color: colors.danger,
+    lineHeight: 16,
+  },
   rescheduleLabel: {
     marginTop: 16,
     marginBottom: 10,
@@ -2618,15 +2734,27 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   stepperCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
   },
-  stepperCardHeaderRight: {
+  stepperCardTitleRow: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  stepperCardTitleGroup: {
+    flex: 1,
+    minWidth: 0,
+  },
+  stepperCardChevron: {
+    marginTop: 2,
+    flexShrink: 0,
+  },
+  stepperCardBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
-    flexShrink: 0,
   },
   stepperSessionNum: {
     fontFamily: font.bold,
@@ -2680,12 +2808,11 @@ const styles = StyleSheet.create({
     color: colors.brand,
   },
   stepperConfirmBadge: {
-    marginTop: 6,
-    alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
+    maxWidth: '100%',
   },
   stepperConfirmBadgePending: {
     backgroundColor: colors.amber50 || '#fffbeb',
