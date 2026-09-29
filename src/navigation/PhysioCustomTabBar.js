@@ -4,7 +4,7 @@ import { colors } from '../theme/colors'
 import { font } from '../theme/typography'
 import { setBottomTabBarHeight } from './tabBarMetrics'
 
-/** Physio footer tabs — same styling as patient CustomTabBar, without onboarding tour hooks. */
+/** Physio footer tabs — same styling as patient CustomTabBar. */
 export default function PhysioCustomTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets()
 
