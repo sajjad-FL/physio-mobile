@@ -1,0 +1,27 @@
+# EAS upload excludes (replaces .gitignore for EAS). Local build caches carry
+# Windows absolute paths that break the Linux Gradle build.
+node_modules/
+.expo/
+dist/
+web-build/
+npm-debug.*
+*.orig.*
+.env
+.env.local
+credentials.json
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+android/build/
+android/app/build/
+android/.gradle/
+android/.kotlin/
+android/.cxx/
+android/app/.cxx/
+android/local.properties
+ios/build/
+ios/Pods/

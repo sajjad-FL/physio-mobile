@@ -16,7 +16,6 @@ import ShopStackNavigator from './ShopStackNavigator'
 import ProfileScreen from '../screens/ProfileScreen'
 import UserTopNavHeader from '../components/UserTopNavHeader'
 import CustomTabBar from './CustomTabBar'
-import PatientAppTourProvider from '../tour/PatientAppTourProvider'
 import WhatsAppSupportFab from '../components/WhatsAppSupportFab'
 import { defaultNativeStackScreenOptions, defaultTabScreenOptions } from './navLayout'
 
@@ -54,8 +53,7 @@ export default function UserTabNavigator() {
   }, [navigation, authEpoch])
 
   return (
-    <PatientAppTourProvider>
-      <View style={{ flex: 1 }}>
+    <View style={{ flex: 1 }}>
       <Tab.Navigator
       detachInactiveScreens
       tabBar={(props) => <CustomTabBar {...props} />}
@@ -143,8 +141,7 @@ export default function UserTabNavigator() {
         }}
       />
     </Tab.Navigator>
-    <WhatsAppSupportFab />
+      <WhatsAppSupportFab />
     </View>
-    </PatientAppTourProvider>
   )
 }

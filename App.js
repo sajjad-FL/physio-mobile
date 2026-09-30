@@ -19,7 +19,6 @@ import { ActivityIndicator, View } from 'react-native'
 import { AuthProvider } from './src/context/AuthContext'
 import ProfileCompletionHost from './src/components/ProfileCompletionHost'
 import RootNavigator from './src/navigation/RootNavigator'
-import { PatientTourGateProvider } from './src/tour/patientTourGate'
 import { colors } from './src/theme/colors'
 import { queryClient } from './src/api/queryClient'
 
@@ -51,17 +50,15 @@ export default function App() {
       <SafeAreaProvider>
         <StatusBar style="dark" />
         <AuthProvider>
-          <PatientTourGateProvider>
-            <QueryClientProvider client={queryClient}>
-              <NavigationContainer ref={navigationRef}>
-                <View style={{ flex: 1, backgroundColor: colors.canvas }}>
-                  <RootNavigator />
-                </View>
-              </NavigationContainer>
-              <ProfileCompletionHost />
-            </QueryClientProvider>
-            <Toast />
-          </PatientTourGateProvider>
+          <QueryClientProvider client={queryClient}>
+            <NavigationContainer ref={navigationRef}>
+              <View style={{ flex: 1, backgroundColor: colors.canvas }}>
+                <RootNavigator />
+              </View>
+            </NavigationContainer>
+            <ProfileCompletionHost />
+          </QueryClientProvider>
+          <Toast />
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

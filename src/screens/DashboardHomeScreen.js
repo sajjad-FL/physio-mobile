@@ -1,9 +1,7 @@
 import { memo, useCallback, useMemo } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { AttachStep } from 'react-native-spotlight-tour'
 import { Ionicons } from '@expo/vector-icons'
 import { useMyBookings, useMyDisputes, useProfile } from '../api/queries'
-import { usePatientAppTour } from '../tour/usePatientAppTour'
 import { formatBookingDateAndSlot, formatBookingTimeSlot } from '../utils/date'
 import { bookingStatusBadge } from '../utils/dashboardUtils'
 import { pickNextSession, todayYmd, normalizeSessionRows, listSameDaySiblings } from '../utils/physioBookingHelpers'
@@ -183,8 +181,6 @@ export default function DashboardHomeScreen({ navigation }) {
           }
     : null
 
-  usePatientAppTour({ hasUpcomingBooking: Boolean(nextSession) })
-
   if (loading) {
     return (
       <View style={[styles.center, { justifyContent: 'flex-start' }]}>
@@ -213,16 +209,14 @@ export default function DashboardHomeScreen({ navigation }) {
       <View style={styles.ambientHeaderGlow} pointerEvents="none" />
       <View style={styles.ambientHeaderGlow2} pointerEvents="none" />
 
-      <AttachStep index={0}>
-        <View style={styles.headerSection}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.headerGreeting}>
-              Hi, {firstName || 'there'}
-            </Text>
-            <Text style={styles.headerTitle}>{todayStr}</Text>
-          </View>
+      <View style={styles.headerSection}>
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerGreeting}>
+            Hi, {firstName || 'there'}
+          </Text>
+          <Text style={styles.headerTitle}>{todayStr}</Text>
         </View>
-      </AttachStep>
+      </View>
 
       {needsProfile && (
         <Pressable
@@ -254,8 +248,7 @@ export default function DashboardHomeScreen({ navigation }) {
       )}
 
       {nextSession ? (
-        <AttachStep index={1} fill>
-          <View style={styles.nextCardContainer}>
+        <View style={styles.nextCardContainer}>
             <Pressable
               style={({ pressed }) => [styles.nextCard, pressed && styles.nextCardDim]}
               onPress={() =>
@@ -306,10 +299,8 @@ export default function DashboardHomeScreen({ navigation }) {
               </Text>
             </Pressable>
           </View>
-        </AttachStep>
       ) : (
-        <AttachStep index={1} fill>
-          <Pressable
+        <Pressable
             style={({ pressed }) => [styles.bookCta, pressed && styles.dimmed]}
             onPress={() => navigation.navigate('PhysioList')}
           >
@@ -322,7 +313,6 @@ export default function DashboardHomeScreen({ navigation }) {
             </View>
             <Ionicons name="chevron-forward" size={16} color={figmaTokens.primary} />
           </Pressable>
-        </AttachStep>
       )}
 
       {sameDaySiblings.length > 0 ? (
