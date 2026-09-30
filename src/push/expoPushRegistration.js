@@ -1,6 +1,7 @@
 import { Platform } from 'react-native'
 import Constants from 'expo-constants'
 import * as Notifications from 'expo-notifications'
+import { getRoleSync } from '../auth/tokenStore'
 
 const ANDROID_DEFAULT_CHANNEL = 'default'
 
@@ -79,10 +80,19 @@ export function setupNotificationTapHandler(navigationRef) {
   return Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response.notification.request.content.data || {}
     if (data.bookingId && navigationRef?.isReady?.()) {
-      navigationRef.navigate('Bookings', {
-        screen: 'BookingDetail',
-        params: { id: data.bookingId },
-      })
+      // navigationRef dispatches from the root stack, so go through the role's tab navigator.
+      const params = { id: data.bookingId }
+      if (getRoleSync() === 'physio') {
+        navigationRef.navigate('PhysioTabs', {
+          screen: 'PhysioDashboard',
+          params: { screen: 'PhysioBookingDetail', params },
+        })
+      } else {
+        navigationRef.navigate('UserTabs', {
+          screen: 'Bookings',
+          params: { screen: 'BookingDetail', params },
+        })
+      }
     }
   })
 }

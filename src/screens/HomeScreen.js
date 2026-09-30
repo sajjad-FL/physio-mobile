@@ -360,7 +360,10 @@ const HealthHubCard = memo(function HealthHubCard({ token, navigation, openWhats
             style={styles.hubActionBtnPri}
             onPress={() => {
               if (activeBooking._id) {
-                navigation.navigate('Bookings', { screen: 'BookingDetail', params: { id: activeBooking._id } })
+                navigation.navigate('UserTabs', {
+                  screen: 'Bookings',
+                  params: { screen: 'BookingDetail', params: { id: activeBooking._id } },
+                })
               } else {
                 navigation.navigate(getDefaultDashboardScreen())
               }
