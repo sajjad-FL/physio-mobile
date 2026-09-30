@@ -885,15 +885,15 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.valueRow}>
           <View style={[styles.valueItem, { backgroundColor: colors.success + '08', borderColor: colors.success + '20' }]}>
             <Ionicons name="checkmark-circle-outline" size={12} color={colors.success} />
-            <Text style={[styles.valueText, { color: colors.success }]}>Verified BPT/MPT</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.valueText, { color: colors.success }]}>Verified BPT/MPT</Text>
           </View>
           <View style={[styles.valueItem, { backgroundColor: figmaTokens.primary + '08', borderColor: figmaTokens.primary + '20' }]}>
             <Ionicons name="medkit-outline" size={12} color={figmaTokens.primary} />
-            <Text style={[styles.valueText, { color: figmaTokens.primary }]}>Home · Clinic · Online</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.valueText, { color: figmaTokens.primary }]}>Home · Clinic · Online</Text>
           </View>
           <View style={[styles.valueItem, { backgroundColor: colors.info + '08', borderColor: colors.info + '20' }]}>
             <Ionicons name="shield-checkmark-outline" size={12} color={colors.info} />
-            <Text style={[styles.valueText, { color: colors.info }]}>Safe & Secure</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.valueText, { color: colors.info }]}>Safe & Secure</Text>
           </View>
         </View>
 
@@ -2117,21 +2117,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 14,
     paddingHorizontal: 2,
-    gap: 8,
+    gap: 6,
     zIndex: 1,
   },
+  // Width follows the label (longest badge gets the most room) instead of equal thirds, so nothing wraps.
   valueItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     borderWidth: 1,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 6,
     borderRadius: 10,
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 'auto',
     justifyContent: 'center',
   },
   valueText: {
+    flexShrink: 1,
     fontFamily: font.bold,
     fontSize: 9,
   },
