@@ -95,13 +95,13 @@ packagingOptions {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.physiokhom.patient'
+    namespace 'com.physiokhom.app'
     defaultConfig {
-        applicationId 'com.physiokhom.patient'
+        applicationId 'com.physiokhom.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0.07"
+        versionName "1.0.08"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }

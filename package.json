@@ -1,6 +1,6 @@
 {
   "name": "physiokhom-mobile",
-  "version": "1.0.07",
+  "version": "1.0.08",
   "private": true,
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {

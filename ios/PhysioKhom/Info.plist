@@ -19,7 +19,7 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.07</string>
+    <string>1.0.08</string>
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleURLTypes</key>
@@ -28,7 +28,7 @@
         <key>CFBundleURLSchemes</key>
         <array>
           <string>physiokhom</string>
-          <string>com.physiokhom.patient</string>
+          <string>com.physiokhom.app</string>
         </array>
       </dict>
       <dict>

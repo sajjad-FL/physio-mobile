@@ -354,7 +354,7 @@ export default function LoginScreen({ navigation }) {
               and{' '}
               <Text
                 style={styles.legalLink}
-                onPress={() => openLink(`${base}/privacy`)}
+                onPress={() => openLink(`${base}/privacy-policy`)}
                 accessibilityRole="link"
               >
                 Privacy Policy

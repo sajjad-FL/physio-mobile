@@ -11,7 +11,7 @@ function siteOrigin() {
 function LoginLegalFooter() {
   const base = siteOrigin()
   const termsUrl = `${base}/terms`
-  const privacyUrl = `${base}/privacy`
+  const privacyUrl = `${base}/privacy-policy`
 
   const open = useCallback(async (url) => {
     try {

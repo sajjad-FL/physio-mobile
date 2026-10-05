@@ -1,4 +1,4 @@
-package com.physiokhom.patient
+package com.physiokhom.app
 
 import android.app.Application
 import android.content.res.Configuration

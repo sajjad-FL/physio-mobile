@@ -2,7 +2,7 @@
   "expo": {
     "name": "PhysiOkhom",
     "slug": "physiokhom",
-    "version": "1.0.07",
+    "version": "1.0.08",
     "icon": "./assets/images/icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -18,7 +18,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.physiokhom.patient",
+      "bundleIdentifier": "com.physiokhom.app",
       "jsEngine": "hermes",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -33,7 +33,7 @@
       }
     },
     "android": {
-      "package": "com.physiokhom.patient",
+      "package": "com.physiokhom.app",
       "enableProguardInReleaseBuilds": true,
       "jsEngine": "hermes",
       "softwareKeyboardLayoutMode": "resize",
@@ -50,7 +50,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "PhysiOkhom uses your location to set your coverage point for patient bookings."
+          "locationWhenInUsePermission": "PhysiOkhom uses your location to find physiotherapists near you and set your home-visit address."
         }
       ],
       [

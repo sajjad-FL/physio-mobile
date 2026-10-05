@@ -249,7 +249,7 @@ export default function RegisterScreen({ navigation, route }) {
               and{' '}
               <Text
                 style={styles.legalLink}
-                onPress={() => openLink(`${base}/privacy`)}
+                onPress={() => openLink(`${base}/privacy-policy`)}
                 accessibilityRole="link"
               >
                 Privacy Policy
