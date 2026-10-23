@@ -60,8 +60,8 @@ const WHY_FEATURES = [
   },
   {
     icon: 'home-outline',
-    title: 'Convenient Home Visits',
-    desc: 'Get treated in the comfort of your home — zero waiting or travel.',
+    title: 'Clinic or Home Visits',
+    desc: 'Visit a partner clinic or get treated in the comfort of your home.',
     bg: '#eff6ff',
     color: '#2563eb',
   },
@@ -1416,62 +1416,65 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         {/* ── Care Comparison Board ────────────────────────────────── */}
-        <SectionHeader icon="swap-horizontal-outline" title="Home Care vs. Traditional Clinic" />
+        <SectionHeader icon="swap-horizontal-outline" title="Clinic or Home — Your Choice" />
         <View style={styles.compareContainer}>
-          {/* Home Care */}
-          <View style={[styles.compareCol, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
+          {/* Clinic Visits */}
+          <View style={[styles.compareCol, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
             <View style={styles.compareHeader}>
-              <Ionicons name="checkmark-circle" size={14} color="#15803d" />
-              <Text style={[styles.compareHeaderTitle, { color: '#15803d' }]}>At-Home Care</Text>
+              <Ionicons name="business" size={14} color="#1d4ed8" />
+              <Text style={[styles.compareHeaderTitle, { color: '#1d4ed8' }]}>Clinic Visits</Text>
             </View>
-            <Text style={styles.compareSubtitle}>With PhysiOkhom</Text>
+            <Text style={styles.compareSubtitle}>Partner clinics</Text>
             <View style={styles.compareList}>
               <View style={styles.compareItem}>
-                <Ionicons name="checkmark" size={10} color="#15803d" style={styles.compareItemIcon} />
-                <Text style={styles.compareItemText}>100% focused 1-on-1 therapist attention</Text>
+                <Ionicons name="checkmark" size={10} color="#1d4ed8" style={styles.compareItemIcon} />
+                <Text style={styles.compareItemText}>Equipment-supported therapy in a set-up clinic</Text>
               </View>
               <View style={styles.compareItem}>
-                <Ionicons name="checkmark" size={10} color="#15803d" style={styles.compareItemIcon} />
-                <Text style={styles.compareItemText}>Comfort & safety of your own home</Text>
+                <Ionicons name="checkmark" size={10} color="#1d4ed8" style={styles.compareItemIcon} />
+                <Text style={styles.compareItemText}>Clinic assigned for you after booking</Text>
               </View>
+              <View style={styles.compareItem}>
+                <Ionicons name="checkmark" size={10} color="#1d4ed8" style={styles.compareItemIcon} />
+                <Text style={styles.compareItemText}>Booked time slots, less waiting</Text>
+              </View>
+              <View style={styles.compareItem}>
+                <Ionicons name="checkmark" size={10} color="#1d4ed8" style={styles.compareItemIcon} />
+                <Text style={styles.compareItemText}>Ideal if you can travel comfortably</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Home Visits */}
+          <View style={[styles.compareCol, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
+            <View style={styles.compareHeader}>
+              <Ionicons name="home" size={14} color="#15803d" />
+              <Text style={[styles.compareHeaderTitle, { color: '#15803d' }]}>Home Visits</Text>
+            </View>
+            <Text style={styles.compareSubtitle}>Care at your doorstep</Text>
+            <View style={styles.compareList}>
               <View style={styles.compareItem}>
                 <Ionicons name="checkmark" size={10} color="#15803d" style={styles.compareItemIcon} />
                 <Text style={styles.compareItemText}>Zero travel, traffic, or parking stress</Text>
               </View>
               <View style={styles.compareItem}>
                 <Ionicons name="checkmark" size={10} color="#15803d" style={styles.compareItemIcon} />
-                <Text style={styles.compareItemText}>Personalized treatment in active setup</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Traditional Clinic */}
-          <View style={[styles.compareCol, { backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }]}>
-            <View style={styles.compareHeader}>
-              <Ionicons name="close-circle" size={14} color="#64748b" />
-              <Text style={[styles.compareHeaderTitle, { color: '#475569' }]}>Traditional Clinic</Text>
-            </View>
-            <Text style={styles.compareSubtitle}>Standard Facilities</Text>
-            <View style={styles.compareList}>
-              <View style={styles.compareItem}>
-                <Ionicons name="close" size={10} color="#64748b" style={styles.compareItemIcon} />
-                <Text style={styles.compareItemText}>Therapist splits time with 3-4 patients</Text>
+                <Text style={styles.compareItemText}>1-on-1 therapist attention at home</Text>
               </View>
               <View style={styles.compareItem}>
-                <Ionicons name="close" size={10} color="#64748b" style={styles.compareItemIcon} />
-                <Text style={styles.compareItemText}>Exposure to clinical germs & viruses</Text>
+                <Ionicons name="checkmark" size={10} color="#15803d" style={styles.compareItemIcon} />
+                <Text style={styles.compareItemText}>Flexible times around your routine</Text>
               </View>
               <View style={styles.compareItem}>
-                <Ionicons name="close" size={10} color="#64748b" style={styles.compareItemIcon} />
-                <Text style={styles.compareItemText}>Painful commute when mobility is low</Text>
-              </View>
-              <View style={styles.compareItem}>
-                <Ionicons name="close" size={10} color="#64748b" style={styles.compareItemIcon} />
-                <Text style={styles.compareItemText}>Long waiting times in noisy rooms</Text>
+                <Ionicons name="checkmark" size={10} color="#15803d" style={styles.compareItemIcon} />
+                <Text style={styles.compareItemText}>Ideal when travel is painful</Text>
               </View>
             </View>
           </View>
         </View>
+        <Text style={styles.compareFootnote}>
+          Both include vetted physiotherapists and a Care Manager–led care plan.
+        </Text>
 
         {/* ── Why PhysiOkhom Card Grid (2-column layout) ───────────────── */}
         <SectionHeader icon="star-outline" title="Why Patients Choose Us" />
@@ -3352,6 +3355,15 @@ const styles = StyleSheet.create({
     lineHeight: 12,
     color: colors.textPrimary,
     flex: 1,
+  },
+  compareFootnote: {
+    fontFamily: font.medium,
+    fontSize: 10,
+    lineHeight: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 4,
   },
 
   // Safety Promise Shield Styles
